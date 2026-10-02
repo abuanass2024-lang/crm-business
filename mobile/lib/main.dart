@@ -11,34 +11,56 @@ const apiBase = String.fromEnvironment(
 
 class ApiClient {
   Future<String?> _token() async {
-    final p = await SharedPreferences.getInstance();
-    return p.getString('accessToken');
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('accessToken');
   }
 
   Future<String?> _refresh() async {
-    final p = await SharedPreferences.getInstance();
-    final rtk = p.getString('refreshToken');
+    final prefs = await SharedPreferences.getInstance();
+    final refreshToken = prefs.getString('refreshToken');
 
-    if (rtk == null || rtk.isEmpty) {
+    if (refreshToken == null || refreshToken.isEmpty) {
       return null;
     }
 
-    final r = await http.post(
+    final response = await http.post(
       Uri.parse('$apiBase/auth/refresh'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'refreshToken': rtk}),
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({
+        'refreshToken': refreshToken,
+      }),
     );
 
-    if (r.statusCode >= 400) {
+    if (response.statusCode >= 400) {
       return null;
     }
 
-    final d = jsonDecode(r.body);
+    final data = jsonDecode(response.body);
 
-    await p.setString('accessToken', d['accessToken']);
-    await p.setString('refreshToken', d['refreshToken']);
+    if (data is! Map) {
+      return null;
+    }
 
-    return d['accessToken'];
+    final accessToken = data['accessToken'];
+    final newRefreshToken = data['refreshToken'];
+
+    if (accessToken == null || newRefreshToken == null) {
+      return null;
+    }
+
+    await prefs.setString(
+      'accessToken',
+      accessToken.toString(),
+    );
+
+    await prefs.setString(
+      'refreshToken',
+      newRefreshToken.toString(),
+    );
+
+    return accessToken.toString();
   }
 
   Future<http.Response> request(
@@ -47,11 +69,12 @@ class ApiClient {
     Map<String, dynamic>? body,
     bool retry = true,
   }) async {
-    final t = await _token();
+    final token = await _token();
 
-    final headers = {
+    final headers = <String, String>{
       'Content-Type': 'application/json',
-      if (t != null) 'Authorization': 'Bearer $t',
+      if (token != null && token.isNotEmpty)
+        'Authorization': 'Bearer $token',
     };
 
     final url = Uri.parse('$apiBase$path');
@@ -109,7 +132,9 @@ class ApiClient {
   }
 
   Future<dynamic> get(String path) {
-    return _parse(request('GET', path));
+    return _parse(
+      request('GET', path),
+    );
   }
 
   Future<dynamic> post(
@@ -138,19 +163,33 @@ class ApiClient {
     );
   }
 
-  Future<dynamic> _parse(Future<http.Response> future) async {
+  Future<dynamic> _parse(
+    Future<http.Response> future,
+  ) async {
     final response = await future;
 
-    final data = response.body.isEmpty
-        ? {}
-        : jsonDecode(response.body);
+    dynamic data;
+
+    if (response.body.trim().isEmpty) {
+      data = <String, dynamic>{};
+    } else {
+      try {
+        data = jsonDecode(response.body);
+      } catch (_) {
+        data = <String, dynamic>{
+          'message': response.body,
+        };
+      }
+    }
 
     if (response.statusCode >= 400) {
-      throw Exception(
-        data is Map
-            ? data['message'] ?? 'حدث خطأ'
-            : 'حدث خطأ',
-      );
+      String message = 'حدث خطأ';
+
+      if (data is Map && data['message'] != null) {
+        message = data['message'].toString();
+      }
+
+      throw Exception(message);
     }
 
     return data;
@@ -269,6 +308,14 @@ class _LoginPageState extends State<LoginPage> {
   String? error;
 
   Future<void> login() async {
+    if (emailController.text.trim().isEmpty ||
+        passwordController.text.isEmpty) {
+      setState(() {
+        error = 'يرجى إدخال البريد الإلكتروني وكلمة المرور';
+      });
+      return;
+    }
+
     setState(() {
       loading = true;
       error = null;
@@ -283,22 +330,36 @@ class _LoginPageState extends State<LoginPage> {
         },
       );
 
+      if (data is! Map) {
+        throw Exception('استجابة غير صحيحة من الخادم');
+      }
+
+      final accessToken = data['accessToken'];
+      final refreshToken = data['refreshToken'];
+      final company = data['company'];
+
+      if (accessToken == null || refreshToken == null) {
+        throw Exception('بيانات تسجيل الدخول غير مكتملة');
+      }
+
       final storage = await SharedPreferences.getInstance();
 
       await storage.setString(
         'accessToken',
-        data['accessToken'],
+        accessToken.toString(),
       );
 
       await storage.setString(
         'refreshToken',
-        data['refreshToken'],
+        refreshToken.toString(),
       );
 
-      await storage.setString(
-        'companyName',
-        data['company']['name'],
-      );
+      if (company is Map && company['name'] != null) {
+        await storage.setString(
+          'companyName',
+          company['name'].toString(),
+        );
+      }
 
       if (!mounted) return;
 
@@ -344,16 +405,13 @@ class _LoginPageState extends State<LoginPage> {
                 maxWidth: 430,
               ),
               child: Column(
-                crossAxisAlignment:
-                    CrossAxisAlignment.stretch,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   const Icon(
                     Icons.business_center,
                     size: 70,
                   ),
-
                   const SizedBox(height: 8),
-
                   const Text(
                     'CRM Business',
                     textAlign: TextAlign.center,
@@ -362,21 +420,16 @@ class _LoginPageState extends State<LoginPage> {
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-
                   const SizedBox(height: 30),
-
                   TextField(
                     controller: emailController,
-                    keyboardType:
-                        TextInputType.emailAddress,
+                    keyboardType: TextInputType.emailAddress,
                     decoration: const InputDecoration(
                       labelText: 'البريد الإلكتروني',
                       border: OutlineInputBorder(),
                     ),
                   ),
-
                   const SizedBox(height: 12),
-
                   TextField(
                     controller: passwordController,
                     obscureText: true,
@@ -385,11 +438,9 @@ class _LoginPageState extends State<LoginPage> {
                       border: OutlineInputBorder(),
                     ),
                   ),
-
                   if (error != null)
                     Padding(
-                      padding:
-                          const EdgeInsets.only(top: 10),
+                      padding: const EdgeInsets.only(top: 10),
                       child: Text(
                         error!,
                         style: const TextStyle(
@@ -397,31 +448,28 @@ class _LoginPageState extends State<LoginPage> {
                         ),
                       ),
                     ),
-
                   const SizedBox(height: 18),
-
                   FilledButton(
-                    onPressed:
-                        loading ? null : login,
+                    onPressed: loading ? null : login,
                     child: Text(
                       loading
                           ? 'جاري الدخول...'
                           : 'تسجيل الدخول',
                     ),
                   ),
-
                   const SizedBox(height: 8),
-
                   OutlinedButton(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) =>
-                              const RegisterPage(),
-                        ),
-                      );
-                    },
+                    onPressed: loading
+                        ? null
+                        : () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    const RegisterPage(),
+                              ),
+                            );
+                          },
                     child: const Text(
                       'إنشاء شركة جديدة',
                     ),
@@ -444,8 +492,7 @@ class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
 
   @override
-  State<RegisterPage> createState() =>
-      _RegisterPageState();
+  State<RegisterPage> createState() => _RegisterPageState();
 }
 
 class _RegisterPageState extends State<RegisterPage> {
@@ -458,6 +505,16 @@ class _RegisterPageState extends State<RegisterPage> {
   String? error;
 
   Future<void> register() async {
+    if (companyController.text.trim().isEmpty ||
+        ownerController.text.trim().isEmpty ||
+        emailController.text.trim().isEmpty ||
+        passwordController.text.isEmpty) {
+      setState(() {
+        error = 'يرجى تعبئة جميع الحقول';
+      });
+      return;
+    }
+
     setState(() {
       loading = true;
       error = null;
@@ -467,34 +524,43 @@ class _RegisterPageState extends State<RegisterPage> {
       final data = await api.post(
         '/auth/register-company',
         {
-          'companyName':
-              companyController.text.trim(),
-          'ownerName':
-              ownerController.text.trim(),
-          'email':
-              emailController.text.trim(),
-          'password':
-              passwordController.text,
+          'companyName': companyController.text.trim(),
+          'ownerName': ownerController.text.trim(),
+          'email': emailController.text.trim(),
+          'password': passwordController.text,
         },
       );
 
-      final storage =
-          await SharedPreferences.getInstance();
+      if (data is! Map) {
+        throw Exception('استجابة غير صحيحة من الخادم');
+      }
+
+      final accessToken = data['accessToken'];
+      final refreshToken = data['refreshToken'];
+      final company = data['company'];
+
+      if (accessToken == null || refreshToken == null) {
+        throw Exception('بيانات التسجيل غير مكتملة');
+      }
+
+      final storage = await SharedPreferences.getInstance();
 
       await storage.setString(
         'accessToken',
-        data['accessToken'],
+        accessToken.toString(),
       );
 
       await storage.setString(
         'refreshToken',
-        data['refreshToken'],
+        refreshToken.toString(),
       );
 
-      await storage.setString(
-        'companyName',
-        data['company']['name'],
-      );
+      if (company is Map && company['name'] != null) {
+        await storage.setString(
+          'companyName',
+          company['name'].toString(),
+        );
+      }
 
       if (!mounted) return;
 
@@ -547,9 +613,7 @@ class _RegisterPageState extends State<RegisterPage> {
               border: OutlineInputBorder(),
             ),
           ),
-
           const SizedBox(height: 12),
-
           TextField(
             controller: ownerController,
             decoration: const InputDecoration(
@@ -557,21 +621,16 @@ class _RegisterPageState extends State<RegisterPage> {
               border: OutlineInputBorder(),
             ),
           ),
-
           const SizedBox(height: 12),
-
           TextField(
             controller: emailController,
-            keyboardType:
-                TextInputType.emailAddress,
+            keyboardType: TextInputType.emailAddress,
             decoration: const InputDecoration(
               labelText: 'البريد الإلكتروني',
               border: OutlineInputBorder(),
             ),
           ),
-
           const SizedBox(height: 12),
-
           TextField(
             controller: passwordController,
             obscureText: true,
@@ -580,7 +639,6 @@ class _RegisterPageState extends State<RegisterPage> {
               border: OutlineInputBorder(),
             ),
           ),
-
           if (error != null) ...[
             const SizedBox(height: 10),
             Text(
@@ -590,12 +648,9 @@ class _RegisterPageState extends State<RegisterPage> {
               ),
             ),
           ],
-
           const SizedBox(height: 18),
-
           FilledButton(
-            onPressed:
-                loading ? null : register,
+            onPressed: loading ? null : register,
             child: Text(
               loading
                   ? 'جاري الإنشاء...'
@@ -647,8 +702,7 @@ class _HomePageState extends State<HomePage> {
         destinations: const [
           NavigationDestination(
             icon: Icon(Icons.dashboard_outlined),
-            selectedIcon:
-                Icon(Icons.dashboard),
+            selectedIcon: Icon(Icons.dashboard),
             label: 'الرئيسية',
           ),
           NavigationDestination(
@@ -658,20 +712,17 @@ class _HomePageState extends State<HomePage> {
           ),
           NavigationDestination(
             icon: Icon(Icons.trending_up),
-            selectedIcon:
-                Icon(Icons.trending_up),
+            selectedIcon: Icon(Icons.trending_up),
             label: 'الفرص',
           ),
           NavigationDestination(
-            icon: Icon(Icons.task_alt),
-            selectedIcon:
-                Icon(Icons.task_alt),
+            icon: Icon(Icons.task_alt_outlined),
+            selectedIcon: Icon(Icons.task_alt),
             label: 'المهام',
           ),
           NavigationDestination(
             icon: Icon(Icons.more_horiz),
-            selectedIcon:
-                Icon(Icons.more_horiz),
+            selectedIcon: Icon(Icons.more_horiz),
             label: 'المزيد',
           ),
         ],
@@ -688,39 +739,51 @@ class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
 
   @override
-  State<DashboardPage> createState() =>
-      _DashboardPageState();
+  State<DashboardPage> createState() => _DashboardPageState();
 }
 
-class _DashboardPageState
-    extends State<DashboardPage> {
+class _DashboardPageState extends State<DashboardPage> {
   Map<String, dynamic>? data;
   bool loading = true;
   String company = '';
 
+  @override
+  void initState() {
+    super.initState();
+    load();
+  }
+
   Future<void> load() async {
-    final storage =
-        await SharedPreferences.getInstance();
+    final storage = await SharedPreferences.getInstance();
 
-    company =
-        storage.getString('companyName') ?? '';
+    company = storage.getString('companyName') ?? '';
 
-    setState(() {
-      loading = true;
-    });
+    if (mounted) {
+      setState(() {
+        loading = true;
+      });
+    }
 
     try {
-      final result =
-          await api.get('/dashboard');
+      final result = await api.get('/dashboard');
 
       if (!mounted) return;
 
-      setState(() {
-        data =
-            Map<String, dynamic>.from(result);
-      });
-    } catch (_) {
-      // يمكن إضافة رسالة خطأ لاحقًا
+      if (result is Map) {
+        setState(() {
+          data = Map<String, dynamic>.from(result);
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'تعذر تحميل لوحة التحكم: $e',
+          ),
+        ),
+      );
     } finally {
       if (!mounted) return;
 
@@ -728,12 +791,6 @@ class _DashboardPageState
         loading = false;
       });
     }
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    load();
   }
 
   @override
@@ -751,6 +808,7 @@ class _DashboardPageState
       body: RefreshIndicator(
         onRefresh: load,
         child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.all(16),
           children: [
             Text(
@@ -759,21 +817,15 @@ class _DashboardPageState
                   .textTheme
                   .headlineSmall,
             ),
-
             Text(
-              company,
+              company.isEmpty ? 'شركة جديدة' : company,
               style: Theme.of(context)
                   .textTheme
                   .titleMedium,
             ),
-
             const SizedBox(height: 18),
-
-            if (loading)
-              const LinearProgressIndicator(),
-
+            if (loading) const LinearProgressIndicator(),
             const SizedBox(height: 12),
-
             Wrap(
               spacing: 10,
               runSpacing: 10,
@@ -800,47 +852,37 @@ class _DashboardPageState
                 ),
               ],
             ),
-
             const SizedBox(height: 18),
-
             Card(
               child: ListTile(
-                leading:
-                    const Icon(Icons.insights),
+                leading: const Icon(Icons.insights),
                 title: const Text(
                   'التقارير والتحليلات',
                 ),
                 subtitle: const Text(
                   'المبيعات، العملاء، المهام والأنشطة',
                 ),
-                trailing: const Icon(
-                  Icons.chevron_right,
-                ),
+                trailing: const Icon(Icons.chevron_right),
                 onTap: () {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) =>
-                          const AnalyticsPage(),
+                      builder: (_) => const AnalyticsPage(),
                     ),
                   );
                 },
               ),
             ),
-
             Card(
               child: ListTile(
                 leading: const Icon(
                   Icons.card_membership,
                 ),
-                title:
-                    const Text('الاشتراك'),
+                title: const Text('الاشتراك'),
                 subtitle: const Text(
                   'الخطة الحالية والاستخدام',
                 ),
-                trailing: const Icon(
-                  Icons.chevron_right,
-                ),
+                trailing: const Icon(Icons.chevron_right),
                 onTap: () {
                   Navigator.push(
                     context,
@@ -878,15 +920,12 @@ class Metric extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width:
-          MediaQuery.sizeOf(context).width / 2 -
-              22,
+      width: MediaQuery.sizeOf(context).width / 2 - 22,
       child: Card(
         child: Padding(
           padding: const EdgeInsets.all(14),
           child: Column(
-            crossAxisAlignment:
-                CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Icon(icon),
               const SizedBox(height: 8),
@@ -914,17 +953,20 @@ class CustomersPage extends StatefulWidget {
   const CustomersPage({super.key});
 
   @override
-  State<CustomersPage> createState() =>
-      _CustomersPageState();
+  State<CustomersPage> createState() => _CustomersPageState();
 }
 
-class _CustomersPageState
-    extends State<CustomersPage> {
-  List list = [];
+class _CustomersPageState extends State<CustomersPage> {
+  List<dynamic> list = [];
   bool loading = true;
 
-  final searchController =
-      TextEditingController();
+  final searchController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    load();
+  }
 
   Future<void> load() async {
     setState(() {
@@ -932,8 +974,7 @@ class _CustomersPageState
     });
 
     try {
-      final query =
-          searchController.text.trim();
+      final query = searchController.text.trim();
 
       final path = query.isEmpty
           ? '/customers'
@@ -943,14 +984,19 @@ class _CustomersPageState
 
       if (!mounted) return;
 
-      setState(() {
-        list = List.from(result);
-      });
+      if (result is List) {
+        setState(() {
+          list = result;
+        });
+      } else {
+        setState(() {
+          list = [];
+        });
+      }
     } catch (e) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context)
-          .showSnackBar(
+      ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('$e'),
         ),
@@ -962,12 +1008,6 @@ class _CustomersPageState
         loading = false;
       });
     }
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    load();
   }
 
   @override
@@ -996,53 +1036,40 @@ class _CustomersPageState
               controller: searchController,
               onSubmitted: (_) => load(),
               decoration: InputDecoration(
-                prefixIcon:
-                    const Icon(Icons.search),
+                prefixIcon: const Icon(Icons.search),
                 hintText: 'بحث عن عميل',
-                border:
-                    const OutlineInputBorder(),
+                border: const OutlineInputBorder(),
                 suffixIcon: IconButton(
                   onPressed: load,
-                  icon:
-                      const Icon(Icons.search),
+                  icon: const Icon(Icons.search),
                 ),
               ),
             ),
           ),
-
           Expanded(
             child: loading
                 ? const Center(
-                    child:
-                        CircularProgressIndicator(),
+                    child: CircularProgressIndicator(),
                   )
                 : list.isEmpty
                     ? const Center(
-                        child: Text(
-                          'لا يوجد عملاء',
-                        ),
+                        child: Text('لا يوجد عملاء'),
                       )
                     : ListView.separated(
                         itemCount: list.length,
-                        separatorBuilder:
-                            (_, __) =>
-                                const Divider(
-                          height: 1,
-                        ),
-                        itemBuilder:
-                            (context, index) {
+                        separatorBuilder: (_, __) =>
+                            const Divider(height: 1),
+                        itemBuilder: (context, index) {
+                          final item = list[index];
+
                           final customer =
-                              Map<String,
-                                  dynamic>.from(
-                            list[index],
-                          );
+                              item is Map
+                                  ? Map<String, dynamic>.from(item)
+                                  : <String, dynamic>{};
 
                           return ListTile(
-                            leading:
-                                const CircleAvatar(
-                              child: Icon(
-                                Icons.person,
-                              ),
+                            leading: const CircleAvatar(
+                              child: Icon(Icons.person),
                             ),
                             title: Text(
                               '${customer['name'] ?? ''}',
@@ -1056,8 +1083,7 @@ class _CustomersPageState
                                 MaterialPageRoute(
                                   builder: (_) =>
                                       Customer360Page(
-                                    customer:
-                                        customer,
+                                    customer: customer,
                                   ),
                                 ),
                               );
@@ -1076,8 +1102,7 @@ class _CustomersPageState
 // CUSTOMER 360
 // ============================================================
 
-class Customer360Page
-    extends StatelessWidget {
+class Customer360Page extends StatelessWidget {
   final Map<String, dynamic> customer;
 
   const Customer360Page({
@@ -1100,28 +1125,20 @@ class Customer360Page
                 .textTheme
                 .headlineSmall,
           ),
-
           if (customer['companyName'] != null)
-            Text(
-              '${customer['companyName']}',
-            ),
-
+            Text('${customer['companyName']}'),
           const SizedBox(height: 12),
-
           Card(
             child: ListTile(
-              leading:
-                  const Icon(Icons.phone),
+              leading: const Icon(Icons.phone),
               title: Text(
                 '${customer['phone'] ?? 'لا يوجد هاتف'}',
               ),
             ),
           ),
-
           Card(
             child: ListTile(
-              leading:
-                  const Icon(Icons.email),
+              leading: const Icon(Icons.email),
               title: Text(
                 '${customer['email'] ?? 'لا يوجد بريد'}',
               ),
@@ -1137,8 +1154,7 @@ class Customer360Page
 // OPPORTUNITIES
 // ============================================================
 
-class OpportunitiesPage
-    extends StatefulWidget {
+class OpportunitiesPage extends StatefulWidget {
   const OpportunitiesPage({super.key});
 
   @override
@@ -1151,6 +1167,12 @@ class _OpportunitiesPageState
   Map<String, dynamic>? data;
   bool loading = true;
 
+  @override
+  void initState() {
+    super.initState();
+    load();
+  }
+
   Future<void> load() async {
     setState(() {
       loading = true;
@@ -1162,12 +1184,21 @@ class _OpportunitiesPageState
 
       if (!mounted) return;
 
-      setState(() {
-        data =
-            Map<String, dynamic>.from(result);
-      });
-    } catch (_) {
-      // يمكن إضافة رسالة خطأ لاحقًا
+      if (result is Map) {
+        setState(() {
+          data = Map<String, dynamic>.from(result);
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'تعذر تحميل الفرص: $e',
+          ),
+        ),
+      );
     } finally {
       if (!mounted) return;
 
@@ -1178,17 +1209,12 @@ class _OpportunitiesPageState
   }
 
   @override
-  void initState() {
-    super.initState();
-    load();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final stages =
-        Map<String, dynamic>.from(
-      (data?['stages'] as Map?) ?? {},
-    );
+    final rawStages = data?['stages'];
+
+    final stages = rawStages is Map
+        ? Map<String, dynamic>.from(rawStages)
+        : <String, dynamic>{};
 
     const stageNames = [
       'LEAD',
@@ -1202,24 +1228,20 @@ class _OpportunitiesPageState
 
     return Scaffold(
       appBar: AppBar(
-        title:
-            const Text('Sales Pipeline'),
+        title: const Text('Sales Pipeline'),
         actions: [
           IconButton(
             onPressed: load,
-            icon:
-                const Icon(Icons.refresh),
+            icon: const Icon(Icons.refresh),
           ),
         ],
       ),
       body: loading
           ? const Center(
-              child:
-                  CircularProgressIndicator(),
+              child: CircularProgressIndicator(),
             )
           : ListView(
-              padding:
-                  const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(16),
               children: [
                 Card(
                   child: ListTile(
@@ -1231,7 +1253,6 @@ class _OpportunitiesPageState
                     ),
                   ),
                 ),
-
                 Card(
                   child: ListTile(
                     title: const Text(
@@ -1242,27 +1263,29 @@ class _OpportunitiesPageState
                     ),
                   ),
                 ),
+                ...stageNames.map(
+                  (stage) {
+                    final rawStage = stages[stage];
 
-                ...stageNames.map((stage) {
-                  final stageData =
-                      Map<String, dynamic>.from(
-                    (stages[stage] as Map?) ?? {},
-                  );
+                    final stageData = rawStage is Map
+                        ? Map<String, dynamic>.from(rawStage)
+                        : <String, dynamic>{};
 
-                  return Card(
-                    child: ListTile(
-                      leading: CircleAvatar(
-                        child: Text(
-                          '${stageData['count'] ?? 0}',
+                    return Card(
+                      child: ListTile(
+                        leading: CircleAvatar(
+                          child: Text(
+                            '${stageData['count'] ?? 0}',
+                          ),
+                        ),
+                        title: Text(stage),
+                        subtitle: Text(
+                          'Value: ${stageData['value'] ?? 0}',
                         ),
                       ),
-                      title: Text(stage),
-                      subtitle: Text(
-                        'Value: ${stageData['value'] ?? 0}',
-                      ),
-                    ),
-                  );
-                }),
+                    );
+                  },
+                ),
               ],
             ),
     );
@@ -1277,14 +1300,18 @@ class TasksPage extends StatefulWidget {
   const TasksPage({super.key});
 
   @override
-  State<TasksPage> createState() =>
-      _TasksPageState();
+  State<TasksPage> createState() => _TasksPageState();
 }
 
-class _TasksPageState
-    extends State<TasksPage> {
-  List list = [];
+class _TasksPageState extends State<TasksPage> {
+  List<dynamic> list = [];
   bool loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    load();
+  }
 
   Future<void> load() async {
     setState(() {
@@ -1292,16 +1319,29 @@ class _TasksPageState
     });
 
     try {
-      final result =
-          await api.get('/tasks');
+      final result = await api.get('/tasks');
 
       if (!mounted) return;
 
-      setState(() {
-        list = List.from(result);
-      });
-    } catch (_) {
-      // يمكن إضافة رسالة خطأ لاحقًا
+      if (result is List) {
+        setState(() {
+          list = result;
+        });
+      } else {
+        setState(() {
+          list = [];
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'تعذر تحميل المهام: $e',
+          ),
+        ),
+      );
     } finally {
       if (!mounted) return;
 
@@ -1312,55 +1352,44 @@ class _TasksPageState
   }
 
   @override
-  void initState() {
-    super.initState();
-    load();
-  }
-
-  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title:
-            const Text('مهام المتابعة'),
+        title: const Text('مهام المتابعة'),
         actions: [
           IconButton(
             onPressed: load,
-            icon:
-                const Icon(Icons.refresh),
+            icon: const Icon(Icons.refresh),
           ),
         ],
       ),
       body: loading
           ? const Center(
-              child:
-                  CircularProgressIndicator(),
+              child: CircularProgressIndicator(),
             )
           : list.isEmpty
               ? const Center(
-                  child: Text(
-                    'لا توجد مهام',
-                  ),
+                  child: Text('لا توجد مهام'),
                 )
               : ListView.separated(
                   itemCount: list.length,
-                  separatorBuilder:
-                      (_, __) =>
-                          const Divider(),
-                  itemBuilder:
-                      (context, index) {
-                    final task =
-                        Map<String, dynamic>.from(
-                      list[index],
-                    );
+                  separatorBuilder: (_, __) =>
+                      const Divider(),
+                  itemBuilder: (context, index) {
+                    final item = list[index];
+
+                    final task = item is Map
+                        ? Map<String, dynamic>.from(item)
+                        : <String, dynamic>{};
+
+                    final completed =
+                        task['status'] == 'COMPLETED';
 
                     return ListTile(
                       leading: Icon(
-                        task['status'] ==
-                                'COMPLETED'
+                        completed
                             ? Icons.check_circle
-                            : Icons
-                                .radio_button_unchecked,
+                            : Icons.radio_button_unchecked,
                       ),
                       title: Text(
                         '${task['title'] ?? ''}',
@@ -1379,8 +1408,7 @@ class _TasksPageState
 // ANALYTICS
 // ============================================================
 
-class AnalyticsPage
-    extends StatefulWidget {
+class AnalyticsPage extends StatefulWidget {
   const AnalyticsPage({super.key});
 
   @override
@@ -1388,8 +1416,7 @@ class AnalyticsPage
       _AnalyticsPageState();
 }
 
-class _AnalyticsPageState
-    extends State<AnalyticsPage> {
+class _AnalyticsPageState extends State<AnalyticsPage> {
   Map<String, dynamic>? data;
   bool loading = true;
 
@@ -1406,12 +1433,21 @@ class _AnalyticsPageState
 
       if (!mounted) return;
 
-      setState(() {
-        data =
-            Map<String, dynamic>.from(result);
-      });
-    } catch (_) {
-      // يمكن إضافة رسالة خطأ لاحقًا
+      if (result is Map) {
+        setState(() {
+          data = Map<String, dynamic>.from(result);
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'تعذر تحميل التحليلات: $e',
+          ),
+        ),
+      );
     } finally {
       if (!mounted) return;
 
@@ -1423,20 +1459,18 @@ class _AnalyticsPageState
 
   @override
   Widget build(BuildContext context) {
+    final entries = data?.entries.toList() ?? [];
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'التقارير والتحليلات',
-        ),
+        title: const Text('التقارير والتحليلات'),
       ),
       body: loading
           ? const Center(
-              child:
-                  CircularProgressIndicator(),
+              child: CircularProgressIndicator(),
             )
           : ListView(
-              padding:
-                  const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(16),
               children: [
                 Text(
                   'ملخص الأداء',
@@ -1444,15 +1478,20 @@ class _AnalyticsPageState
                       .textTheme
                       .titleLarge,
                 ),
-
                 const SizedBox(height: 12),
-
-                ...(data ?? {}).entries.map(
+                if (entries.isEmpty)
+                  const Card(
+                    child: ListTile(
+                      title: Text(
+                        'لا توجد بيانات تحليلية حالياً',
+                      ),
+                    ),
+                  ),
+                ...entries.map(
                   (entry) {
                     return Card(
                       child: ListTile(
-                        title:
-                            Text(entry.key),
+                        title: Text(entry.key.toString()),
                         trailing: Text(
                           '${entry.value}',
                         ),
@@ -1470,8 +1509,7 @@ class _AnalyticsPageState
 // SUBSCRIPTION
 // ============================================================
 
-class SubscriptionPage
-    extends StatefulWidget {
+class SubscriptionPage extends StatefulWidget {
   const SubscriptionPage({super.key});
 
   @override
@@ -1497,12 +1535,21 @@ class _SubscriptionPageState
 
       if (!mounted) return;
 
-      setState(() {
-        data =
-            Map<String, dynamic>.from(result);
-      });
-    } catch (_) {
-      // يمكن إضافة رسالة خطأ لاحقًا
+      if (result is Map) {
+        setState(() {
+          data = Map<String, dynamic>.from(result);
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'تعذر تحميل الاشتراك: $e',
+          ),
+        ),
+      );
     } finally {
       if (!mounted) return;
 
@@ -1514,10 +1561,15 @@ class _SubscriptionPageState
 
   @override
   Widget build(BuildContext context) {
-    final planName =
-        data?['plan']?['name'] ??
-        data?['planName'] ??
-        '—';
+    final rawPlan = data?['plan'];
+
+    String planName = '—';
+
+    if (rawPlan is Map && rawPlan['name'] != null) {
+      planName = rawPlan['name'].toString();
+    } else if (data?['planName'] != null) {
+      planName = data!['planName'].toString();
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -1525,27 +1577,22 @@ class _SubscriptionPageState
       ),
       body: loading
           ? const Center(
-              child:
-                  CircularProgressIndicator(),
+              child: CircularProgressIndicator(),
             )
           : ListView(
-              padding:
-                  const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(16),
               children: [
                 Card(
                   child: ListTile(
                     title: const Text(
                       'الخطة الحالية',
                     ),
-                    subtitle:
-                        Text('$planName'),
+                    subtitle: Text(planName),
                   ),
                 ),
-
                 Card(
                   child: ListTile(
-                    title:
-                        const Text('الحالة'),
+                    title: const Text('الحالة'),
                     subtitle: Text(
                       '${data?['status'] ?? '—'}',
                     ),
@@ -1564,9 +1611,7 @@ class _SubscriptionPageState
 class MorePage extends StatelessWidget {
   const MorePage({super.key});
 
-  Future<void> logout(
-    BuildContext context,
-  ) async {
+  Future<void> logout(BuildContext context) async {
     final storage =
         await SharedPreferences.getInstance();
 
@@ -1592,8 +1637,7 @@ class MorePage extends StatelessWidget {
       body: ListView(
         children: [
           ListTile(
-            leading:
-                const Icon(Icons.insights),
+            leading: const Icon(Icons.insights),
             title: const Text(
               'التقارير والتحليلات',
             ),
@@ -1601,19 +1645,16 @@ class MorePage extends StatelessWidget {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) =>
-                      const AnalyticsPage(),
+                  builder: (_) => const AnalyticsPage(),
                 ),
               );
             },
           ),
-
           ListTile(
             leading: const Icon(
               Icons.card_membership,
             ),
-            title:
-                const Text('الاشتراك'),
+            title: const Text('الاشتراك'),
             onTap: () {
               Navigator.push(
                 context,
@@ -1624,12 +1665,9 @@ class MorePage extends StatelessWidget {
               );
             },
           ),
-
           ListTile(
-            leading:
-                const Icon(Icons.logout),
-            title:
-                const Text('تسجيل الخروج'),
+            leading: const Icon(Icons.logout),
+            title: const Text('تسجيل الخروج'),
             onTap: () => logout(context),
           ),
         ],
