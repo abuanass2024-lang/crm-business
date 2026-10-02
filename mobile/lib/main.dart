@@ -681,8 +681,8 @@ class DemoInfoCard extends StatelessWidget {
       child: Padding(
         padding:
             const EdgeInsets.all(18),
-        child: Column(
-          children: const [
+        child: const Column(
+          children: [
             Row(
               children: [
                 Icon(
@@ -902,923 +902,17 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() =>
       _HomePageState();
 }
-
-class _HomePageState
-    extends State<HomePage> {
-  int index = 0;
-
-  Future<void> refresh() async {
-    setState(() {});
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final pages = [
-      DashboardPage(
-        store: widget.store,
-        onChanged: refresh,
-      ),
-      CustomersPage(
-        store: widget.store,
-        onChanged: refresh,
-      ),
-      OpportunitiesPage(
-        store: widget.store,
-        onChanged: refresh,
-      ),
-      TasksPage(
-        store: widget.store,
-        onChanged: refresh,
-      ),
-      MorePage(
-        store: widget.store,
-        guest: widget.guest,
-      ),
-    ];
-
-    return Scaffold(
-      body: pages[index],
-      bottomNavigationBar:
-          NavigationBar(
-        selectedIndex: index,
-        onDestinationSelected:
-            (value) {
-          setState(() {
-            index = value;
-          });
-        },
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(
-              Icons.dashboard_outlined,
-            ),
-            selectedIcon: Icon(
-              Icons.dashboard,
-            ),
-            label: 'الرئيسية',
-          ),
-          NavigationDestination(
-            icon: Icon(
-              Icons.people_outline,
-            ),
-            selectedIcon: Icon(
-              Icons.people,
-            ),
-            label: 'العملاء',
-          ),
-          NavigationDestination(
-            icon: Icon(
-              Icons.trending_up,
-            ),
-            label: 'الفرص',
-          ),
-          NavigationDestination(
-            icon: Icon(
-              Icons.task_alt,
-            ),
-            label: 'المهام',
-          ),
-          NavigationDestination(
-            icon: Icon(
-              Icons.more_horiz,
-            ),
-            label: 'المزيد',
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class DashboardPage extends StatelessWidget {
-  final DemoStore store;
-  final VoidCallback onChanged;
-
-  const DashboardPage({
-    super.key,
-    required this.store,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final pipeline =
-        store.pipelineValue();
-
-    final weighted =
-        store.weightedPipeline();
-
-    final overdue =
-        store.overdueTasks();
-
-    final highPriority =
-        store.highPriorityOpportunities();
-
-    final topOpportunity =
-        [...store.opportunities]
-          ..removeWhere(
-            (o) =>
-                o['stage'] == 'مغلقة' ||
-                o['stage'] == 'خاسرة',
-          )
-          ..sort(
-            (a, b) =>
-                ((b['value'] as num) *
-                        (b['probability']
-                            as num))
-                    .compareTo(
-              (a['value'] as num) *
-                  (a['probability'] as num),
-            ),
-          );
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'CRM Business',
-          style: TextStyle(
-            fontWeight:
-                FontWeight.bold,
-          ),
-        ),
-        actions: [
-          IconButton(
-            onPressed: onChanged,
-            icon: const Icon(
-              Icons.refresh,
-            ),
-          ),
-        ],
-      ),
-      body: RefreshIndicator(
-        onRefresh: () async {
-          onChanged();
-        },
-        child: ListView(
-          padding:
-              const EdgeInsets.all(16),
-          children: [
-            const Text(
-              'صورة العمل اليوم',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight:
-                    FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 6),
-            const Text(
-              'قراءة سريعة لما يحتاج انتباهك الآن.',
-              style: TextStyle(
-                color: Colors.black54,
-              ),
-            ),
-            const SizedBox(height: 18),
-            GridView.count(
-              crossAxisCount: 2,
-              shrinkWrap: true,
-              physics:
-                  const NeverScrollableScrollPhysics(),
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
-              childAspectRatio: 1.45,
-              children: [
-                KpiCard(
-                  title: 'Pipeline',
-                  value: money(
-                    pipeline,
-                  ),
-                  icon:
-                      Icons.account_balance_wallet,
-                ),
-                KpiCard(
-                  title: 'Weighted',
-                  value: money(
-                    weighted,
-                  ),
-                  icon:
-                      Icons.analytics,
-                ),
-                KpiCard(
-                  title: 'العملاء',
-                  value:
-                      '${store.customers.length}',
-                  icon: Icons.people,
-                ),
-                KpiCard(
-                  title: 'مهام متأخرة',
-                  value: '$overdue',
-                  icon:
-                      Icons.warning_amber,
-                  danger:
-                      overdue > 0,
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-            const SectionTitle(
-              icon:
-                  Icons.auto_awesome,
-              title:
-                  'Next Best Actions',
-            ),
-            const SizedBox(height: 8),
-            ActionCard(
-              icon: overdue > 0
-                  ? Icons.warning_amber
-                  : Icons.check_circle_outline,
-              title: overdue > 0
-                  ? 'لديك مهام متأخرة تحتاج متابعة'
-                  : 'لا توجد مهام متأخرة',
-              subtitle: overdue > 0
-                  ? 'ابدأ بإغلاق المهام القديمة قبل إضافة أعمال جديدة.'
-                  : 'استمر في المحافظة على انضباط المتابعة.',
-            ),
-            ActionCard(
-              icon:
-                  Icons.trending_up,
-              title:
-                  '$highPriority فرص ذات أولوية عالية',
-              subtitle:
-                  'راجع الفرص ذات الاحتمال الأعلى وقرب الإغلاق.',
-            ),
-            if (topOpportunity
-                .isNotEmpty)
-              ActionCard(
-                icon:
-                    Icons.star_outline,
-                title:
-                    'ركز على ${topOpportunity.first['title']}',
-                subtitle:
-                    '${money(topOpportunity.first['value'])} — احتمال ${topOpportunity.first['probability']}%',
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) =>
-                          OpportunityDetailsPage(
-                        store: store,
-                        opportunityId:
-                            topOpportunity
-                                .first['id']
-                                .toString(),
-                      ),
-                    ),
-                  );
-                },
-              ),
-            const SizedBox(height: 20),
-            const SectionTitle(
-              icon: Icons.insights,
-              title:
-                  'Executive Brief',
-            ),
-            const SizedBox(height: 8),
-            Card(
-              child: Padding(
-                padding:
-                    const EdgeInsets.all(18),
-                child: Column(
-                  crossAxisAlignment:
-                      CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'ملخص المدير',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight:
-                            FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(
-                        height: 12),
-                    Text(
-                      'لديك ${store.opportunities.length} فرص، '
-                      'منها $highPriority فرص ذات احتمال مرتفع. '
-                      'قيمة الـPipeline الحالية ${money(pipeline)} '
-                      'والقيمة المرجحة ${money(weighted)}.',
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class KpiCard extends StatelessWidget {
-  final String title;
-  final String value;
-  final IconData icon;
-  final bool danger;
-
-  const KpiCard({
-    super.key,
-    required this.title,
-    required this.value,
-    required this.icon,
-    this.danger = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding:
-            const EdgeInsets.all(15),
-        child: Column(
-          crossAxisAlignment:
-              CrossAxisAlignment.start,
-          children: [
-            Icon(
-              icon,
-              color: danger
-                  ? dangerColor
-                  : primaryColor,
-            ),
-            const Spacer(),
-            Text(
-              value,
-              style: const TextStyle(
-                fontSize: 21,
-                fontWeight:
-                    FontWeight.bold,
-              ),
-            ),
-            Text(
-              title,
-              style:
-                  const TextStyle(
-                color: Colors.black54,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class SectionTitle extends StatelessWidget {
-  final IconData icon;
-  final String title;
-
-  const SectionTitle({
-    super.key,
-    required this.icon,
-    required this.title,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Icon(
-          icon,
-          color: primaryColor,
-        ),
-        const SizedBox(width: 8),
-        Text(
-          title,
-          style: const TextStyle(
-            fontSize: 19,
-            fontWeight:
-                FontWeight.bold,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class ActionCard extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final VoidCallback? onTap;
-
-  const ActionCard({
-    super.key,
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: InkWell(
-        borderRadius:
-            BorderRadius.circular(18),
-        onTap: onTap,
-        child: Padding(
-          padding:
-              const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              CircleAvatar(
-                backgroundColor:
-                    primaryColor.withValues(
-                  alpha: .1,
-                ),
-                child: Icon(
-                  icon,
-                  color: primaryColor,
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment:
-                      CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style:
-                          const TextStyle(
-                        fontWeight:
-                            FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(
-                        height: 4),
-                    Text(
-                      subtitle,
-                      style:
-                          const TextStyle(
-                        color:
-                            Colors.black54,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (onTap != null)
-                const Icon(
-                  Icons.chevron_left,
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class CustomersPage extends StatefulWidget {
-  final DemoStore store;
-  final VoidCallback onChanged;
-
-  const CustomersPage({
-    super.key,
-    required this.store,
-    required this.onChanged,
-  });
-
-  @override
-  State<CustomersPage> createState() =>
-      _CustomersPageState();
-}
-
-class _CustomersPageState
-    extends State<CustomersPage> {
-  String query = '';
-
-  Future<void> addCustomer() async {
-    await showCustomerDialog(
-      context,
-      widget.store,
-    );
-
-    setState(() {});
-    widget.onChanged();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final filtered =
-        widget.store.customers
-            .where((customer) {
-      final q =
-          query.toLowerCase();
-
-      return customer['name']
-              .toString()
-              .toLowerCase()
-              .contains(q) ||
-          customer['contactName']
-              .toString()
-              .toLowerCase()
-              .contains(q) ||
-          customer['sector']
-              .toString()
-              .toLowerCase()
-              .contains(q);
-    }).toList();
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'العملاء',
-        ),
-        actions: [
-          IconButton(
-            onPressed:
-                addCustomer,
-            icon: const Icon(
-              Icons.person_add_alt_1,
-            ),
-          ),
-        ],
-      ),
-      floatingActionButton:
-          FloatingActionButton.extended(
-        onPressed: addCustomer,
-        icon:
-            const Icon(Icons.add),
-        label:
-            const Text('عميل'),
-      ),
-      body: ListView(
-        padding:
-            const EdgeInsets.all(16),
-        children: [
-          TextField(
-            onChanged: (value) {
-              setState(() {
-                query = value;
-              });
-            },
-            decoration:
-                const InputDecoration(
-              hintText:
-                  'بحث عن عميل...',
-              prefixIcon:
-                  Icon(Icons.search),
-            ),
-          ),
-          const SizedBox(height: 16),
-          ...filtered.map(
-            (customer) =>
-                CustomerCard(
-              store:
-                  widget.store,
-              customer:
-                  customer,
-              onChanged: () {
-                setState(() {});
-                widget.onChanged();
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class CustomerCard extends StatelessWidget {
-  final DemoStore store;
-  final Map<String, dynamic> customer;
-  final VoidCallback onChanged;
-
-  const CustomerCard({
-    super.key,
-    required this.store,
-    required this.customer,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final customerId =
-        customer['id'].toString();
-
-    final opportunities =
-        store.opportunities
-            .where(
-              (o) =>
-                  o['customerId'] ==
-                  customerId,
-            )
-            .toList();
-
-    final value =
-        opportunities.fold<double>(
-      0,
-      (sum, o) =>
-          sum +
-          (o['value'] as num)
-              .toDouble(),
-    );
-
-    return Card(
-      margin:
-          const EdgeInsets.only(
-        bottom: 12,
-      ),
-      child: InkWell(
-        borderRadius:
-            BorderRadius.circular(
-          18,
-        ),
-        onTap: () async {
-          await Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) =>
-                  Customer360Page(
-                store: store,
-                customerId:
-                    customerId,
-              ),
-            ),
-          );
-
-          onChanged();
-        },
-        child: Padding(
-          padding:
-              const EdgeInsets.all(16),
-          child: Column(
-            children: [
-              Row(
-                children: [
-                  CircleAvatar(
-                    radius: 25,
-                    backgroundColor:
-                        primaryColor.withValues(
-                      alpha: .1,
-                    ),
-                    child:
-                        const Icon(
-                      Icons.business,
-                      color:
-                          primaryColor,
-                    ),
-                  ),
-                  const SizedBox(
-                      width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment:
-                          CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          customer[
-                                  'name']
-                              .toString(),
-                          style:
-                              const TextStyle(
-                            fontWeight:
-                                FontWeight.bold,
-                            fontSize: 16,
-                          ),
-                        ),
-                        const SizedBox(
-                            height: 4),
-                        Text(
-                          customer[
-                                  'sector']
-                              .toString(),
-                          style:
-                              const TextStyle(
-                            color:
-                                Colors.black54,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const Icon(
-                    Icons.chevron_left,
-                  ),
-                ],
-              ),
-              const Divider(
-                height: 24,
-              ),
-              Row(
-                mainAxisAlignment:
-                    MainAxisAlignment
-                        .spaceBetween,
-                children: [
-                  Text(
-                    'الحالة: ${customer['status']}',
-                  ),
-                  Text(
-                    money(value),
-                    style:
-                        const TextStyle(
-                      fontWeight:
-                          FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-Future<void> showCustomerDialog(
-  BuildContext context,
-  DemoStore store, {
-  Map<String, dynamic>? existing,
-}) async {
-  final name =
-      TextEditingController(
-    text:
-        existing?['name']
-                ?.toString() ??
-            '',
-  );
-
-  final contact =
-      TextEditingController(
-    text:
-        existing?['contactName']
-                ?.toString() ??
-            '',
-  );
-
-  final phone =
-      TextEditingController(
-    text:
-        existing?['phone']
-                ?.toString() ??
-            '',
-  );
-
-  final email =
-      TextEditingController(
-    text:
-        existing?['email']
-                ?.toString() ??
-            '',
-  );
-
-  final sector =
-      TextEditingController(
-    text:
-        existing?['sector']
-                ?.toString() ??
-            '',
-  );
-
-  final notes =
-      TextEditingController(
-    text:
-        existing?['notes']
-                ?.toString() ??
-            '',
-  );
-
-  await showDialog(
-    context: context,
-    builder: (dialogContext) {
-      return AlertDialog(
-        title: Text(
-          existing == null
-              ? 'إضافة عميل'
-              : 'تعديل العميل',
-        ),
-        content:
-            SingleChildScrollView(
-          child: Column(
-            children: [
-              TextField(
-                controller: name,
-                decoration:
-                    const InputDecoration(
-                  labelText:
-                      'اسم الشركة',
-                ),
-              ),
-              const SizedBox(
-                  height: 10),
-              TextField(
-                controller: contact,
-                decoration:
-                    const InputDecoration(
-                  labelText:
-                      'جهة الاتصال',
-                ),
-              ),
-              const SizedBox(
-                  height: 10),
-              TextField(
-                controller: phone,
-                decoration:
-                    const InputDecoration(
-                  labelText: 'الهاتف',
-                ),
-              ),
-              const SizedBox(
-                  height: 10),
-              TextField(
-                controller: email,
-                decoration:
-                    const InputDecoration(
-                  labelText:
-                      'البريد',
-                ),
-              ),
-              const SizedBox(
-                  height: 10),
-              TextField(
-                controller: sector,
-                decoration:
-                    const InputDecoration(
-                  labelText:
-                      'القطاع',
-                ),
-              ),
-              const SizedBox(
-                  height: 10),
-              TextField(
-                controller: notes,
-                maxLines: 3,
-                decoration:
-                    const InputDecoration(
-                  labelText:
-                      'ملاحظات',
-                ),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () =>
-                Navigator.pop(
-              dialogContext,
-            ),
-            child:
-                const Text('إلغاء'),
-          ),
-          FilledButton(
-            onPressed: () async {
-              if (name.text
-                  .trim()
-                  .isEmpty) {
-                return;
-              }
-
-              final item = {
-                'id': existing?[
-                        'id'] ??
-                    store.newId(
-                      'customer',
-                    ),
-                'name':
-                    name.text.trim(),
-                'contactName':
-                    contact.text
-                        .trim(),
-                'phone':
-                    phone.text.trim(),
-                'email':
-                    email.text.trim(),
-                'sector':
-                    sector.text.trim(),
-                'status':
-                    existing?[
-                            'status'] ??
-                        'نشط',
-                'notes':
-                    notes.text.trim(),
-              };
-
-              if (existing ==
-                  null) {
-                await store
-                    .addCustomer(
-                  item,
-                );
+              if (existing == null) {
+                await store.addCustomer(item);
               } else {
-                await store
-                    .updateCustomer(
-                  item,
-                );
+                await store.updateCustomer(item);
               }
 
-              if (dialogContext
-                  .mounted) {
-                Navigator.pop(
-                  dialogContext,
-                );
+              if (dialogContext.mounted) {
+                Navigator.pop(dialogContext);
               }
             },
-            child:
-                const Text('حفظ'),
+            child: const Text('حفظ'),
           ),
         ],
       );
@@ -1833,8 +927,7 @@ Future<void> showCustomerDialog(
   notes.dispose();
 }
 
-class Customer360Page
-    extends StatefulWidget {
+class Customer360Page extends StatefulWidget {
   final DemoStore store;
   final String customerId;
 
@@ -1858,8 +951,7 @@ class _Customer360PageState
     final note =
         TextEditingController();
 
-    String type =
-        activityTypes.first;
+    String type = activityTypes.first;
 
     await showDialog(
       context: context,
@@ -1868,8 +960,7 @@ class _Customer360PageState
           builder:
               (context, setDialogState) {
             return AlertDialog(
-              title:
-                  const Text(
+              title: const Text(
                 'إضافة نشاط',
               ),
               content:
@@ -1878,54 +969,49 @@ class _Customer360PageState
                   children: [
                     DropdownButtonFormField<
                         String>(
-                      initialValue:
-                          type,
+                      initialValue: type,
+                      decoration:
+                          const InputDecoration(
+                        labelText: 'نوع النشاط',
+                      ),
                       items:
-                          activityTypes
-                              .map(
-                        (x) =>
-                            DropdownMenuItem(
-                          value: x,
-                          child:
-                              Text(x),
-                        ),
-                      )
-                              .toList(),
+                          activityTypes.map(
+                        (item) {
+                          return DropdownMenuItem(
+                            value: item,
+                            child:
+                                Text(item),
+                          );
+                        },
+                      ).toList(),
                       onChanged:
                           (value) {
-                        if (value !=
-                            null) {
-                          setDialogState(
-                            () {
-                              type =
-                                  value;
-                            },
-                          );
+                        if (value == null) {
+                          return;
                         }
+
+                        setDialogState(() {
+                          type = value;
+                        });
                       },
+                    ),
+                    const SizedBox(
+                      height: 12,
+                    ),
+                    TextField(
+                      controller: title,
                       decoration:
                           const InputDecoration(
                         labelText:
-                            'نوع النشاط',
+                            'عنوان النشاط',
                       ),
                     ),
                     const SizedBox(
-                        height: 10),
-                    TextField(
-                      controller:
-                          title,
-                      decoration:
-                          const InputDecoration(
-                        labelText:
-                            'العنوان',
-                      ),
+                      height: 12,
                     ),
-                    const SizedBox(
-                        height: 10),
                     TextField(
-                      controller:
-                          note,
-                      maxLines: 3,
+                      controller: note,
+                      maxLines: 4,
                       decoration:
                           const InputDecoration(
                         labelText:
@@ -1942,39 +1028,28 @@ class _Customer360PageState
                     dialogContext,
                   ),
                   child:
-                      const Text(
-                    'إلغاء',
-                  ),
+                      const Text('إلغاء'),
                 ),
                 FilledButton(
-                  onPressed:
-                      () async {
-                    if (title
-                        .text
+                  onPressed: () async {
+                    if (title.text
                         .trim()
                         .isEmpty) {
                       return;
                     }
 
-                    await widget
-                        .store
+                    await widget.store
                         .addActivity({
-                      'id': widget
-                          .store
-                          .newId(
-                        'activity',
-                      ),
+                      'id': widget.store
+                          .newId('activity'),
                       'customerId':
                           widget.customerId,
                       'type': type,
                       'title':
-                          title.text
-                              .trim(),
+                          title.text.trim(),
                       'note':
-                          note.text
-                              .trim(),
-                      'date': DateTime
-                              .now()
+                          note.text.trim(),
+                      'date': DateTime.now()
                           .toIso8601String(),
                     });
 
@@ -1984,11 +1059,13 @@ class _Customer360PageState
                         dialogContext,
                       );
                     }
+
+                    if (mounted) {
+                      setState(() {});
+                    }
                   },
                   child:
-                      const Text(
-                    'حفظ',
-                  ),
+                      const Text('حفظ'),
                 ),
               ],
             );
@@ -1999,60 +1076,71 @@ class _Customer360PageState
 
     title.dispose();
     note.dispose();
-
-    setState(() {});
   }
 
-  int calculateHealth({
-    required List<
-            Map<String, dynamic>>
-        opportunities,
-    required List<
-            Map<String, dynamic>>
-        tasks,
-    required List<
-            Map<String, dynamic>>
-        activities,
-  }) {
-    var score = 0;
+  Future<void> editCustomer(
+    Map<String, dynamic> customer,
+  ) async {
+    await showCustomerDialog(
+      context,
+      widget.store,
+      existing: customer,
+    );
 
-    if (activities.isNotEmpty) {
-      score += 25;
+    if (mounted) {
+      setState(() {});
     }
+  }
 
-    if (opportunities.isNotEmpty) {
-      score += 25;
-    }
-
-    if (tasks.any(
-      (t) =>
-          t['status'] == 'مكتملة',
-    )) {
-      score += 20;
-    }
-
-    if (opportunities.any(
-      (o) =>
-          (o['probability']
-              as num) >=
-          60,
-    )) {
-      score += 20;
-    }
-
-    if (!tasks.any(
-      (t) =>
-          t['status'] !=
-              'مكتملة' &&
-          isOverdue(
-            t['dueDate']
-                ?.toString(),
+  Future<void> deleteCustomer() async {
+    final confirmed =
+        await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text(
+            'حذف العميل',
           ),
-    )) {
-      score += 10;
+          content: const Text(
+            'سيتم حذف العميل والفرص والمهام والأنشطة المرتبطة به. هل تريد المتابعة؟',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () =>
+                  Navigator.pop(
+                dialogContext,
+                false,
+              ),
+              child:
+                  const Text('إلغاء'),
+            ),
+            FilledButton(
+              onPressed: () =>
+                  Navigator.pop(
+                dialogContext,
+                true,
+              ),
+              child:
+                  const Text('حذف'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true) {
+      return;
     }
 
-    return score.clamp(0, 100);
+    await widget.store.deleteCustomer(
+      widget.customerId,
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    Navigator.pop(context);
   }
 
   @override
@@ -2065,8 +1153,7 @@ class _Customer360PageState
     if (customer == null) {
       return Scaffold(
         appBar: AppBar(),
-        body:
-            const Center(
+        body: const Center(
           child: Text(
             'العميل غير موجود',
           ),
@@ -2099,55 +1186,40 @@ class _Customer360PageState
                   a['customerId'] ==
                   widget.customerId,
             )
-            .toList()
-          ..sort(
-            (a, b) =>
-                b['date']
-                    .toString()
-                    .compareTo(
-                  a['date']
-                      .toString(),
-                ),
-          );
+            .toList();
 
-    final health =
-        calculateHealth(
-      opportunities:
-          opportunities,
-      tasks: tasks,
-      activities:
-          activities,
+    final opportunityValue =
+        opportunities.fold<double>(
+      0,
+      (sum, item) =>
+          sum +
+          (item['value'] as num)
+              .toDouble(),
     );
 
     return Scaffold(
       appBar: AppBar(
-        title:
-            const Text(
+        title: const Text(
           'Customer 360',
         ),
         actions: [
           IconButton(
-            onPressed: () async {
-              await showCustomerDialog(
-                context,
-                widget.store,
-                existing:
-                    customer,
-              );
-
-              setState(() {});
-            },
+            onPressed: () =>
+                editCustomer(customer),
             icon:
-                const Icon(
-              Icons.edit,
+                const Icon(Icons.edit),
+          ),
+          IconButton(
+            onPressed: deleteCustomer,
+            icon: const Icon(
+              Icons.delete_outline,
             ),
           ),
         ],
       ),
       floatingActionButton:
           FloatingActionButton.extended(
-        onPressed:
-            addActivity,
+        onPressed: addActivity,
         icon:
             const Icon(Icons.add),
         label:
@@ -2160,209 +1232,257 @@ class _Customer360PageState
           Card(
             child: Padding(
               padding:
-                  const EdgeInsets.all(
-                18,
-              ),
+                  const EdgeInsets.all(18),
               child: Column(
+                crossAxisAlignment:
+                    CrossAxisAlignment.start,
                 children: [
-                  CircleAvatar(
-                    radius: 34,
-                    backgroundColor:
-                        primaryColor
-                            .withValues(
-                      alpha: .1,
-                    ),
-                    child:
-                        const Icon(
-                      Icons.business,
-                      size: 34,
-                      color:
-                          primaryColor,
-                    ),
+                  Row(
+                    children: [
+                      const CircleAvatar(
+                        radius: 30,
+                        child: Icon(
+                          Icons.business,
+                          size: 30,
+                        ),
+                      ),
+                      const SizedBox(
+                        width: 14,
+                      ),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment:
+                              CrossAxisAlignment
+                                  .start,
+                          children: [
+                            Text(
+                              customer[
+                                      'name']
+                                  .toString(),
+                              style:
+                                  const TextStyle(
+                                fontSize: 19,
+                                fontWeight:
+                                    FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(
+                              height: 4,
+                            ),
+                            Text(
+                              customer[
+                                      'sector']
+                                  .toString(),
+                              style:
+                                  const TextStyle(
+                                color:
+                                    Colors.black54,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(
-                      height: 12),
-                  Text(
-                    customer['name']
-                        .toString(),
-                    textAlign:
-                        TextAlign.center,
-                    style:
-                        const TextStyle(
-                      fontSize: 21,
-                      fontWeight:
-                          FontWeight.bold,
-                    ),
+                  const Divider(
+                    height: 28,
                   ),
-                  const SizedBox(
-                      height: 6),
-                  Text(
-                    customer[
-                            'sector']
-                        .toString(),
+                  InfoRow(
+                    label:
+                        'جهة الاتصال',
+                    value:
+                        customer[
+                                'contactName']
+                            .toString(),
                   ),
-                  const SizedBox(
-                      height: 14),
-                  HealthBadge(
-                    score: health,
+                  InfoRow(
+                    label: 'الهاتف',
+                    value:
+                        customer['phone']
+                            .toString(),
+                  ),
+                  InfoRow(
+                    label: 'البريد',
+                    value:
+                        customer['email']
+                            .toString(),
+                  ),
+                  InfoRow(
+                    label: 'الحالة',
+                    value:
+                        customer['status']
+                            .toString(),
                   ),
                 ],
               ),
             ),
           ),
           const SizedBox(
-              height: 14),
+            height: 14,
+          ),
           Row(
             children: [
               Expanded(
-                child: MiniStat(
-                  title:
-                      'الفرص',
+                child: MiniMetric(
+                  title: 'الفرص',
                   value:
                       '${opportunities.length}',
                 ),
               ),
               const SizedBox(
-                  width: 10),
+                width: 10,
+              ),
               Expanded(
-                child: MiniStat(
-                  title:
-                      'المهام',
+                child: MiniMetric(
+                  title: 'قيمة الفرص',
                   value:
-                      '${tasks.length}',
+                      money(opportunityValue),
                 ),
               ),
               const SizedBox(
-                  width: 10),
+                width: 10,
+              ),
               Expanded(
-                child: MiniStat(
-                  title:
-                      'الأنشطة',
+                child: MiniMetric(
+                  title: 'المهام',
                   value:
-                      '${activities.length}',
+                      '${tasks.length}',
                 ),
               ),
             ],
           ),
           const SizedBox(
-              height: 18),
+            height: 20,
+          ),
           const SectionTitle(
-            icon:
-                Icons.trending_up,
+            icon: Icons.trending_up,
             title: 'الفرص',
           ),
           const SizedBox(
-              height: 8),
+            height: 8,
+          ),
+          if (opportunities.isEmpty)
+            const EmptyCard(
+              text:
+                  'لا توجد فرص لهذا العميل.',
+            ),
           ...opportunities.map(
-            (o) =>
-                OpportunityTile(
-              store:
-                  widget.store,
-              opportunity: o,
-              onChanged: () =>
-                  setState(() {}),
+            (opportunity) =>
+                OpportunityCompactCard(
+              store: widget.store,
+              opportunity:
+                  opportunity,
+              onChanged: () {
+                setState(() {});
+              },
             ),
           ),
           const SizedBox(
-              height: 18),
+            height: 18,
+          ),
+          const SectionTitle(
+            icon: Icons.task_alt,
+            title: 'المهام',
+          ),
+          const SizedBox(
+            height: 8,
+          ),
+          if (tasks.isEmpty)
+            const EmptyCard(
+              text:
+                  'لا توجد مهام لهذا العميل.',
+            ),
+          ...tasks.map(
+            (task) => TaskCompactCard(
+              store: widget.store,
+              task: task,
+              onChanged: () {
+                setState(() {});
+              },
+            ),
+          ),
+          const SizedBox(
+            height: 18,
+          ),
           const SectionTitle(
             icon: Icons.timeline,
             title: 'Timeline',
           ),
           const SizedBox(
-              height: 8),
-          ...activities.map(
-            (a) => Card(
-              child: ListTile(
-                leading:
-                    const CircleAvatar(
-                  child: Icon(
-                    Icons.event_note,
-                  ),
-                ),
-                title: Text(
-                  a['title']
-                      .toString(),
-                ),
-                subtitle: Text(
-                  '${a['type']} • ${shortDate(a['date']?.toString())}\n${a['note']}',
-                ),
-              ),
-            ),
+            height: 8,
           ),
           if (activities.isEmpty)
-            const Card(
-              child: Padding(
-                padding:
-                    EdgeInsets.all(18),
-                child: Text(
-                  'لا توجد أنشطة مسجلة بعد.',
-                ),
-              ),
+            const EmptyCard(
+              text:
+                  'لا توجد أنشطة مسجلة.',
             ),
+          ...activities.reversed.map(
+            (activity) =>
+                ActivityCard(
+              activity: activity,
+            ),
+          ),
+          const SizedBox(
+            height: 80,
+          ),
         ],
       ),
     );
   }
 }
 
-class HealthBadge extends StatelessWidget {
-  final int score;
+class InfoRow extends StatelessWidget {
+  final String label;
+  final String value;
 
-  const HealthBadge({
+  const InfoRow({
     super.key,
-    required this.score,
+    required this.label,
+    required this.value,
   });
 
   @override
   Widget build(BuildContext context) {
-    final Color color;
-    final String label;
-
-    if (score >= 80) {
-      color = successColor;
-      label = 'Healthy';
-    } else if (score >= 50) {
-      color = warningColor;
-      label = 'Attention';
-    } else {
-      color = dangerColor;
-      label = 'At Risk';
-    }
-
-    return Container(
+    return Padding(
       padding:
-          const EdgeInsets.symmetric(
-        horizontal: 16,
-        vertical: 8,
+          const EdgeInsets.only(
+        bottom: 9,
       ),
-      decoration:
-          BoxDecoration(
-        color: color.withValues(
-          alpha: .1,
-        ),
-        borderRadius:
-            BorderRadius.circular(
-          30,
-        ),
-      ),
-      child: Text(
-        '$label • $score/100',
-        style: TextStyle(
-          color: color,
-          fontWeight:
-              FontWeight.bold,
-        ),
+      child: Row(
+        crossAxisAlignment:
+            CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 105,
+            child: Text(
+              label,
+              style:
+                  const TextStyle(
+                color: Colors.black54,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style:
+                  const TextStyle(
+                fontWeight:
+                    FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
-class MiniStat extends StatelessWidget {
+class MiniMetric extends StatelessWidget {
   final String title;
   final String value;
 
-  const MiniStat({
+  const MiniMetric({
     super.key,
     required this.title,
     required this.value,
@@ -2380,17 +1500,20 @@ class MiniStat extends StatelessWidget {
               value,
               style:
                   const TextStyle(
-                fontSize: 22,
                 fontWeight:
                     FontWeight.bold,
+                fontSize: 18,
               ),
+            ),
+            const SizedBox(
+              height: 4,
             ),
             Text(
               title,
               style:
                   const TextStyle(
-                color:
-                    Colors.black54,
+                color: Colors.black54,
+                fontSize: 12,
               ),
             ),
           ],
@@ -2400,153 +1523,100 @@ class MiniStat extends StatelessWidget {
   }
 }
 
-class OpportunitiesPage
-    extends StatefulWidget {
-  final DemoStore store;
-  final VoidCallback onChanged;
+class EmptyCard extends StatelessWidget {
+  final String text;
 
-  const OpportunitiesPage({
+  const EmptyCard({
     super.key,
-    required this.store,
-    required this.onChanged,
+    required this.text,
   });
 
   @override
-  State<OpportunitiesPage> createState() =>
-      _OpportunitiesPageState();
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding:
+            const EdgeInsets.all(18),
+        child: Center(
+          child: Text(
+            text,
+            style:
+                const TextStyle(
+              color: Colors.black54,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
-class _OpportunitiesPageState
-    extends State<OpportunitiesPage> {
-  String selectedStage =
-      'الكل';
+class ActivityCard extends StatelessWidget {
+  final Map<String, dynamic> activity;
 
-  Future<void>
-      addOpportunity() async {
-    await showOpportunityDialog(
-      context,
-      widget.store,
-    );
+  const ActivityCard({
+    super.key,
+    required this.activity,
+  });
 
-    setState(() {});
-    widget.onChanged();
+  IconData get icon {
+    switch (activity['type']) {
+      case 'مكالمة':
+        return Icons.phone;
+      case 'زيارة':
+        return Icons.location_on;
+      case 'اجتماع':
+        return Icons.groups;
+      case 'بريد':
+        return Icons.email;
+      default:
+        return Icons.notes;
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final stages = [
-      'الكل',
-      ...opportunityStages,
-    ];
-
-    final list =
-        selectedStage == 'الكل'
-            ? widget.store
-                .opportunities
-            : widget.store
-                .opportunities
-                .where(
-                  (o) =>
-                      o['stage'] ==
-                      selectedStage,
-                )
-                .toList();
-
-    return Scaffold(
-      appBar: AppBar(
-        title:
-            const Text(
-          'Sales Pipeline',
+    return Card(
+      margin:
+          const EdgeInsets.only(
+        bottom: 10,
+      ),
+      child: ListTile(
+        leading: CircleAvatar(
+          child: Icon(icon),
         ),
-        actions: [
-          IconButton(
-            onPressed:
-                addOpportunity,
-            icon:
-                const Icon(
-              Icons.add_chart,
-            ),
+        title: Text(
+          activity['title']
+              .toString(),
+          style:
+              const TextStyle(
+            fontWeight:
+                FontWeight.bold,
           ),
-        ],
-      ),
-      floatingActionButton:
-          FloatingActionButton.extended(
-        onPressed:
-            addOpportunity,
-        icon:
-            const Icon(Icons.add),
-        label:
-            const Text('فرصة'),
-      ),
-      body: ListView(
-        padding:
-            const EdgeInsets.all(16),
-        children: [
-          SizedBox(
-            height: 46,
-            child: ListView
-                .separated(
-              scrollDirection:
-                  Axis.horizontal,
-              itemCount:
-                  stages.length,
-              separatorBuilder:
-                  (_, __) =>
-                      const SizedBox(
-                width: 8,
-              ),
-              itemBuilder:
-                  (_, index) {
-                final stage =
-                    stages[index];
-
-                return ChoiceChip(
-                  label:
-                      Text(stage),
-                  selected:
-                      selectedStage ==
-                          stage,
-                  onSelected:
-                      (_) {
-                    setState(
-                      () {
-                        selectedStage =
-                            stage;
-                      },
-                    );
-                  },
-                );
-              },
-            ),
+        ),
+        subtitle: Text(
+          activity['note']
+                  ?.toString() ??
+              '',
+        ),
+        trailing: Text(
+          shortDate(
+            activity['date']
+                ?.toString(),
           ),
-          const SizedBox(
-              height: 14),
-          ...list.map(
-            (o) =>
-                OpportunityTile(
-              store:
-                  widget.store,
-              opportunity: o,
-              onChanged: () {
-                setState(() {});
-                widget.onChanged();
-              },
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
 }
 
-class OpportunityTile
+class OpportunityCompactCard
     extends StatelessWidget {
   final DemoStore store;
-  final Map<String, dynamic>
-      opportunity;
+  final Map<String, dynamic> opportunity;
   final VoidCallback onChanged;
 
-  const OpportunityTile({
+  const OpportunityCompactCard({
     super.key,
     required this.store,
     required this.opportunity,
@@ -2555,21 +1625,30 @@ class OpportunityTile
 
   @override
   Widget build(BuildContext context) {
-    final value =
-        (opportunity['value']
-                as num)
-            .toDouble();
-
-    final probability =
-        opportunity[
-            'probability'] as num;
-
     return Card(
       margin:
           const EdgeInsets.only(
         bottom: 10,
       ),
       child: ListTile(
+        title: Text(
+          opportunity['title']
+              .toString(),
+        ),
+        subtitle: Text(
+          '${opportunity['stage']} • ${opportunity['probability']}%',
+        ),
+        trailing: Text(
+          money(
+            opportunity['value']
+                as num,
+          ),
+          style:
+              const TextStyle(
+            fontWeight:
+                FontWeight.bold,
+          ),
+        ),
         onTap: () async {
           await Navigator.push(
             context,
@@ -2587,141 +1666,95 @@ class OpportunityTile
 
           onChanged();
         },
-        leading:
-            CircleAvatar(
-          backgroundColor:
-              primaryColor
-                  .withValues(
-            alpha: .1,
-          ),
-          child:
-              const Icon(
-            Icons.trending_up,
-            color:
-                primaryColor,
-          ),
-        ),
-        title: Text(
-          opportunity[
-                  'title']
-              .toString(),
-          style:
-              const TextStyle(
-            fontWeight:
-                FontWeight.bold,
-          ),
-        ),
-        subtitle: Text(
-          '${store.customerName(opportunity['customerId'].toString())}\n'
-          '${opportunity['stage']} • ${probability.toInt()}%',
-        ),
-        isThreeLine: true,
-        trailing:
-            Text(
-          money(value),
-          style:
-              const TextStyle(
-            fontWeight:
-                FontWeight.bold,
-          ),
-        ),
       ),
     );
   }
 }
 
-Future<void>
-    showOpportunityDialog(
-  BuildContext context,
-  DemoStore store, {
-  Map<String, dynamic>? existing,
-}) async {
-  final title =
-      TextEditingController(
-    text:
-        existing?['title']
-                ?.toString() ??
-            '',
-  );
+class TaskCompactCard
+    extends StatelessWidget {
+  final DemoStore store;
+  final Map<String, dynamic> task;
+  final VoidCallback onChanged;
 
-  final value =
-      TextEditingController(
-    text:
-        existing?['value']
-                ?.toString() ??
-            '',
-  );
+  const TaskCompactCard({
+    super.key,
+    required this.store,
+    required this.task,
+    required this.onChanged,
+  });
 
-  final probability =
-      TextEditingController(
-    text:
-        existing?['probability']
-                ?.toString() ??
-            '50',
-  );
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin:
+          const EdgeInsets.only(
+        bottom: 10,
+      ),
+      child: ListTile(
+        leading: Icon(
+          task['priority'] == 'عالية'
+              ? Icons.priority_high
+              : Icons.task_alt,
+          color:
+              task['priority'] == 'عالية'
+                  ? dangerColor
+                  : primaryColor,
+        ),
+        title: Text(
+          task['title']
+              .toString(),
+        ),
+        subtitle: Text(
+          '${task['status']} • ${shortDate(task['dueDate']?.toString())}',
+        ),
+        trailing:
+            isOverdue(
+              task['dueDate']
+                  ?.toString(),
+            ) &&
+                    task['status'] !=
+                        'مكتملة'
+                ? const Icon(
+                    Icons.warning_amber,
+                    color:
+                        dangerColor,
+                  )
+                : null,
+        onTap: () async {
+          await showTaskDialog(
+            context,
+            store,
+            existing: task,
+          );
 
-  String? customerId =
-      existing?['customerId']
-          ?.toString();
-
-  String stage =
-      existing?['stage']
-              ?.toString() ??
-          'جديد';
-
-  if (customerId == null &&
-      store.customers.isNotEmpty) {
-    customerId =
-        store.customers.first[
-                'id']
-            .toString();
+          onChanged();
+        },
+      ),
+    );
   }
-
-  await showDialog(
-    context: context,
-    builder: (dialogContext) {
-      return StatefulBuilder(
-        builder:
-            (context, setDialogState) {
-          return AlertDialog(
-            title: Text(
-              existing == null
-                  ? 'إضافة فرصة'
-                  : 'تعديل الفرصة',
-            ),
-            content:
-                SingleChildScrollView(
-              child: Column(
-                children: [
-                  DropdownButtonFormField<
-                      String>(
-                    initialValue:
-                        customerId,
-                    items: store
-                        .customers
+}                        .customers
                         .map(
-                      (c) =>
+                      (customer) =>
                           DropdownMenuItem(
-                        value: c['id']
-                            .toString(),
+                        value:
+                            customer['id']
+                                .toString(),
                         child: Text(
-                          c['name']
+                          customer['name']
                               .toString(),
                           overflow:
-                              TextOverflow
-                                  .ellipsis,
+                              TextOverflow.ellipsis,
                         ),
                       ),
                     )
                         .toList(),
                     onChanged:
                         (value) {
-                      setDialogState(
-                        () {
-                          customerId =
-                              value;
-                        },
-                      );
+                      setDialogState(() {
+                        customerId =
+                            value;
+                      });
                     },
                     decoration:
                         const InputDecoration(
@@ -2730,7 +1763,8 @@ Future<void>
                     ),
                   ),
                   const SizedBox(
-                      height: 10),
+                    height: 10,
+                  ),
                   TextField(
                     controller: title,
                     decoration:
@@ -2740,26 +1774,29 @@ Future<void>
                     ),
                   ),
                   const SizedBox(
-                      height: 10),
+                    height: 10,
+                  ),
                   TextField(
                     controller: value,
                     keyboardType:
-                        TextInputType
-                            .number,
+                        const TextInputType
+                            .numberWithOptions(
+                          decimal: true,
+                        ),
                     decoration:
                         const InputDecoration(
                       labelText:
-                          'القيمة',
+                          'قيمة الفرصة',
                     ),
                   ),
                   const SizedBox(
-                      height: 10),
+                    height: 10,
+                  ),
                   TextField(
                     controller:
                         probability,
                     keyboardType:
-                        TextInputType
-                            .number,
+                        TextInputType.number,
                     decoration:
                         const InputDecoration(
                       labelText:
@@ -2767,7 +1804,8 @@ Future<void>
                     ),
                   ),
                   const SizedBox(
-                      height: 10),
+                    height: 10,
+                  ),
                   DropdownButtonFormField<
                       String>(
                     initialValue:
@@ -2775,30 +1813,27 @@ Future<void>
                     items:
                         opportunityStages
                             .map(
-                      (x) =>
+                      (item) =>
                           DropdownMenuItem(
-                        value: x,
+                        value: item,
                         child:
-                            Text(x),
+                            Text(item),
                       ),
-                    )
-                            .toList(),
+                    ).toList(),
                     onChanged:
-                        (v) {
-                      if (v !=
-                          null) {
-                        setDialogState(
-                          () {
-                            stage =
-                                v;
-                          },
-                        );
+                        (value) {
+                      if (value == null) {
+                        return;
                       }
+
+                      setDialogState(() {
+                        stage = value;
+                      });
                     },
                     decoration:
                         const InputDecoration(
                       labelText:
-                          'المرحلة',
+                          'مرحلة البيع',
                     ),
                   ),
                 ],
@@ -2811,21 +1846,29 @@ Future<void>
                   dialogContext,
                 ),
                 child:
-                    const Text(
-                  'إلغاء',
-                ),
+                    const Text('إلغاء'),
               ),
               FilledButton(
-                onPressed:
-                    () async {
-                  if (customerId ==
-                          null ||
-                      title.text
+                onPressed: () async {
+                  final parsedValue =
+                      double.tryParse(
+                    value.text
+                        .trim(),
+                  );
+
+                  final parsedProbability =
+                      int.tryParse(
+                    probability.text
+                        .trim(),
+                  );
+
+                  if (title.text
                           .trim()
                           .isEmpty ||
-                      value.text
-                          .trim()
-                          .isEmpty) {
+                      customerId == null ||
+                      parsedValue == null ||
+                      parsedProbability ==
+                          null) {
                     return;
                   }
 
@@ -2838,34 +1881,22 @@ Future<void>
                     'customerId':
                         customerId,
                     'title':
-                        title.text
-                            .trim(),
+                        title.text.trim(),
                     'value':
-                        double.tryParse(
-                              value.text
-                                  .trim(),
-                            ) ??
-                            0,
+                        parsedValue,
                     'probability':
-                        int.tryParse(
-                              probability
-                                  .text
-                                  .trim(),
-                            ) ??
-                            50,
-                    'stage':
-                        stage,
+                        parsedProbability
+                            .clamp(0, 100),
+                    'stage': stage,
                     'expectedClose':
                         existing?[
                                 'expectedClose'] ??
-                            DateTime
-                                .now()
+                            DateTime.now()
                                 .add(
-                                  const Duration(
-                                    days:
-                                        30,
-                                  ),
-                                )
+                              const Duration(
+                                days: 30,
+                              ),
+                            )
                                 .toIso8601String()
                                 .substring(
                                   0,
@@ -2873,8 +1904,7 @@ Future<void>
                                 ),
                   };
 
-                  if (existing ==
-                      null) {
+                  if (existing == null) {
                     await store
                         .addOpportunity(
                       item,
@@ -2894,9 +1924,7 @@ Future<void>
                   }
                 },
                 child:
-                    const Text(
-                  'حفظ',
-                ),
+                    const Text('حفظ'),
               ),
             ],
           );
@@ -2930,29 +1958,81 @@ class OpportunityDetailsPage
 class _OpportunityDetailsPageState
     extends State<
         OpportunityDetailsPage> {
-  Map<String, dynamic>?
-      get opportunity {
-    for (final o
-        in widget.store
-            .opportunities) {
-      if (o['id'].toString() ==
-          widget.opportunityId) {
-        return o;
-      }
+  Future<void> changeStage(
+    String stage,
+  ) async {
+    final opportunities =
+        widget.store.opportunities;
+
+    final index =
+        opportunities.indexWhere(
+      (item) =>
+          item['id'] ==
+          widget.opportunityId,
+    );
+
+    if (index < 0) {
+      return;
     }
 
-    return null;
+    final updated = {
+      ...opportunities[index],
+      'stage': stage,
+    };
+
+    await widget.store
+        .updateOpportunity(
+      updated,
+    );
+
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  Future<void> edit() async {
+    final opportunity =
+        widget.store.opportunities
+            .cast<Map<String, dynamic>?>()
+            .firstWhere(
+              (item) =>
+                  item?['id'] ==
+                  widget.opportunityId,
+              orElse: () => null,
+            );
+
+    if (opportunity == null) {
+      return;
+    }
+
+    await showOpportunityDialog(
+      context,
+      widget.store,
+      existing: opportunity,
+    );
+
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final o = opportunity;
+    Map<String, dynamic>? opportunity;
 
-    if (o == null) {
+    for (final item
+        in widget.store.opportunities) {
+      if (item['id'] ==
+          widget.opportunityId) {
+        opportunity = item;
+        break;
+      }
+    }
+
+    if (opportunity == null) {
       return Scaffold(
         appBar: AppBar(),
-        body:
-            const Center(
+        body: const Center(
           child: Text(
             'الفرصة غير موجودة',
           ),
@@ -2961,12 +2041,14 @@ class _OpportunityDetailsPageState
     }
 
     final value =
-        (o['value'] as num)
+        (opportunity['value']
+                as num)
             .toDouble();
 
     final probability =
-        (o['probability']
-                as num)
+        (opportunity[
+                'probability']
+            as num)
             .toDouble();
 
     final weighted =
@@ -2977,24 +2059,12 @@ class _OpportunityDetailsPageState
     return Scaffold(
       appBar: AppBar(
         title:
-            const Text(
-          'Opportunity',
-        ),
+            const Text('تفاصيل الفرصة'),
         actions: [
           IconButton(
-            onPressed: () async {
-              await showOpportunityDialog(
-                context,
-                widget.store,
-                existing: o,
-              );
-
-              setState(() {});
-            },
+            onPressed: edit,
             icon:
-                const Icon(
-              Icons.edit,
-            ),
+                const Icon(Icons.edit),
           ),
         ],
       ),
@@ -3005,42 +2075,41 @@ class _OpportunityDetailsPageState
           Card(
             child: Padding(
               padding:
-                  const EdgeInsets.all(
-                20,
-              ),
+                  const EdgeInsets.all(20),
               child: Column(
+                crossAxisAlignment:
+                    CrossAxisAlignment.start,
                 children: [
-                  const Icon(
-                    Icons.trending_up,
-                    size: 50,
-                    color:
-                        primaryColor,
-                  ),
-                  const SizedBox(
-                      height: 12),
                   Text(
-                    o['title']
+                    opportunity[
+                            'title']
                         .toString(),
-                    textAlign:
-                        TextAlign.center,
                     style:
                         const TextStyle(
-                      fontSize: 22,
+                      fontSize: 23,
                       fontWeight:
                           FontWeight.bold,
                     ),
                   ),
                   const SizedBox(
-                      height: 8),
+                    height: 8,
+                  ),
                   Text(
                     widget.store
                         .customerName(
-                      o['customerId']
+                      opportunity[
+                              'customerId']
                           .toString(),
+                    ),
+                    style:
+                        const TextStyle(
+                      color:
+                          Colors.black54,
                     ),
                   ),
                   const SizedBox(
-                      height: 20),
+                    height: 20,
+                  ),
                   Row(
                     children: [
                       Expanded(
@@ -3049,13 +2118,12 @@ class _OpportunityDetailsPageState
                           title:
                               'القيمة',
                           value:
-                              money(
-                            value,
-                          ),
+                              money(value),
                         ),
                       ),
                       const SizedBox(
-                          width: 8),
+                        width: 10,
+                      ),
                       Expanded(
                         child:
                             MiniStat(
@@ -3066,16 +2134,15 @@ class _OpportunityDetailsPageState
                         ),
                       ),
                       const SizedBox(
-                          width: 8),
+                        width: 10,
+                      ),
                       Expanded(
                         child:
                             MiniStat(
                           title:
-                              'مرجح',
+                              'Weighted',
                           value:
-                              money(
-                            weighted,
-                          ),
+                              money(weighted),
                         ),
                       ),
                     ],
@@ -3085,108 +2152,107 @@ class _OpportunityDetailsPageState
             ),
           ),
           const SizedBox(
-              height: 18),
+            height: 18,
+          ),
+          const SectionTitle(
+            icon:
+                Icons.alt_route,
+            title:
+                'مسار الفرصة',
+          ),
+          const SizedBox(
+            height: 10,
+          ),
+          ...opportunityStages.map(
+            (stage) {
+              final selected =
+                  opportunity![
+                          'stage'] ==
+                      stage;
+
+              return Card(
+                margin:
+                    const EdgeInsets
+                        .only(
+                  bottom: 8,
+                ),
+                child: ListTile(
+                  leading:
+                      CircleAvatar(
+                    backgroundColor:
+                        selected
+                            ? primaryColor
+                            : Colors.black12,
+                    child: Icon(
+                      selected
+                          ? Icons.check
+                          : Icons.circle_outlined,
+                      color: selected
+                          ? Colors.white
+                          : Colors.black54,
+                    ),
+                  ),
+                  title:
+                      Text(stage),
+                  trailing:
+                      selected
+                          ? const Text(
+                              'الحالية',
+                              style:
+                                  TextStyle(
+                                color:
+                                    primaryColor,
+                                fontWeight:
+                                    FontWeight.bold,
+                              ),
+                            )
+                          : null,
+                  onTap: () =>
+                      changeStage(
+                    stage,
+                  ),
+                ),
+              );
+            },
+          ),
+          const SizedBox(
+            height: 10,
+          ),
           Card(
             child: Padding(
               padding:
-                  const EdgeInsets.all(
-                18,
-              ),
+                  const EdgeInsets.all(18),
               child: Column(
                 crossAxisAlignment:
                     CrossAxisAlignment.start,
                 children: [
-                  const SectionTitle(
-                    icon: Icons
-                        .auto_awesome,
-                    title:
-                        'Opportunity Intelligence',
-                  ),
-                  const SizedBox(
-                      height: 14),
-                  Text(
-                    probability >= 70
-                        ? 'الفرصة ذات احتمال إغلاق مرتفع. ركز على إزالة أي عائق متبقٍ قبل موعد الإغلاق.'
-                        : probability >=
-                                40
-                            ? 'الفرصة في منطقة تحتاج متابعة. تسجيل نشاط جديد أو اجتماع قد يرفع وضوح المسار.'
-                            : 'الفرصة تحتاج qualification ومعلومات إضافية قبل زيادة توقعات الإغلاق.',
-                  ),
-                  const SizedBox(
-                      height: 14),
                   const Text(
-                    'Next Best Action',
+                    'تاريخ الإغلاق المتوقع',
                     style:
                         TextStyle(
-                      fontWeight:
-                          FontWeight
-                              .bold,
+                      color:
+                          Colors.black54,
                     ),
                   ),
                   const SizedBox(
-                      height: 6),
+                    height: 6,
+                  ),
                   Text(
-                    o['stage'] ==
-                            'عرض سعر'
-                        ? 'جدولة اجتماع لمراجعة العرض.'
-                        : o['stage'] ==
-                                'تفاوض'
-                            ? 'تأكيد الاعتراضات والشروط النهائية.'
-                            : 'تسجيل النشاط التالي مع العميل.',
+                    shortDate(
+                      opportunity[
+                              'expectedClose']
+                          ?.toString(),
+                    ),
+                    style:
+                        const TextStyle(
+                      fontSize: 17,
+                      fontWeight:
+                          FontWeight.bold,
+                    ),
                   ),
                 ],
               ),
             ),
-          ),
-          const SizedBox(
-              height: 18),
-          const Text(
-            'تغيير المرحلة',
-            style:
-                TextStyle(
-              fontSize: 18,
-              fontWeight:
-                  FontWeight.bold,
-            ),
-          ),
-          const SizedBox(
-              height: 10),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children:
-                opportunityStages
-                    .map(
-              (stage) {
-                return ChoiceChip(
-                  label:
-                      Text(stage),
-                  selected:
-                      o['stage'] ==
-                          stage,
-                  onSelected:
-                      (_) async {
-                    final updated =
-                        Map<String,
-                            dynamic>.from(
-                      o,
-                    );
-
-                    updated[
-                            'stage'] =
-                        stage;
-
-                    await widget
-                        .store
-                        .updateOpportunity(
-                      updated,
-                    );
-
-                    setState(() {});
-                  },
-                );
-              },
-            ).toList(),
           ),
         ],
       ),
@@ -3212,6 +2278,8 @@ class TasksPage
 
 class _TasksPageState
     extends State<TasksPage> {
+  String filter = 'الكل';
+
   Future<void> addTask() async {
     await showTaskDialog(
       context,
@@ -3224,18 +2292,21 @@ class _TasksPageState
 
   @override
   Widget build(BuildContext context) {
-    final tasks =
-        [...widget.store.tasks];
+    final filters = [
+      'الكل',
+      ...taskStatuses,
+    ];
 
-    tasks.sort(
-      (a, b) =>
-          a['dueDate']
-              .toString()
-              .compareTo(
-            b['dueDate']
-                .toString(),
-          ),
-    );
+    final list =
+        filter == 'الكل'
+            ? widget.store.tasks
+            : widget.store.tasks
+                .where(
+                  (t) =>
+                      t['status'] ==
+                      filter,
+                )
+                .toList();
 
     return Scaffold(
       appBar: AppBar(
@@ -3245,9 +2316,7 @@ class _TasksPageState
           IconButton(
             onPressed: addTask,
             icon:
-                const Icon(
-              Icons.add_task,
-            ),
+                const Icon(Icons.add_task),
           ),
         ],
       ),
@@ -3263,8 +2332,45 @@ class _TasksPageState
         padding:
             const EdgeInsets.all(16),
         children: [
-          ...tasks.map(
-            (task) => TaskCard(
+          SizedBox(
+            height: 46,
+            child: ListView
+                .separated(
+              scrollDirection:
+                  Axis.horizontal,
+              itemCount:
+                  filters.length,
+              separatorBuilder:
+                  (_, __) =>
+                      const SizedBox(
+                width: 8,
+              ),
+              itemBuilder:
+                  (_, index) {
+                final item =
+                    filters[index];
+
+                return ChoiceChip(
+                  label:
+                      Text(item),
+                  selected:
+                      filter == item,
+                  onSelected:
+                      (_) {
+                    setState(() {
+                      filter = item;
+                    });
+                  },
+                );
+              },
+            ),
+          ),
+          const SizedBox(
+            height: 14,
+          ),
+          ...list.map(
+            (task) =>
+                TaskListCard(
               store:
                   widget.store,
               task: task,
@@ -3280,13 +2386,13 @@ class _TasksPageState
   }
 }
 
-class TaskCard
+class TaskListCard
     extends StatelessWidget {
   final DemoStore store;
   final Map<String, dynamic> task;
   final VoidCallback onChanged;
 
-  const TaskCard({
+  const TaskListCard({
     super.key,
     required this.store,
     required this.task,
@@ -3309,21 +2415,25 @@ class TaskCard
         bottom: 10,
       ),
       child: ListTile(
-        leading: Icon(
-          task['status'] ==
-                  'مكتملة'
-              ? Icons.check_circle
-              : overdue
-                  ? Icons.warning_amber
-                  : Icons
-                      .radio_button_unchecked,
-          color:
-              task['status'] ==
-                      'مكتملة'
-                  ? successColor
-                  : overdue
-                      ? dangerColor
-                      : primaryColor,
+        leading:
+            CircleAvatar(
+          backgroundColor:
+              overdue
+                  ? dangerColor.withValues(
+                      alpha: .1,
+                    )
+                  : primaryColor.withValues(
+                      alpha: .1,
+                    ),
+          child: Icon(
+            task['status'] ==
+                    'مكتملة'
+                ? Icons.check
+                : Icons.task_alt,
+            color: overdue
+                ? dangerColor
+                : primaryColor,
+          ),
         ),
         title: Text(
           task['title']
@@ -3336,733 +2446,26 @@ class TaskCard
         ),
         subtitle: Text(
           '${store.customerName(task['customerId'].toString())}\n'
-          '${task['priority']} • ${shortDate(task['dueDate']?.toString())}',
+          '${task['status']} • ${task['priority']} • ${shortDate(task['dueDate']?.toString())}',
         ),
         isThreeLine: true,
         trailing:
-            PopupMenuButton<
-                String>(
-          onSelected:
-              (value) async {
-            final updated =
-                Map<String,
-                    dynamic>.from(
-              task,
-            );
-
-            updated['status'] =
-                value;
-
-            await store.updateTask(
-              updated,
-            );
-
-            onChanged();
-          },
-          itemBuilder: (_) =>
-              taskStatuses
-                  .map(
-            (status) =>
-                PopupMenuItem(
-              value: status,
-              child:
-                  Text(status),
-            ),
-          ).toList(),
-        ),
-      ),
-    );
-  }
-}
-
-Future<void> showTaskDialog(
-  BuildContext context,
-  DemoStore store,
-) async {
-  final title =
-      TextEditingController();
-
-  String? customerId =
-      store.customers.isNotEmpty
-          ? store.customers.first[
-                  'id']
-              .toString()
-          : null;
-
-  String priority =
-      'متوسطة';
-
-  await showDialog(
-    context: context,
-    builder: (dialogContext) {
-      return StatefulBuilder(
-        builder:
-            (context, setDialogState) {
-          return AlertDialog(
-            title:
-                const Text(
-              'إضافة مهمة',
-            ),
-            content:
-                SingleChildScrollView(
-              child: Column(
-                children: [
-                  DropdownButtonFormField<
-                      String>(
-                    initialValue:
-                        customerId,
-                    items: store
-                        .customers
-                        .map(
-                      (c) =>
-                          DropdownMenuItem(
-                        value:
-                            c['id']
-                                .toString(),
-                        child: Text(
-                          c['name']
-                              .toString(),
-                          overflow:
-                              TextOverflow
-                                  .ellipsis,
-                        ),
-                      ),
-                    )
-                        .toList(),
-                    onChanged:
-                        (v) {
-                      setDialogState(
-                        () {
-                          customerId =
-                              v;
-                        },
-                      );
-                    },
-                    decoration:
-                        const InputDecoration(
-                      labelText:
-                          'العميل',
-                    ),
-                  ),
-                  const SizedBox(
-                      height: 10),
-                  TextField(
-                    controller: title,
-                    decoration:
-                        const InputDecoration(
-                      labelText:
-                          'المهمة',
-                    ),
-                  ),
-                  const SizedBox(
-                      height: 10),
-                  DropdownButtonFormField<
-                      String>(
-                    initialValue:
-                        priority,
-                    items:
-                        priorities
-                            .map(
-                      (x) =>
-                          DropdownMenuItem(
-                        value: x,
-                        child:
-                            Text(x),
-                      ),
-                    )
-                            .toList(),
-                    onChanged:
-                        (v) {
-                      if (v !=
-                          null) {
-                        setDialogState(
-                          () {
-                            priority =
-                                v;
-                          },
-                        );
-                      }
-                    },
-                    decoration:
-                        const InputDecoration(
-                      labelText:
-                          'الأولوية',
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () =>
-                    Navigator.pop(
-                  dialogContext,
-                ),
-                child:
-                    const Text(
-                  'إلغاء',
-                ),
-              ),
-              FilledButton(
-                onPressed:
-                    () async {
-                  if (customerId ==
-                          null ||
-                      title.text
-                          .trim()
-                          .isEmpty) {
-                    return;
-                  }
-
-                  await store.addTask({
-                    'id': store
-                        .newId(
-                      'task',
-                    ),
-                    'customerId':
-                        customerId,
-                    'title':
-                        title.text
-                            .trim(),
-                    'priority':
-                        priority,
-                    'dueDate':
-                        DateTime
-                            .now()
-                            .add(
-                              const Duration(
-                                days:
-                                    1,
-                              ),
-                            )
-                            .toIso8601String()
-                            .substring(
-                              0,
-                              10,
-                            ),
-                    'status':
-                        'مفتوحة',
-                  });
-
-                  if (dialogContext
-                      .mounted) {
-                    Navigator.pop(
-                      dialogContext,
-                    );
-                  }
-                },
-                child:
-                    const Text(
-                  'حفظ',
-                ),
-              ),
-            ],
+            overdue
+                ? const Icon(
+                    Icons.warning_amber,
+                    color:
+                        dangerColor,
+                  )
+                : null,
+        onTap: () async {
+          await showTaskDialog(
+            context,
+            store,
+            existing: task,
           );
+
+          onChanged();
         },
-      );
-    },
-  );
-
-  title.dispose();
-}
-
-class MorePage
-    extends StatelessWidget {
-  final DemoStore store;
-  final bool guest;
-
-  const MorePage({
-    super.key,
-    required this.store,
-    required this.guest,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title:
-            const Text('المزيد'),
-      ),
-      body: ListView(
-        padding:
-            const EdgeInsets.all(16),
-        children: [
-          Card(
-            child: ListTile(
-              leading:
-                  const Icon(
-                Icons.analytics,
-              ),
-              title:
-                  const Text(
-                'التحليلات',
-              ),
-              subtitle:
-                  const Text(
-                'Sales, Conversion & Forecast',
-              ),
-              trailing:
-                  const Icon(
-                Icons.chevron_left,
-              ),
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) =>
-                        AnalyticsPage(
-                      store: store,
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-          Card(
-            child: ListTile(
-              leading:
-                  const Icon(
-                Icons.auto_awesome,
-              ),
-              title:
-                  const Text(
-                'Smart Assistant',
-              ),
-              subtitle:
-                  const Text(
-                'توصيات ذكية مبنية على بيانات CRM',
-              ),
-              trailing:
-                  const Icon(
-                Icons.chevron_left,
-              ),
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) =>
-                        AssistantPage(
-                      store: store,
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-          Card(
-            child: ListTile(
-              leading:
-                  const Icon(
-                Icons.restart_alt,
-              ),
-              title:
-                  const Text(
-                'إعادة بيانات التجربة',
-              ),
-              subtitle:
-                  const Text(
-                'إرجاع Demo إلى الحالة الأصلية',
-              ),
-              onTap: () async {
-                await store.reset();
-
-                if (context.mounted) {
-                  ScaffoldMessenger.of(
-                    context,
-                  ).showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                        'تمت إعادة بيانات Demo',
-                      ),
-                    ),
-                  );
-                }
-              },
-            ),
-          ),
-          if (guest)
-            Card(
-              child: ListTile(
-                leading:
-                    const Icon(
-                  Icons.logout,
-                ),
-                title:
-                    const Text(
-                  'الخروج من وضع الضيف',
-                ),
-                onTap: () {
-                  Navigator.popUntil(
-                    context,
-                    (route) =>
-                        route.isFirst,
-                  );
-                },
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class AnalyticsPage
-    extends StatelessWidget {
-  final DemoStore store;
-
-  const AnalyticsPage({
-    super.key,
-    required this.store,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final pipeline =
-        store.pipelineValue();
-
-    final weighted =
-        store.weightedPipeline();
-
-    final won =
-        store.wonValue();
-
-    final open = store
-        .opportunities
-        .where(
-          (o) =>
-              o['stage'] !=
-                  'مغلقة' &&
-              o['stage'] !=
-                  'خاسرة',
-        )
-        .length;
-
-    final closed = store
-        .opportunities
-        .where(
-          (o) =>
-              o['stage'] ==
-              'مغلقة',
-        )
-        .length;
-
-    final conversion =
-        store.opportunities.isEmpty
-            ? 0
-            : closed /
-                store.opportunities
-                    .length *
-                100;
-
-    return Scaffold(
-      appBar: AppBar(
-        title:
-            const Text(
-          'Analytics',
-        ),
-      ),
-      body: ListView(
-        padding:
-            const EdgeInsets.all(16),
-        children: [
-          const SectionTitle(
-            icon: Icons.analytics,
-            title:
-                'Sales Intelligence',
-          ),
-          const SizedBox(
-              height: 14),
-          KpiCard(
-            title: 'Pipeline',
-            value:
-                money(pipeline),
-            icon:
-                Icons.trending_up,
-          ),
-          KpiCard(
-            title:
-                'Weighted Forecast',
-            value:
-                money(weighted),
-            icon:
-                Icons.auto_graph,
-          ),
-          KpiCard(
-            title: 'Won',
-            value: money(won),
-            icon:
-                Icons.verified,
-          ),
-          KpiCard(
-            title: 'Conversion',
-            value:
-                '${conversion.toStringAsFixed(1)}%',
-            icon:
-                Icons.swap_horiz,
-          ),
-          const SizedBox(
-              height: 18),
-          Card(
-            child: Padding(
-              padding:
-                  const EdgeInsets.all(
-                18,
-              ),
-              child: Column(
-                crossAxisAlignment:
-                    CrossAxisAlignment
-                        .start,
-                children: [
-                  const Text(
-                    'Pipeline by Stage',
-                    style:
-                        TextStyle(
-                      fontSize: 18,
-                      fontWeight:
-                          FontWeight
-                              .bold,
-                    ),
-                  ),
-                  const SizedBox(
-                      height: 14),
-                  ...opportunityStages
-                      .map(
-                    (stage) {
-                      final items =
-                          store
-                              .opportunities
-                              .where(
-                                (o) =>
-                                    o['stage'] ==
-                                    stage,
-                              )
-                              .toList();
-
-                      final total =
-                          items.fold<
-                              double>(
-                        0,
-                        (sum, o) =>
-                            sum +
-                            (o['value']
-                                    as num)
-                                .toDouble(),
-                      );
-
-                      return Padding(
-                        padding:
-                            const EdgeInsets
-                                .only(
-                          bottom: 12,
-                        ),
-                        child: Row(
-                          children: [
-                            SizedBox(
-                              width: 80,
-                              child:
-                                  Text(
-                                stage,
-                              ),
-                            ),
-                            Expanded(
-                              child:
-                                  LinearProgressIndicator(
-                                value: pipeline ==
-                                        0
-                                    ? 0
-                                    : (total /
-                                            pipeline)
-                                        .clamp(
-                                            0,
-                                            1),
-                              ),
-                            ),
-                            const SizedBox(
-                                width: 10),
-                            Text(
-                              money(
-                                total,
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(
-              height: 18),
-          Card(
-            child: Padding(
-              padding:
-                  const EdgeInsets.all(
-                18,
-              ),
-              child: Text(
-                'عدد الفرص المفتوحة: $open\n'
-                'عدد الفرص المغلقة: $closed\n'
-                'قيمة الـPipeline: ${money(pipeline)}\n'
-                'القيمة المرجحة: ${money(weighted)}',
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class AssistantPage
-    extends StatelessWidget {
-  final DemoStore store;
-
-  const AssistantPage({
-    super.key,
-    required this.store,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final actions =
-        <String>[];
-
-    if (store.overdueTasks() >
-        0) {
-      actions.add(
-        'ابدأ بالمهام المتأخرة وعددها ${store.overdueTasks()}.',
-      );
-    }
-
-    final opportunities =
-        [...store.opportunities]
-          ..removeWhere(
-            (o) =>
-                o['stage'] ==
-                    'مغلقة' ||
-                o['stage'] ==
-                    'خاسرة',
-          )
-          ..sort(
-            (a, b) =>
-                ((b['value']
-                            as num) *
-                        (b['probability']
-                            as num))
-                    .compareTo(
-              (a['value'] as num) *
-                  (a['probability']
-                      as num),
-            ),
-          );
-
-    if (opportunities
-        .isNotEmpty) {
-      final o =
-          opportunities.first;
-
-      actions.add(
-        'ركز على فرصة "${o['title']}" بقيمة '
-        '${money((o['value'] as num).toDouble())} '
-        'واحتمال ${o['probability']}%.',
-      );
-    }
-
-    if (store.activities
-        .isEmpty) {
-      actions.add(
-        'ابدأ بتسجيل أنشطة العملاء لتحسين Customer Health.',
-      );
-    }
-
-    if (actions.isEmpty) {
-      actions.add(
-        'لا توجد تنبيهات حرجة. استمر في متابعة العملاء.',
-      );
-    }
-
-    return Scaffold(
-      appBar: AppBar(
-        title:
-            const Text(
-          'Smart Assistant',
-        ),
-      ),
-      body: ListView(
-        padding:
-            const EdgeInsets.all(16),
-        children: [
-          Card(
-            child: Padding(
-              padding:
-                  const EdgeInsets.all(
-                20,
-              ),
-              child: Column(
-                children: [
-                  const CircleAvatar(
-                    radius: 34,
-                    child: Icon(
-                      Icons
-                          .auto_awesome,
-                      size: 34,
-                    ),
-                  ),
-                  const SizedBox(
-                      height: 14),
-                  const Text(
-                    'مساعد CRM Business',
-                    style:
-                        TextStyle(
-                      fontSize: 21,
-                      fontWeight:
-                          FontWeight
-                              .bold,
-                    ),
-                  ),
-                  const SizedBox(
-                      height: 8),
-                  const Text(
-                    'تحليل محلي لبيانات Demo وتحديد الإجراءات التالية.',
-                    textAlign:
-                        TextAlign.center,
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(
-              height: 16),
-          const SectionTitle(
-            icon:
-                Icons.lightbulb_outline,
-            title:
-                'التوصيات',
-          ),
-          const SizedBox(
-              height: 8),
-          ...actions
-              .asMap()
-              .entries
-              .map(
-            (entry) => Card(
-              child: ListTile(
-                leading:
-                    CircleAvatar(
-                  child: Text(
-                    '${entry.key + 1}',
-                  ),
-                ),
-                title: Text(
-                  entry.value,
-                ),
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }
