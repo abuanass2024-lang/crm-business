@@ -9,70 +9,30 @@ const apiBase = String.fromEnvironment(
   defaultValue: 'http://10.0.2.2:3000/api',
 );
 
+void main() {
+  runApp(const CrmApp());
+}
+
+/* =========================================================
+   API CLIENT
+   ========================================================= */
+
 class ApiClient {
-  Future<String?> _getToken() async {
-    final storage = await SharedPreferences.getInstance();
-    return storage.getString('accessToken');
-  }
-
-  Future<String?> _refreshToken() async {
-    final storage = await SharedPreferences.getInstance();
-    final refreshToken = storage.getString('refreshToken');
-
-    if (refreshToken == null || refreshToken.isEmpty) {
-      return null;
-    }
-
-    final response = await http.post(
-      Uri.parse('$apiBase/auth/refresh'),
-      headers: const {
-        'Content-Type': 'application/json',
-      },
-      body: jsonEncode({
-        'refreshToken': refreshToken,
-      }),
-    );
-
-    if (response.statusCode >= 400) {
-      return null;
-    }
-
-    final data = jsonDecode(response.body);
-
-    if (data is! Map) {
-      return null;
-    }
-
-    final accessToken = data['accessToken'];
-    final newRefreshToken = data['refreshToken'];
-
-    if (accessToken == null || newRefreshToken == null) {
-      return null;
-    }
-
-    await storage.setString(
-      'accessToken',
-      accessToken.toString(),
-    );
-
-    await storage.setString(
-      'refreshToken',
-      newRefreshToken.toString(),
-    );
-
-    return accessToken.toString();
+  Future<String?> _token() async {
+    final s = await SharedPreferences.getInstance();
+    return s.getString('accessToken');
   }
 
   Future<http.Response> request(
     String method,
     String path, {
     Map<String, dynamic>? body,
-    bool retry = true,
   }) async {
-    final token = await _getToken();
+    final token = await _token();
 
     final headers = <String, String>{
       'Content-Type': 'application/json',
+      'Accept': 'application/json',
     };
 
     if (token != null && token.isNotEmpty) {
@@ -80,72 +40,64 @@ class ApiClient {
     }
 
     final uri = Uri.parse('$apiBase$path');
-    final encodedBody = body == null ? null : jsonEncode(body);
 
-    late http.Response response;
-
-    if (method == 'POST') {
-      response = await http.post(
-        uri,
-        headers: headers,
-        body: encodedBody,
-      );
-    } else if (method == 'PATCH') {
-      response = await http.patch(
-        uri,
-        headers: headers,
-        body: encodedBody,
-      );
-    } else if (method == 'DELETE') {
-      response = await http.delete(
-        uri,
-        headers: headers,
-      );
-    } else {
-      response = await http.get(
-        uri,
-        headers: headers,
-      );
-    }
-
-    if (response.statusCode == 401 && retry) {
-      final newToken = await _refreshToken();
-
-      if (newToken != null) {
-        return request(
-          method,
-          path,
-          body: body,
-          retry: false,
+    switch (method) {
+      case 'POST':
+        return http.post(
+          uri,
+          headers: headers,
+          body: body == null ? null : jsonEncode(body),
         );
-      }
-    }
 
-    return response;
+      case 'PATCH':
+        return http.patch(
+          uri,
+          headers: headers,
+          body: body == null ? null : jsonEncode(body),
+        );
+
+      case 'DELETE':
+        return http.delete(
+          uri,
+          headers: headers,
+        );
+
+      default:
+        return http.get(
+          uri,
+          headers: headers,
+        );
+    }
   }
 
-  Future<dynamic> _parse(Future<http.Response> future) async {
-    final response = await future;
+  Future<dynamic> parse(
+    Future<http.Response> request,
+  ) async {
+    final response = await request;
 
     dynamic data;
 
     if (response.body.trim().isEmpty) {
-      data = <String, dynamic>{};
+      data = {};
     } else {
       try {
         data = jsonDecode(response.body);
       } catch (_) {
-        data = <String, dynamic>{
-          'message': response.body,
-        };
+        data = {'message': response.body};
       }
     }
 
     if (response.statusCode >= 400) {
-      var message = 'حدث خطأ في الاتصال بالخادم';
+      String message = 'حدث خطأ في الخادم';
 
       if (data is Map && data['message'] != null) {
-        message = data['message'].toString();
+        final m = data['message'];
+
+        if (m is List) {
+          message = m.join('، ');
+        } else {
+          message = m.toString();
+        }
       }
 
       throw Exception(message);
@@ -155,29 +107,16 @@ class ApiClient {
   }
 
   Future<dynamic> get(String path) {
-    return _parse(request('GET', path));
+    return parse(request('GET', path));
   }
 
   Future<dynamic> post(
     String path,
     Map<String, dynamic> body,
   ) {
-    return _parse(
+    return parse(
       request(
         'POST',
-        path,
-        body: body,
-      ),
-    );
-  }
-
-  Future<dynamic> patch(
-    String path,
-    Map<String, dynamic> body,
-  ) {
-    return _parse(
-      request(
-        'PATCH',
         path,
         body: body,
       ),
@@ -187,30 +126,265 @@ class ApiClient {
 
 final api = ApiClient();
 
-Future<bool> guestModeEnabled() async {
-  final storage = await SharedPreferences.getInstance();
-  return storage.getBool('guestMode') ?? false;
+/* =========================================================
+   LOCAL DEMO DATABASE
+   ========================================================= */
+
+class DemoStore {
+  static const customersKey = 'demo_customers';
+  static const opportunitiesKey = 'demo_opportunities';
+  static const tasksKey = 'demo_tasks';
+  static const activitiesKey = 'demo_activities';
+
+  static Future<SharedPreferences> _prefs() {
+    return SharedPreferences.getInstance();
+  }
+
+  static Future<void> initialize() async {
+    final p = await _prefs();
+
+    if (!p.containsKey(customersKey)) {
+      await saveCustomers([
+        {
+          'id': 'C001',
+          'name': 'شركة النور للتجارة',
+          'phone': '777000001',
+          'email': 'info@noor.example',
+          'company': 'شركة النور للتجارة',
+          'address': 'صنعاء',
+          'status': 'نشط',
+        },
+        {
+          'id': 'C002',
+          'name': 'مؤسسة البكري للطاقة',
+          'phone': '777000002',
+          'email': 'info@bakri.example',
+          'company': 'مؤسسة البكري للطاقة',
+          'address': 'صنعاء',
+          'status': 'نشط',
+        },
+        {
+          'id': 'C003',
+          'name': 'شركة المستقبل',
+          'phone': '777000003',
+          'email': 'info@future.example',
+          'company': 'شركة المستقبل',
+          'address': 'تعز',
+          'status': 'نشط',
+        },
+        {
+          'id': 'C004',
+          'name': 'مؤسسة النجاح',
+          'phone': '777000004',
+          'email': 'info@success.example',
+          'company': 'مؤسسة النجاح',
+          'address': 'إب',
+          'status': 'نشط',
+        },
+      ]);
+    }
+
+    if (!p.containsKey(opportunitiesKey)) {
+      await saveOpportunities([
+        {
+          'id': 'O001',
+          'name': 'توريد أجهزة مكتبية',
+          'customer': 'شركة النور للتجارة',
+          'stage': 'مؤهل',
+          'value': 50000,
+        },
+        {
+          'id': 'O002',
+          'name': 'مشروع طاقة شمسية',
+          'customer': 'مؤسسة البكري للطاقة',
+          'stage': 'عرض سعر',
+          'value': 75000,
+        },
+        {
+          'id': 'O003',
+          'name': 'عقد خدمات سنوي',
+          'customer': 'شركة المستقبل',
+          'stage': 'تفاوض',
+          'value': 60000,
+        },
+      ]);
+    }
+
+    if (!p.containsKey(tasksKey)) {
+      await saveTasks([
+        {
+          'id': 'T001',
+          'title': 'الاتصال بالعميل',
+          'customer': 'شركة النور للتجارة',
+          'priority': 'عالية',
+          'status': 'مفتوحة',
+        },
+        {
+          'id': 'T002',
+          'title': 'إرسال عرض سعر',
+          'customer': 'مؤسسة البكري للطاقة',
+          'priority': 'متوسطة',
+          'status': 'قيد التنفيذ',
+        },
+        {
+          'id': 'T003',
+          'title': 'متابعة فرصة المبيعات',
+          'customer': 'شركة المستقبل',
+          'priority': 'عالية',
+          'status': 'مفتوحة',
+        },
+      ]);
+    }
+
+    if (!p.containsKey(activitiesKey)) {
+      await saveActivities([
+        {
+          'id': 'A001',
+          'customerId': 'C001',
+          'title': 'مكالمة هاتفية',
+          'description': 'تم التواصل مع العميل.',
+          'date': '2026-10-01',
+        },
+        {
+          'id': 'A002',
+          'customerId': 'C002',
+          'title': 'زيارة',
+          'description': 'زيارة العميل ومناقشة احتياجاته.',
+          'date': '2026-10-02',
+        },
+      ]);
+    }
+  }
+
+  static Future<List<Map<String, dynamic>>> _list(
+    String key,
+  ) async {
+    final p = await _prefs();
+    final raw = p.getString(key);
+
+    if (raw == null) return [];
+
+    try {
+      final decoded = jsonDecode(raw);
+
+      if (decoded is List) {
+        return decoded
+            .map(
+              (e) => Map<String, dynamic>.from(e),
+            )
+            .toList();
+      }
+    } catch (_) {}
+
+    return [];
+  }
+
+  static Future<void> _save(
+    String key,
+    List<Map<String, dynamic>> data,
+  ) async {
+    final p = await _prefs();
+
+    await p.setString(
+      key,
+      jsonEncode(data),
+    );
+  }
+
+  static Future<List<Map<String, dynamic>>> customers() {
+    return _list(customersKey);
+  }
+
+  static Future<void> saveCustomers(
+    List<Map<String, dynamic>> data,
+  ) {
+    return _save(customersKey, data);
+  }
+
+  static Future<List<Map<String, dynamic>>> opportunities() {
+    return _list(opportunitiesKey);
+  }
+
+  static Future<void> saveOpportunities(
+    List<Map<String, dynamic>> data,
+  ) {
+    return _save(opportunitiesKey, data);
+  }
+
+  static Future<List<Map<String, dynamic>>> tasks() {
+    return _list(tasksKey);
+  }
+
+  static Future<void> saveTasks(
+    List<Map<String, dynamic>> data,
+  ) {
+    return _save(tasksKey, data);
+  }
+
+  static Future<List<Map<String, dynamic>>> activities() {
+    return _list(activitiesKey);
+  }
+
+  static Future<void> saveActivities(
+    List<Map<String, dynamic>> data,
+  ) {
+    return _save(activitiesKey, data);
+  }
+
+  static Future<void> reset() async {
+    final p = await _prefs();
+
+    await p.remove(customersKey);
+    await p.remove(opportunitiesKey);
+    await p.remove(tasksKey);
+    await p.remove(activitiesKey);
+
+    await initialize();
+  }
 }
 
-Future<void> enableGuestMode() async {
-  final storage = await SharedPreferences.getInstance();
+/* =========================================================
+   SESSION
+   ========================================================= */
 
-  await storage.setBool('guestMode', true);
-  await storage.setString('companyName', 'شركة تجريبية');
-  await storage.setString('guestOwner', 'المستخدم التجريبي');
+Future<bool> isGuest() async {
+  final p = await SharedPreferences.getInstance();
+
+  return p.getBool('guestMode') ?? false;
 }
 
-Future<void> disableGuestMode() async {
-  final storage = await SharedPreferences.getInstance();
+Future<void> enableGuest() async {
+  final p = await SharedPreferences.getInstance();
 
-  await storage.remove('guestMode');
-  await storage.remove('companyName');
-  await storage.remove('guestOwner');
+  await p.setBool('guestMode', true);
+
+  await p.setString(
+    'companyName',
+    'شركة CRM التجريبية',
+  );
+
+  await p.setString(
+    'guestOwner',
+    'المستخدم التجريبي',
+  );
+
+  await p.remove('accessToken');
+  await p.remove('refreshToken');
+
+  await DemoStore.initialize();
 }
 
-void main() {
-  runApp(const CrmApp());
+Future<void> disableGuest() async {
+  final p = await SharedPreferences.getInstance();
+
+  await p.remove('guestMode');
+  await p.remove('guestOwner');
+  await p.remove('companyName');
 }
+
+/* =========================================================
+   APP
+   ========================================================= */
 
 class CrmApp extends StatelessWidget {
   const CrmApp({super.key});
@@ -223,11 +397,18 @@ class CrmApp extends StatelessWidget {
       theme: ThemeData(
         useMaterial3: true,
         colorSchemeSeed: Colors.indigo,
+        inputDecorationTheme: const InputDecorationTheme(
+          border: OutlineInputBorder(),
+        ),
       ),
       home: const StartupPage(),
     );
   }
 }
+
+/* =========================================================
+   STARTUP
+   ========================================================= */
 
 class StartupPage extends StatefulWidget {
   const StartupPage({super.key});
@@ -240,15 +421,18 @@ class _StartupPageState extends State<StartupPage> {
   @override
   void initState() {
     super.initState();
-    _restoreSession();
+
+    start();
   }
 
-  Future<void> _restoreSession() async {
-    final storage = await SharedPreferences.getInstance();
+  Future<void> start() async {
+    final p = await SharedPreferences.getInstance();
 
-    final isGuest = storage.getBool('guestMode') ?? false;
+    final guest = p.getBool('guestMode') ?? false;
 
-    if (isGuest) {
+    if (guest) {
+      await DemoStore.initialize();
+
       if (!mounted) return;
 
       Navigator.pushReplacement(
@@ -261,7 +445,7 @@ class _StartupPageState extends State<StartupPage> {
       return;
     }
 
-    final token = storage.getString('accessToken');
+    final token = p.getString('accessToken');
 
     if (token == null || token.isEmpty) {
       if (!mounted) return;
@@ -288,7 +472,8 @@ class _StartupPageState extends State<StartupPage> {
         ),
       );
     } catch (_) {
-      await storage.clear();
+      await p.remove('accessToken');
+      await p.remove('refreshToken');
 
       if (!mounted) return;
 
@@ -311,6 +496,10 @@ class _StartupPageState extends State<StartupPage> {
   }
 }
 
+/* =========================================================
+   LOGIN
+   ========================================================= */
+
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
 
@@ -319,18 +508,19 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-  final emailController = TextEditingController();
-  final passwordController = TextEditingController();
+  final email = TextEditingController();
+  final password = TextEditingController();
 
   bool loading = false;
   String? error;
 
   Future<void> login() async {
-    if (emailController.text.trim().isEmpty ||
-        passwordController.text.isEmpty) {
+    if (email.text.trim().isEmpty ||
+        password.text.isEmpty) {
       setState(() {
-        error = 'يرجى إدخال البريد الإلكتروني وكلمة المرور';
+        error = 'يرجى إدخال البريد وكلمة المرور';
       });
+
       return;
     }
 
@@ -343,44 +533,24 @@ class _LoginPageState extends State<LoginPage> {
       final data = await api.post(
         '/auth/login',
         {
-          'email': emailController.text.trim(),
-          'password': passwordController.text,
+          'email': email.text.trim(),
+          'password': password.text,
         },
       );
 
-      if (data is! Map) {
-        throw Exception('استجابة غير صحيحة من الخادم');
-      }
+      final p = await SharedPreferences.getInstance();
 
-      final accessToken = data['accessToken'];
-      final refreshToken = data['refreshToken'];
-
-      if (accessToken == null || refreshToken == null) {
-        throw Exception('بيانات تسجيل الدخول غير مكتملة');
-      }
-
-      final storage = await SharedPreferences.getInstance();
-
-      await storage.remove('guestMode');
-
-      await storage.setString(
+      await p.setString(
         'accessToken',
-        accessToken.toString(),
+        data['accessToken'].toString(),
       );
 
-      await storage.setString(
+      await p.setString(
         'refreshToken',
-        refreshToken.toString(),
+        data['refreshToken'].toString(),
       );
 
-      final company = data['company'];
-
-      if (company is Map && company['name'] != null) {
-        await storage.setString(
-          'companyName',
-          company['name'].toString(),
-        );
-      }
+      await p.remove('guestMode');
 
       if (!mounted) return;
 
@@ -392,10 +562,11 @@ class _LoginPageState extends State<LoginPage> {
         (_) => false,
       );
     } catch (e) {
-      if (!mounted) return;
-
       setState(() {
-        error = e.toString().replaceFirst('Exception: ', '');
+        error = e.toString().replaceFirst(
+              'Exception: ',
+              '',
+            );
       });
     } finally {
       if (mounted) {
@@ -406,43 +577,29 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
-  Future<void> loginAsGuest() async {
+  Future<void> guest() async {
     setState(() {
       loading = true;
       error = null;
     });
 
-    try {
-      await enableGuestMode();
+    await enableGuest();
 
-      if (!mounted) return;
+    if (!mounted) return;
 
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(
-          builder: (_) => const HomePage(),
-        ),
-        (_) => false,
-      );
-    } catch (_) {
-      if (!mounted) return;
-
-      setState(() {
-        error = 'تعذر تشغيل وضع الضيف';
-      });
-    } finally {
-      if (mounted) {
-        setState(() {
-          loading = false;
-        });
-      }
-    }
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const HomePage(),
+      ),
+      (_) => false,
+    );
   }
 
   @override
   void dispose() {
-    emailController.dispose();
-    passwordController.dispose();
+    email.dispose();
+    password.dispose();
     super.dispose();
   }
 
@@ -455,16 +612,19 @@ class _LoginPageState extends State<LoginPage> {
             padding: const EdgeInsets.all(24),
             child: ConstrainedBox(
               constraints: const BoxConstraints(
-                maxWidth: 430,
+                maxWidth: 440,
               ),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+                crossAxisAlignment:
+                    CrossAxisAlignment.stretch,
                 children: [
                   const Icon(
                     Icons.business_center,
-                    size: 70,
+                    size: 80,
                   ),
-                  const SizedBox(height: 10),
+
+                  const SizedBox(height: 12),
+
                   const Text(
                     'CRM Business',
                     textAlign: TextAlign.center,
@@ -473,46 +633,61 @@ class _LoginPageState extends State<LoginPage> {
                       fontWeight: FontWeight.bold,
                     ),
                   ),
+
                   const SizedBox(height: 8),
+
                   const Text(
                     'نظام إدارة علاقات العملاء',
                     textAlign: TextAlign.center,
                   ),
+
                   const SizedBox(height: 30),
+
                   TextField(
-                    controller: emailController,
-                    keyboardType: TextInputType.emailAddress,
+                    controller: email,
+                    keyboardType:
+                        TextInputType.emailAddress,
                     decoration: const InputDecoration(
                       labelText: 'البريد الإلكتروني',
-                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.email),
                     ),
                   ),
+
                   const SizedBox(height: 12),
+
                   TextField(
-                    controller: passwordController,
+                    controller: password,
                     obscureText: true,
                     decoration: const InputDecoration(
                       labelText: 'كلمة المرور',
-                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.lock),
                     ),
                   ),
+
                   if (error != null) ...[
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 12),
                     Text(
                       error!,
+                      textAlign: TextAlign.center,
                       style: const TextStyle(
                         color: Colors.red,
                       ),
                     ),
                   ],
+
                   const SizedBox(height: 18),
+
                   FilledButton(
                     onPressed: loading ? null : login,
                     child: Text(
-                      loading ? 'جاري الدخول...' : 'تسجيل الدخول',
+                      loading
+                          ? 'جاري الدخول...'
+                          : 'تسجيل الدخول',
                     ),
                   ),
-                  const SizedBox(height: 8),
+
+                  const SizedBox(height: 10),
+
                   OutlinedButton(
                     onPressed: loading
                         ? null
@@ -520,15 +695,24 @@ class _LoginPageState extends State<LoginPage> {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (_) => const RegisterPage(),
+                                builder: (_) =>
+                                    const RegisterPage(),
                               ),
                             );
                           },
-                    child: const Text('إنشاء شركة جديدة'),
+                    child: const Text(
+                      'إنشاء شركة جديدة',
+                    ),
                   ),
-                  const SizedBox(height: 8),
-                  TextButton.icon(
-                    onPressed: loading ? null : loginAsGuest,
+
+                  const SizedBox(height: 12),
+
+                  const Divider(),
+
+                  const SizedBox(height: 12),
+
+                  FilledButton.icon(
+                    onPressed: loading ? null : guest,
                     icon: const Icon(
                       Icons.visibility_outlined,
                     ),
@@ -536,9 +720,11 @@ class _LoginPageState extends State<LoginPage> {
                       'الدخول كضيف وتجربة التطبيق',
                     ),
                   ),
+
                   const SizedBox(height: 8),
+
                   const Text(
-                    'وضع الضيف يعمل بدون خادم وبدون إنشاء حساب حقيقي.',
+                    'تجربة تفاعلية بدون خادم',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 12,
@@ -554,30 +740,37 @@ class _LoginPageState extends State<LoginPage> {
   }
 }
 
+/* =========================================================
+   REGISTER
+   ========================================================= */
+
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
 
   @override
-  State<RegisterPage> createState() => _RegisterPageState();
+  State<RegisterPage> createState() =>
+      _RegisterPageState();
 }
 
-class _RegisterPageState extends State<RegisterPage> {
-  final companyController = TextEditingController();
-  final ownerController = TextEditingController();
-  final emailController = TextEditingController();
-  final passwordController = TextEditingController();
+class _RegisterPageState
+    extends State<RegisterPage> {
+  final company = TextEditingController();
+  final owner = TextEditingController();
+  final email = TextEditingController();
+  final password = TextEditingController();
 
   bool loading = false;
   String? error;
 
   Future<void> register() async {
-    if (companyController.text.trim().isEmpty ||
-        ownerController.text.trim().isEmpty ||
-        emailController.text.trim().isEmpty ||
-        passwordController.text.isEmpty) {
+    if (company.text.trim().isEmpty ||
+        owner.text.trim().isEmpty ||
+        email.text.trim().isEmpty ||
+        password.text.isEmpty) {
       setState(() {
         error = 'يرجى تعبئة جميع الحقول';
       });
+
       return;
     }
 
@@ -590,51 +783,31 @@ class _RegisterPageState extends State<RegisterPage> {
       final data = await api.post(
         '/auth/register-company',
         {
-          'companyName': companyController.text.trim(),
-          'ownerName': ownerController.text.trim(),
-          'email': emailController.text.trim(),
-          'password': passwordController.text,
+          'companyName': company.text.trim(),
+          'ownerName': owner.text.trim(),
+          'email': email.text.trim(),
+          'password': password.text,
         },
       );
 
-      if (data is! Map) {
-        throw Exception('استجابة غير صحيحة من الخادم');
-      }
+      final p = await SharedPreferences.getInstance();
 
-      final accessToken = data['accessToken'];
-      final refreshToken = data['refreshToken'];
-
-      if (accessToken == null || refreshToken == null) {
-        throw Exception('بيانات التسجيل غير مكتملة');
-      }
-
-      final storage = await SharedPreferences.getInstance();
-
-      await storage.remove('guestMode');
-
-      await storage.setString(
+      await p.setString(
         'accessToken',
-        accessToken.toString(),
+        data['accessToken'].toString(),
       );
 
-      await storage.setString(
+      await p.setString(
         'refreshToken',
-        refreshToken.toString(),
+        data['refreshToken'].toString(),
       );
 
-      final company = data['company'];
+      await p.remove('guestMode');
 
-      if (company is Map && company['name'] != null) {
-        await storage.setString(
-          'companyName',
-          company['name'].toString(),
-        );
-      } else {
-        await storage.setString(
-          'companyName',
-          companyController.text.trim(),
-        );
-      }
+      await p.setString(
+        'companyName',
+        company.text.trim(),
+      );
 
       if (!mounted) return;
 
@@ -646,10 +819,11 @@ class _RegisterPageState extends State<RegisterPage> {
         (_) => false,
       );
     } catch (e) {
-      if (!mounted) return;
-
       setState(() {
-        error = e.toString().replaceFirst('Exception: ', '');
+        error = e.toString().replaceFirst(
+              'Exception: ',
+              '',
+            );
       });
     } finally {
       if (mounted) {
@@ -662,10 +836,10 @@ class _RegisterPageState extends State<RegisterPage> {
 
   @override
   void dispose() {
-    companyController.dispose();
-    ownerController.dispose();
-    emailController.dispose();
-    passwordController.dispose();
+    company.dispose();
+    owner.dispose();
+    email.dispose();
+    password.dispose();
     super.dispose();
   }
 
@@ -673,46 +847,53 @@ class _RegisterPageState extends State<RegisterPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('إنشاء شركة'),
+        title: const Text('إنشاء شركة جديدة'),
       ),
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
           TextField(
-            controller: companyController,
+            controller: company,
             decoration: const InputDecoration(
               labelText: 'اسم الشركة',
-              border: OutlineInputBorder(),
+              prefixIcon: Icon(Icons.business),
             ),
           ),
+
           const SizedBox(height: 12),
+
           TextField(
-            controller: ownerController,
+            controller: owner,
             decoration: const InputDecoration(
               labelText: 'اسم المسؤول',
-              border: OutlineInputBorder(),
+              prefixIcon: Icon(Icons.person),
             ),
           ),
+
           const SizedBox(height: 12),
+
           TextField(
-            controller: emailController,
+            controller: email,
             keyboardType: TextInputType.emailAddress,
             decoration: const InputDecoration(
               labelText: 'البريد الإلكتروني',
-              border: OutlineInputBorder(),
+              prefixIcon: Icon(Icons.email),
             ),
           ),
+
           const SizedBox(height: 12),
+
           TextField(
-            controller: passwordController,
+            controller: password,
             obscureText: true,
             decoration: const InputDecoration(
               labelText: 'كلمة المرور',
-              border: OutlineInputBorder(),
+              prefixIcon: Icon(Icons.lock),
             ),
           ),
+
           if (error != null) ...[
-            const SizedBox(height: 10),
+            const SizedBox(height: 12),
             Text(
               error!,
               style: const TextStyle(
@@ -720,11 +901,15 @@ class _RegisterPageState extends State<RegisterPage> {
               ),
             ),
           ],
+
           const SizedBox(height: 18),
+
           FilledButton(
             onPressed: loading ? null : register,
             child: Text(
-              loading ? 'جاري الإنشاء...' : 'إنشاء الشركة',
+              loading
+                  ? 'جاري إنشاء الشركة...'
+                  : 'إنشاء الشركة',
             ),
           ),
         ],
@@ -732,6 +917,10 @@ class _RegisterPageState extends State<RegisterPage> {
     );
   }
 }
+
+/* =========================================================
+   HOME
+   ========================================================= */
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -741,7 +930,7 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  int selectedIndex = 0;
+  int index = 0;
 
   final pages = const [
     DashboardPage(),
@@ -755,14 +944,14 @@ class _HomePageState extends State<HomePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: IndexedStack(
-        index: selectedIndex,
+        index: index,
         children: pages,
       ),
       bottomNavigationBar: NavigationBar(
-        selectedIndex: selectedIndex,
-        onDestinationSelected: (index) {
+        selectedIndex: index,
+        onDestinationSelected: (value) {
           setState(() {
-            selectedIndex = index;
+            index = value;
           });
         },
         destinations: const [
@@ -777,12 +966,13 @@ class _HomePageState extends State<HomePage> {
             label: 'العملاء',
           ),
           NavigationDestination(
-            icon: Icon(Icons.trending_up),
+            icon: Icon(Icons.trending_up_outlined),
+            selectedIcon: Icon(Icons.trending_up),
             label: 'الفرص',
           ),
           NavigationDestination(
-            icon: Icon(Icons.task_alt_outlined),
-            selectedIcon: Icon(Icons.task_alt),
+            icon: Icon(Icons.task_outlined),
+            selectedIcon: Icon(Icons.task),
             label: 'المهام',
           ),
           NavigationDestination(
@@ -795,47 +985,78 @@ class _HomePageState extends State<HomePage> {
   }
 }
 
+/* =========================================================
+   DASHBOARD
+   ========================================================= */
+
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
 
   @override
-  State<DashboardPage> createState() => _DashboardPageState();
+  State<DashboardPage> createState() =>
+      _DashboardPageState();
 }
 
-class _DashboardPageState extends State<DashboardPage> {
-  bool loading = true;
+class _DashboardPageState
+    extends State<DashboardPage> {
   bool guest = false;
-  String companyName = '';
 
   int customers = 0;
   int opportunities = 0;
   int tasks = 0;
   int overdue = 0;
+  double pipeline = 0;
+
+  String company = '';
 
   @override
   void initState() {
     super.initState();
+
     load();
   }
 
   Future<void> load() async {
-    final storage = await SharedPreferences.getInstance();
+    final g = await isGuest();
 
-    final isGuest = storage.getBool('guestMode') ?? false;
+    if (g) {
+      final c = await DemoStore.customers();
+      final o = await DemoStore.opportunities();
+      final t = await DemoStore.tasks();
 
-    final name = storage.getString('companyName') ?? '';
+      final p =
+          await SharedPreferences.getInstance();
 
-    if (isGuest) {
+      final total = o.fold<double>(
+        0,
+        (sum, item) =>
+            sum +
+            (double.tryParse(
+                  item['value'].toString(),
+                ) ??
+                0),
+      );
+
       if (!mounted) return;
 
       setState(() {
         guest = true;
-        companyName = name;
-        customers = 12;
-        opportunities = 7;
-        tasks = 18;
-        overdue = 2;
-        loading = false;
+        customers = c.length;
+        opportunities = o
+            .where(
+              (e) => e['stage'] != 'مغلقة',
+            )
+            .length;
+        tasks = t.length;
+        overdue = t
+            .where(
+              (e) => e['status'] == 'متأخرة',
+            )
+            .length;
+        pipeline = total;
+        company =
+            p.getString('companyName') ??
+                'شركة CRM التجريبية';
       });
 
       return;
@@ -846,43 +1067,54 @@ class _DashboardPageState extends State<DashboardPage> {
 
       if (!mounted) return;
 
-      if (data is Map) {
-        setState(() {
-          companyName = name;
-          customers = _toInt(data['customers']);
-          opportunities = _toInt(data['openOpportunities']);
-          tasks = _toInt(data['tasks']);
-          overdue = _toInt(data['tasksOverdue']);
-          loading = false;
-        });
-      }
-    } catch (e) {
-      if (!mounted) return;
-
       setState(() {
-        loading = false;
-      });
+        guest = false;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'تعذر تحميل لوحة التحكم: $e',
-          ),
-        ),
-      );
-    }
+        if (data is Map) {
+          customers =
+              int.tryParse(
+                    data['customers']
+                            ?.toString() ??
+                        '',
+                  ) ??
+                  0;
+
+          opportunities =
+              int.tryParse(
+                    data['openOpportunities']
+                            ?.toString() ??
+                        '',
+                  ) ??
+                  0;
+
+          tasks =
+              int.tryParse(
+                    data['tasks']?.toString() ??
+                        '',
+                  ) ??
+                  0;
+
+          overdue =
+              int.tryParse(
+                    data['tasksOverdue']
+                            ?.toString() ??
+                        '',
+                  ) ??
+                  0;
+        }
+      });
+    } catch (_) {}
   }
 
-  int _toInt(dynamic value) {
-    if (value is int) return value;
-    return int.tryParse(value?.toString() ?? '') ?? 0;
+  String money(double value) {
+    return value.toStringAsFixed(0);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('CRM Business'),
+        title: const Text('لوحة التحكم'),
         actions: [
           IconButton(
             onPressed: load,
@@ -890,138 +1122,118 @@ class _DashboardPageState extends State<DashboardPage> {
           ),
         ],
       ),
-      body: loading
-          ? const Center(
-              child: CircularProgressIndicator(),
-            )
-          : RefreshIndicator(
-              onRefresh: load,
-              child: ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.all(16),
-                children: [
-                  if (guest)
-                    const Card(
-                      child: ListTile(
-                        leading: Icon(Icons.visibility),
-                        title: Text('وضع الضيف'),
-                        subtitle: Text(
-                          'هذه بيانات تجريبية محلية وليست بيانات حقيقية.',
-                        ),
-                      ),
-                    ),
-                  Text(
-                    'مرحباً 👋',
-                    style: Theme.of(context)
-                        .textTheme
-                        .headlineSmall,
+      body: RefreshIndicator(
+        onRefresh: load,
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            if (guest)
+              Card(
+                child: ListTile(
+                  leading: const Icon(
+                    Icons.visibility,
                   ),
-                  Text(
-                    companyName.isEmpty
-                        ? 'شركة جديدة'
-                        : companyName,
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleMedium,
+                  title: const Text(
+                    'وضع الضيف التفاعلي',
                   ),
-                  const SizedBox(height: 18),
-                  GridView.count(
-                    crossAxisCount: 2,
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    crossAxisSpacing: 10,
-                    mainAxisSpacing: 10,
-                    childAspectRatio: 1.4,
-                    children: [
-                      MetricCard(
-                        title: 'العملاء',
-                        value: customers,
-                        icon: Icons.people,
-                      ),
-                      MetricCard(
-                        title: 'الفرص المفتوحة',
-                        value: opportunities,
-                        icon: Icons.trending_up,
-                      ),
-                      MetricCard(
-                        title: 'المهام',
-                        value: tasks,
-                        icon: Icons.task_alt,
-                      ),
-                      MetricCard(
-                        title: 'المتأخرة',
-                        value: overdue,
-                        icon: Icons.warning_amber,
-                      ),
-                    ],
+                  subtitle: Text(
+                    company,
                   ),
-                  const SizedBox(height: 16),
-                  Card(
-                    child: ListTile(
-                      leading: const Icon(Icons.insights),
-                      title: const Text('التقارير والتحليلات'),
-                      trailing: const Icon(Icons.chevron_right),
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const AnalyticsPage(),
-                          ),
-                        );
-                      },
-                    ),
+                ),
+              ),
+
+            const SizedBox(height: 8),
+
+            Text(
+              'مرحباً 👋',
+              style: Theme.of(context)
+                  .textTheme
+                  .headlineSmall,
+            ),
+
+            const SizedBox(height: 4),
+
+            Text(
+              company,
+              style: Theme.of(context)
+                  .textTheme
+                  .titleMedium,
+            ),
+
+            const SizedBox(height: 20),
+
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                Metric(
+                  title: 'العملاء',
+                  value: customers.toString(),
+                  icon: Icons.people,
+                ),
+                Metric(
+                  title: 'الفرص المفتوحة',
+                  value: opportunities.toString(),
+                  icon: Icons.trending_up,
+                ),
+                Metric(
+                  title: 'المهام',
+                  value: tasks.toString(),
+                  icon: Icons.task_alt,
+                ),
+                Metric(
+                  title: 'المتأخرة',
+                  value: overdue.toString(),
+                  icon: Icons.warning_amber,
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 16),
+
+            Card(
+              child: ListTile(
+                leading: const Icon(
+                  Icons.attach_money,
+                ),
+                title: const Text(
+                  'قيمة الفرص',
+                ),
+                subtitle: const Text(
+                  'إجمالي قيمة Pipeline التجريبي',
+                ),
+                trailing: Text(
+                  money(pipeline),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
                   ),
-                  Card(
-                    child: ListTile(
-                      leading: const Icon(Icons.card_membership),
-                      title: const Text('الاشتراك'),
-                      trailing: const Icon(Icons.chevron_right),
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const SubscriptionPage(),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
-    );
-  }
-}
 
-class MetricCard extends StatelessWidget {
-  final String title;
-  final int value;
-  final IconData icon;
+            const SizedBox(height: 8),
 
-  const MetricCard({
-    super.key,
-    required this.title,
-    required this.value,
-    required this.icon,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon),
-            const SizedBox(height: 6),
-            Text(title),
-            Text(
-              '$value',
-              style: const TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
+            Card(
+              child: ListTile(
+                leading: const Icon(
+                  Icons.insights,
+                ),
+                title: const Text(
+                  'التحليلات',
+                ),
+                trailing: const Icon(
+                  Icons.chevron_right,
+                ),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) =>
+                          const AnalyticsPage(),
+                    ),
+                  );
+                },
               ),
             ),
           ],
@@ -1031,109 +1243,234 @@ class MetricCard extends StatelessWidget {
   }
 }
 
+class Metric extends StatelessWidget {
+  final String title;
+  final String value;
+  final IconData icon;
+
+  const Metric({
+    super.key,
+    required this.title,
+    required this.value,
+    required this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 165,
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment:
+                CrossAxisAlignment.start,
+            children: [
+              Icon(icon, size: 30),
+              const SizedBox(height: 8),
+              Text(
+                value,
+                style: const TextStyle(
+                  fontSize: 26,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(title),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/* =========================================================
+   CUSTOMERS
+   ========================================================= */
+
 class CustomersPage extends StatefulWidget {
   const CustomersPage({super.key});
 
   @override
-  State<CustomersPage> createState() => _CustomersPageState();
+  State<CustomersPage> createState() =>
+      _CustomersPageState();
 }
 
-class _CustomersPageState extends State<CustomersPage> {
-  final searchController = TextEditingController();
+class _CustomersPageState
+    extends State<CustomersPage> {
+  List<Map<String, dynamic>> items = [];
 
-  bool loading = true;
-  List<Map<String, String>> customers = [];
+  final search = TextEditingController();
 
   @override
   void initState() {
     super.initState();
+
     load();
   }
 
   Future<void> load() async {
-    final guest = await guestModeEnabled();
+    final guest = await isGuest();
 
     if (guest) {
+      final data = await DemoStore.customers();
+
       if (!mounted) return;
 
       setState(() {
-        customers = [
-          {
-            'name': 'شركة النور التجارية',
-            'phone': '777000001',
-            'email': 'info@alnoor.demo',
-          },
-          {
-            'name': 'مؤسسة المستقبل',
-            'phone': '777000002',
-            'email': 'future@demo.local',
-          },
-          {
-            'name': 'عميل تجريبي',
-            'phone': '777000003',
-            'email': 'customer@demo.local',
-          },
-        ];
-        loading = false;
+        items = data;
       });
 
       return;
     }
 
     try {
-      final query = searchController.text.trim();
-
-      final path = query.isEmpty
-          ? '/customers'
-          : '/customers?q=${Uri.encodeQueryComponent(query)}';
-
-      final data = await api.get(path);
+      final result = await api.get('/customers');
 
       if (!mounted) return;
 
-      final result = <Map<String, String>>[];
+      final list = <Map<String, dynamic>>[];
 
-      if (data is List) {
-        for (final item in data) {
+      if (result is List) {
+        for (final item in result) {
           if (item is Map) {
-            result.add({
-              'name': item['name']?.toString() ?? '',
-              'phone': item['phone']?.toString() ?? '',
-              'email': item['email']?.toString() ?? '',
-            });
+            list.add(
+              Map<String, dynamic>.from(item),
+            );
           }
         }
       }
 
       setState(() {
-        customers = result;
-        loading = false;
+        items = list;
       });
-    } catch (e) {
-      if (!mounted) return;
+    } catch (_) {}
+  }
 
-      setState(() {
-        loading = false;
-      });
+  List<Map<String, dynamic>> filtered() {
+    final q = search.text.trim().toLowerCase();
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'تعذر تحميل العملاء: $e',
-          ),
-        ),
-      );
+    if (q.isEmpty) return items;
+
+    return items.where((e) {
+      final name =
+          e['name']?.toString().toLowerCase() ?? '';
+
+      final phone =
+          e['phone']?.toString().toLowerCase() ?? '';
+
+      final email =
+          e['email']?.toString().toLowerCase() ?? '';
+
+      return name.contains(q) ||
+          phone.contains(q) ||
+          email.contains(q);
+    }).toList();
+  }
+
+  Future<void> addCustomer() async {
+    final result = await showCustomerDialog(
+      context,
+    );
+
+    if (result == null) return;
+
+    final guest = await isGuest();
+
+    if (!guest) return;
+
+    final list = await DemoStore.customers();
+
+    list.insert(
+      0,
+      {
+        'id': 'C${DateTime.now().millisecondsSinceEpoch}',
+        ...result,
+      },
+    );
+
+    await DemoStore.saveCustomers(list);
+
+    await load();
+  }
+
+  Future<void> editCustomer(
+    Map<String, dynamic> customer,
+  ) async {
+    final result = await showCustomerDialog(
+      context,
+      existing: customer,
+    );
+
+    if (result == null) return;
+
+    final list = await DemoStore.customers();
+
+    final index = list.indexWhere(
+      (e) => e['id'] == customer['id'],
+    );
+
+    if (index >= 0) {
+      list[index] = {
+        ...list[index],
+        ...result,
+      };
     }
+
+    await DemoStore.saveCustomers(list);
+
+    await load();
+  }
+
+  Future<void> deleteCustomer(
+    Map<String, dynamic> customer,
+  ) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('حذف العميل'),
+        content: Text(
+          'هل تريد حذف ${customer['name']}؟',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () =>
+                Navigator.pop(context, false),
+            child: const Text('إلغاء'),
+          ),
+          FilledButton(
+            onPressed: () =>
+                Navigator.pop(context, true),
+            child: const Text('حذف'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    final list = await DemoStore.customers();
+
+    list.removeWhere(
+      (e) => e['id'] == customer['id'],
+    );
+
+    await DemoStore.saveCustomers(list);
+
+    await load();
   }
 
   @override
   void dispose() {
-    searchController.dispose();
+    search.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final visible = filtered();
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('العملاء'),
@@ -1144,65 +1481,109 @@ class _CustomersPageState extends State<CustomersPage> {
           ),
         ],
       ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: addCustomer,
+        icon: const Icon(Icons.person_add),
+        label: const Text('عميل جديد'),
+      ),
       body: Column(
         children: [
           Padding(
             padding: const EdgeInsets.all(12),
             child: TextField(
-              controller: searchController,
-              onSubmitted: (_) => load(),
+              controller: search,
+              onChanged: (_) => setState(() {}),
               decoration: InputDecoration(
-                prefixIcon: const Icon(Icons.search),
                 hintText: 'بحث عن عميل',
-                border: const OutlineInputBorder(),
-                suffixIcon: IconButton(
-                  onPressed: load,
-                  icon: const Icon(Icons.search),
+                prefixIcon: const Icon(
+                  Icons.search,
                 ),
+                suffixIcon: search.text.isEmpty
+                    ? null
+                    : IconButton(
+                        onPressed: () {
+                          search.clear();
+                          setState(() {});
+                        },
+                        icon: const Icon(
+                          Icons.clear,
+                        ),
+                      ),
               ),
             ),
           ),
-          Expanded(
-            child: loading
-                ? const Center(
-                    child: CircularProgressIndicator(),
-                  )
-                : customers.isEmpty
-                    ? const Center(
-                        child: Text('لا يوجد عملاء'),
-                      )
-                    : ListView.separated(
-                        itemCount: customers.length,
-                        separatorBuilder: (_, __) =>
-                            const Divider(height: 1),
-                        itemBuilder: (context, index) {
-                          final customer = customers[index];
 
-                          return ListTile(
-                            leading: const CircleAvatar(
-                              child: Icon(Icons.person),
+          Expanded(
+            child: visible.isEmpty
+                ? const Center(
+                    child: Text(
+                      'لا توجد نتائج',
+                    ),
+                  )
+                : ListView.separated(
+                    itemCount: visible.length,
+                    separatorBuilder:
+                        (_, __) => const Divider(
+                      height: 1,
+                    ),
+                    itemBuilder:
+                        (context, index) {
+                      final customer =
+                          visible[index];
+
+                      return ListTile(
+                        leading: const CircleAvatar(
+                          child: Icon(
+                            Icons.person,
+                          ),
+                        ),
+                        title: Text(
+                          customer['name']
+                                  ?.toString() ??
+                              '',
+                        ),
+                        subtitle: Text(
+                          customer['phone']
+                                  ?.toString() ??
+                              '',
+                        ),
+                        trailing: PopupMenuButton(
+                          itemBuilder: (_) => const [
+                            PopupMenuItem(
+                              value: 'edit',
+                              child: Text('تعديل'),
                             ),
-                            title: Text(
-                              customer['name'] ?? '',
+                            PopupMenuItem(
+                              value: 'delete',
+                              child: Text('حذف'),
                             ),
-                            subtitle: Text(
-                              customer['phone']?.isNotEmpty == true
-                                  ? customer['phone']!
-                                  : customer['email'] ?? '',
-                            ),
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => Customer360Page(
-                                    customer: customer,
-                                  ),
-                                ),
+                          ],
+                          onSelected: (value) {
+                            if (value == 'edit') {
+                              editCustomer(
+                                customer,
                               );
-                            },
+                            } else {
+                              deleteCustomer(
+                                customer,
+                              );
+                            }
+                          },
+                        ),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  Customer360Page(
+                                customer: customer,
+                              ),
+                            ),
                           );
                         },
-                      ),
+                      );
+                    },
+                  ),
           ),
         ],
       ),
@@ -1210,8 +1591,112 @@ class _CustomersPageState extends State<CustomersPage> {
   }
 }
 
-class Customer360Page extends StatelessWidget {
-  final Map<String, String> customer;
+Future<Map<String, String>?> showCustomerDialog(
+  BuildContext context, {
+  Map<String, dynamic>? existing,
+}) async {
+  final name = TextEditingController(
+    text: existing?['name']?.toString() ?? '',
+  );
+
+  final phone = TextEditingController(
+    text: existing?['phone']?.toString() ?? '',
+  );
+
+  final email = TextEditingController(
+    text: existing?['email']?.toString() ?? '',
+  );
+
+  final address = TextEditingController(
+    text: existing?['address']?.toString() ?? '',
+  );
+
+  final result =
+      await showDialog<Map<String, String>>(
+    context: context,
+    builder: (_) => AlertDialog(
+      title: Text(
+        existing == null
+            ? 'إضافة عميل'
+            : 'تعديل العميل',
+      ),
+      content: SingleChildScrollView(
+        child: Column(
+          children: [
+            TextField(
+              controller: name,
+              decoration: const InputDecoration(
+                labelText: 'اسم العميل',
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: phone,
+              keyboardType: TextInputType.phone,
+              decoration: const InputDecoration(
+                labelText: 'رقم الهاتف',
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: email,
+              keyboardType: TextInputType.emailAddress,
+              decoration: const InputDecoration(
+                labelText: 'البريد الإلكتروني',
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: address,
+              decoration: const InputDecoration(
+                labelText: 'العنوان',
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () =>
+              Navigator.pop(context),
+          child: const Text('إلغاء'),
+        ),
+        FilledButton(
+          onPressed: () {
+            if (name.text.trim().isEmpty) return;
+
+            Navigator.pop(
+              context,
+              {
+                'name': name.text.trim(),
+                'phone': phone.text.trim(),
+                'email': email.text.trim(),
+                'address': address.text.trim(),
+                'company': name.text.trim(),
+                'status': 'نشط',
+              },
+            );
+          },
+          child: const Text('حفظ'),
+        ),
+      ],
+    ),
+  );
+
+  name.dispose();
+  phone.dispose();
+  email.dispose();
+  address.dispose();
+
+  return result;
+}
+
+/* =========================================================
+   CUSTOMER 360
+   ========================================================= */
+
+class Customer360Page extends StatefulWidget {
+  final Map<String, dynamic> customer;
 
   const Customer360Page({
     super.key,
@@ -1219,36 +1704,224 @@ class Customer360Page extends StatelessWidget {
   });
 
   @override
+  State<Customer360Page> createState() =>
+      _Customer360PageState();
+}
+
+class _Customer360PageState
+    extends State<Customer360Page> {
+  List<Map<String, dynamic>> activities = [];
+
+  @override
+  void initState() {
+    super.initState();
+
+    load();
+  }
+
+  Future<void> load() async {
+    final all = await DemoStore.activities();
+
+    final id = widget.customer['id'];
+
+    if (!mounted) return;
+
+    setState(() {
+      activities = all
+          .where(
+            (e) => e['customerId'] == id,
+          )
+          .toList();
+    });
+  }
+
+  Future<void> addActivity() async {
+    final title = TextEditingController();
+    final description = TextEditingController();
+
+    final result =
+        await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text(
+          'إضافة نشاط',
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: title,
+              decoration: const InputDecoration(
+                labelText: 'نوع النشاط',
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: description,
+              decoration: const InputDecoration(
+                labelText: 'الوصف',
+              ),
+              maxLines: 3,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () =>
+                Navigator.pop(context, false),
+            child: const Text('إلغاء'),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (title.text.trim().isEmpty) return;
+
+              Navigator.pop(context, true);
+            },
+            child: const Text('حفظ'),
+          ),
+        ],
+      ),
+    );
+
+    if (result != true) {
+      title.dispose();
+      description.dispose();
+      return;
+    }
+
+    final list = await DemoStore.activities();
+
+    list.insert(
+      0,
+      {
+        'id':
+            'A${DateTime.now().millisecondsSinceEpoch}',
+        'customerId': widget.customer['id'],
+        'title': title.text.trim(),
+        'description': description.text.trim(),
+        'date':
+            DateTime.now().toString().substring(0, 10),
+      },
+    );
+
+    await DemoStore.saveActivities(list);
+
+    title.dispose();
+    description.dispose();
+
+    await load();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final c = widget.customer;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Customer 360'),
+        actions: [
+          IconButton(
+            onPressed: addActivity,
+            icon: const Icon(
+              Icons.add_comment,
+            ),
+          ),
+        ],
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          Text(
-            customer['name'] ?? '',
-            style: Theme.of(context).textTheme.headlineSmall,
+          CircleAvatar(
+            radius: 40,
+            child: Text(
+              (c['name']?.toString().isNotEmpty ?? false)
+                  ? c['name']
+                      .toString()
+                      .substring(0, 1)
+                  : '?',
+              style: const TextStyle(
+                fontSize: 30,
+              ),
+            ),
           ),
-          const SizedBox(height: 16),
+
+          const SizedBox(height: 12),
+
+          Text(
+            c['name']?.toString() ?? '',
+            textAlign: TextAlign.center,
+            style: Theme.of(context)
+                .textTheme
+                .headlineSmall,
+          ),
+
+          const SizedBox(height: 20),
+
           Card(
             child: ListTile(
               leading: const Icon(Icons.phone),
               title: Text(
-                customer['phone']?.isNotEmpty == true
-                    ? customer['phone']!
-                    : 'لا يوجد هاتف',
+                c['phone']?.toString() ??
+                    'لا يوجد',
               ),
             ),
           ),
+
           Card(
             child: ListTile(
               leading: const Icon(Icons.email),
               title: Text(
-                customer['email']?.isNotEmpty == true
-                    ? customer['email']!
-                    : 'لا يوجد بريد',
+                c['email']?.toString() ??
+                    'لا يوجد',
+              ),
+            ),
+          ),
+
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.location_on),
+              title: Text(
+                c['address']?.toString() ??
+                    'لا يوجد',
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 12),
+
+          Text(
+            'سجل التفاعل',
+            style: Theme.of(context)
+                .textTheme
+                .titleLarge,
+          ),
+
+          const SizedBox(height: 8),
+
+          if (activities.isEmpty)
+            const Card(
+              child: Padding(
+                padding: EdgeInsets.all(16),
+                child: Text(
+                  'لا توجد أنشطة بعد',
+                ),
+              ),
+            ),
+
+          ...activities.map(
+            (activity) => Card(
+              child: ListTile(
+                leading: const Icon(
+                  Icons.history,
+                ),
+                title: Text(
+                  activity['title']
+                          ?.toString() ??
+                      '',
+                ),
+                subtitle: Text(
+                  '${activity['description'] ?? ''}\n${activity['date'] ?? ''}',
+                ),
               ),
             ),
           ),
@@ -1257,6 +1930,10 @@ class Customer360Page extends StatelessWidget {
     );
   }
 }
+
+/* =========================================================
+   OPPORTUNITIES
+   ========================================================= */
 
 class OpportunitiesPage extends StatefulWidget {
   const OpportunitiesPage({super.key});
@@ -1266,93 +1943,121 @@ class OpportunitiesPage extends StatefulWidget {
       _OpportunitiesPageState();
 }
 
-class _OpportunitiesPageState extends State<OpportunitiesPage> {
-  bool loading = true;
-  List<Map<String, String>> opportunities = [];
+class _OpportunitiesPageState
+    extends State<OpportunitiesPage> {
+  List<Map<String, dynamic>> items = [];
 
   @override
   void initState() {
     super.initState();
+
     load();
   }
 
   Future<void> load() async {
-    final guest = await guestModeEnabled();
+    if (await isGuest()) {
+      final data =
+          await DemoStore.opportunities();
 
-    if (guest) {
       if (!mounted) return;
 
       setState(() {
-        opportunities = [
-          {
-            'name': 'توريد أجهزة مكتبية',
-            'stage': 'QUALIFIED',
-            'value': '50000',
-          },
-          {
-            'name': 'مشروع طاقة شمسية',
-            'stage': 'PROPOSAL',
-            'value': '75000',
-          },
-          {
-            'name': 'عقد خدمات سنوي',
-            'stage': 'NEGOTIATION',
-            'value': '60000',
-          },
-          {
-            'name': 'توريد معدات',
-            'stage': 'LEAD',
-            'value': '35000',
-          },
-        ];
-        loading = false;
+        items = data;
       });
 
       return;
     }
 
     try {
-      final data = await api.get('/opportunities/pipeline');
+      final result =
+          await api.get('/opportunities/pipeline');
 
       if (!mounted) return;
 
-      final result = <Map<String, String>>[];
-
-      if (data is Map) {
-        final stages = data['stages'];
-
-        if (stages is Map) {
-          stages.forEach((key, value) {
-            if (value is Map) {
-              result.add({
-                'name': key.toString(),
-                'stage': key.toString(),
-                'value': value['value']?.toString() ?? '0',
-              });
-            }
-          });
-        }
+      if (result is List) {
+        setState(() {
+          items = result
+              .map(
+                (e) => Map<String, dynamic>.from(e),
+              )
+              .toList();
+        });
       }
+    } catch (_) {}
+  }
 
-      setState(() {
-        opportunities = result;
-        loading = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
+  Future<void> addOpportunity() async {
+    final result =
+        await showOpportunityDialog(context);
 
-      setState(() {
-        loading = false;
-      });
+    if (result == null) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'تعذر تحميل الفرص: $e',
-          ),
+    final list =
+        await DemoStore.opportunities();
+
+    list.insert(
+      0,
+      {
+        'id':
+            'O${DateTime.now().millisecondsSinceEpoch}',
+        ...result,
+      },
+    );
+
+    await DemoStore.saveOpportunities(list);
+
+    await load();
+  }
+
+  Future<void> changeStage(
+    Map<String, dynamic> item,
+  ) async {
+    final stages = [
+      'جديد',
+      'مؤهل',
+      'عرض سعر',
+      'تفاوض',
+      'مغلقة',
+    ];
+
+    final selected =
+        await showDialog<String>(
+      context: context,
+      builder: (_) => SimpleDialog(
+        title: const Text(
+          'مرحلة الفرصة',
         ),
-      );
+        children: stages
+            .map(
+              (stage) => SimpleDialogOption(
+                onPressed: () =>
+                    Navigator.pop(
+                  context,
+                  stage,
+                ),
+                child: Text(stage),
+              ),
+            )
+            .toList(),
+      ),
+    );
+
+    if (selected == null) return;
+
+    final list =
+        await DemoStore.opportunities();
+
+    final index = list.indexWhere(
+      (e) => e['id'] == item['id'],
+    );
+
+    if (index >= 0) {
+      list[index]['stage'] = selected;
     }
+
+    await DemoStore.saveOpportunities(list);
+
+    await load();
   }
 
   @override
@@ -1367,131 +2072,251 @@ class _OpportunitiesPageState extends State<OpportunitiesPage> {
           ),
         ],
       ),
-      body: loading
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: addOpportunity,
+        icon: const Icon(Icons.add),
+        label: const Text('فرصة جديدة'),
+      ),
+      body: items.isEmpty
           ? const Center(
-              child: CircularProgressIndicator(),
+              child: Text(
+                'لا توجد فرص',
+              ),
             )
-          : opportunities.isEmpty
-              ? const Center(
-                  child: Text('لا توجد فرص'),
-                )
-              : ListView.separated(
-                  itemCount: opportunities.length,
-                  separatorBuilder: (_, __) =>
-                      const Divider(height: 1),
-                  itemBuilder: (context, index) {
-                    final opportunity = opportunities[index];
+          : ListView.separated(
+              itemCount: items.length,
+              separatorBuilder:
+                  (_, __) => const Divider(
+                height: 1,
+              ),
+              itemBuilder: (context, index) {
+                final item = items[index];
 
-                    return ListTile(
-                      leading: const CircleAvatar(
-                        child: Icon(Icons.trending_up),
-                      ),
-                      title: Text(
-                        opportunity['name'] ?? '',
-                      ),
-                      subtitle: Text(
-                        opportunity['stage'] ?? '',
-                      ),
-                      trailing: Text(
-                        opportunity['value'] ?? '0',
-                      ),
-                    );
-                  },
-                ),
+                return ListTile(
+                  leading: const CircleAvatar(
+                    child: Icon(
+                      Icons.trending_up,
+                    ),
+                  ),
+                  title: Text(
+                    item['name']?.toString() ??
+                        '',
+                  ),
+                  subtitle: Text(
+                    '${item['customer'] ?? ''} • ${item['stage'] ?? ''}',
+                  ),
+                  trailing: Text(
+                    item['value']?.toString() ??
+                        '0',
+                  ),
+                  onTap: () =>
+                      changeStage(item),
+                );
+              },
+            ),
     );
   }
 }
+
+Future<Map<String, dynamic>?> showOpportunityDialog(
+  BuildContext context,
+) async {
+  final name = TextEditingController();
+  final customer = TextEditingController();
+  final value = TextEditingController();
+
+  final result =
+      await showDialog<Map<String, dynamic>>(
+    context: context,
+    builder: (_) => AlertDialog(
+      title: const Text(
+        'إضافة فرصة',
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: name,
+            decoration: const InputDecoration(
+              labelText: 'اسم الفرصة',
+            ),
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: customer,
+            decoration: const InputDecoration(
+              labelText: 'العميل',
+            ),
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: value,
+            keyboardType:
+                TextInputType.number,
+            decoration: const InputDecoration(
+              labelText: 'القيمة',
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () =>
+              Navigator.pop(context),
+          child: const Text('إلغاء'),
+        ),
+        FilledButton(
+          onPressed: () {
+            if (name.text.trim().isEmpty) return;
+
+            Navigator.pop(
+              context,
+              {
+                'name': name.text.trim(),
+                'customer': customer.text.trim(),
+                'value':
+                    double.tryParse(
+                          value.text,
+                        ) ??
+                        0,
+                'stage': 'جديد',
+              },
+            );
+          },
+          child: const Text('حفظ'),
+        ),
+      ],
+    ),
+  );
+
+  name.dispose();
+  customer.dispose();
+  value.dispose();
+
+  return result;
+}
+
+/* =========================================================
+   TASKS
+   ========================================================= */
 
 class TasksPage extends StatefulWidget {
   const TasksPage({super.key});
 
   @override
-  State<TasksPage> createState() => _TasksPageState();
+  State<TasksPage> createState() =>
+      _TasksPageState();
 }
 
-class _TasksPageState extends State<TasksPage> {
-  bool loading = true;
-  List<Map<String, String>> tasks = [];
+class _TasksPageState
+    extends State<TasksPage> {
+  List<Map<String, dynamic>> items = [];
 
   @override
   void initState() {
     super.initState();
+
     load();
   }
 
   Future<void> load() async {
-    final guest = await guestModeEnabled();
+    if (await isGuest()) {
+      final data = await DemoStore.tasks();
 
-    if (guest) {
       if (!mounted) return;
 
       setState(() {
-        tasks = [
-          {
-            'title': 'الاتصال بالعميل',
-            'status': 'OPEN',
-            'priority': 'HIGH',
-          },
-          {
-            'title': 'إرسال عرض سعر',
-            'status': 'IN_PROGRESS',
-            'priority': 'MEDIUM',
-          },
-          {
-            'title': 'متابعة فرصة المبيعات',
-            'status': 'OPEN',
-            'priority': 'HIGH',
-          },
-          {
-            'title': 'تحديث بيانات العميل',
-            'status': 'COMPLETED',
-            'priority': 'LOW',
-          },
-        ];
-        loading = false;
+        items = data;
       });
 
       return;
     }
 
     try {
-      final data = await api.get('/tasks');
+      final result = await api.get('/tasks');
 
       if (!mounted) return;
 
-      final result = <Map<String, String>>[];
-
-      if (data is List) {
-        for (final item in data) {
-          if (item is Map) {
-            result.add({
-              'title': item['title']?.toString() ?? '',
-              'status': item['status']?.toString() ?? '',
-              'priority': item['priority']?.toString() ?? '',
-            });
-          }
-        }
+      if (result is List) {
+        setState(() {
+          items = result
+              .map(
+                (e) => Map<String, dynamic>.from(e),
+              )
+              .toList();
+        });
       }
+    } catch (_) {}
+  }
 
-      setState(() {
-        tasks = result;
-        loading = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
+  Future<void> addTask() async {
+    final result = await showTaskDialog(context);
 
-      setState(() {
-        loading = false;
-      });
+    if (result == null) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'تعذر تحميل المهام: $e',
-          ),
+    final list = await DemoStore.tasks();
+
+    list.insert(
+      0,
+      {
+        'id':
+            'T${DateTime.now().millisecondsSinceEpoch}',
+        ...result,
+      },
+    );
+
+    await DemoStore.saveTasks(list);
+
+    await load();
+  }
+
+  Future<void> changeStatus(
+    Map<String, dynamic> item,
+  ) async {
+    final statuses = [
+      'مفتوحة',
+      'قيد التنفيذ',
+      'مكتملة',
+      'متأخرة',
+    ];
+
+    final selected =
+        await showDialog<String>(
+      context: context,
+      builder: (_) => SimpleDialog(
+        title: const Text(
+          'حالة المهمة',
         ),
-      );
+        children: statuses
+            .map(
+              (status) => SimpleDialogOption(
+                onPressed: () =>
+                    Navigator.pop(
+                  context,
+                  status,
+                ),
+                child: Text(status),
+              ),
+            )
+            .toList(),
+      ),
+    );
+
+    if (selected == null) return;
+
+    final list = await DemoStore.tasks();
+
+    final index = list.indexWhere(
+      (e) => e['id'] == item['id'],
+    );
+
+    if (index >= 0) {
+      list[index]['status'] = selected;
     }
+
+    await DemoStore.saveTasks(list);
+
+    await load();
   }
 
   @override
@@ -1506,264 +2331,359 @@ class _TasksPageState extends State<TasksPage> {
           ),
         ],
       ),
-      body: loading
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: addTask,
+        icon: const Icon(Icons.add_task),
+        label: const Text('مهمة جديدة'),
+      ),
+      body: items.isEmpty
           ? const Center(
-              child: CircularProgressIndicator(),
+              child: Text(
+                'لا توجد مهام',
+              ),
             )
-          : tasks.isEmpty
-              ? const Center(
-                  child: Text('لا توجد مهام'),
-                )
-              : ListView.separated(
-                  itemCount: tasks.length,
-                  separatorBuilder: (_, __) =>
-                      const Divider(height: 1),
-                  itemBuilder: (context, index) {
-                    final task = tasks[index];
-                    final completed =
-                        task['status'] == 'COMPLETED';
+          : ListView.separated(
+              itemCount: items.length,
+              separatorBuilder:
+                  (_, __) => const Divider(
+                height: 1,
+              ),
+              itemBuilder: (context, index) {
+                final item = items[index];
 
-                    return ListTile(
-                      leading: Icon(
-                        completed
-                            ? Icons.check_circle
-                            : Icons.radio_button_unchecked,
-                      ),
-                      title: Text(
-                        task['title'] ?? '',
-                      ),
-                      subtitle: Text(
-                        '${task['priority'] ?? ''} • ${task['status'] ?? ''}',
-                      ),
-                    );
-                  },
-                ),
+                final completed =
+                    item['status'] == 'مكتملة';
+
+                return ListTile(
+                  leading: Icon(
+                    completed
+                        ? Icons.check_circle
+                        : Icons.radio_button_unchecked,
+                  ),
+                  title: Text(
+                    item['title']?.toString() ??
+                        '',
+                  ),
+                  subtitle: Text(
+                    '${item['customer'] ?? ''} • ${item['priority'] ?? ''}',
+                  ),
+                  trailing: Text(
+                    item['status']?.toString() ??
+                        '',
+                  ),
+                  onTap: () =>
+                      changeStatus(item),
+                );
+              },
+            ),
     );
   }
 }
+
+Future<Map<String, dynamic>?> showTaskDialog(
+  BuildContext context,
+) async {
+  final title = TextEditingController();
+  final customer = TextEditingController();
+
+  String priority = 'متوسطة';
+
+  final result =
+      await showDialog<Map<String, dynamic>>(
+    context: context,
+    builder: (_) => StatefulBuilder(
+      builder: (context, setState) {
+        return AlertDialog(
+          title: const Text(
+            'إضافة مهمة',
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: title,
+                decoration: const InputDecoration(
+                  labelText: 'عنوان المهمة',
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: customer,
+                decoration: const InputDecoration(
+                  labelText: 'العميل',
+                ),
+              ),
+              const SizedBox(height: 10),
+              DropdownButtonFormField<String>(
+                initialValue: priority,
+                decoration: const InputDecoration(
+                  labelText: 'الأولوية',
+                ),
+                items: const [
+                  DropdownMenuItem(
+                    value: 'منخفضة',
+                    child: Text('منخفضة'),
+                  ),
+                  DropdownMenuItem(
+                    value: 'متوسطة',
+                    child: Text('متوسطة'),
+                  ),
+                  DropdownMenuItem(
+                    value: 'عالية',
+                    child: Text('عالية'),
+                  ),
+                ],
+                onChanged: (value) {
+                  if (value != null) {
+                    setState(() {
+                      priority = value;
+                    });
+                  }
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () =>
+                  Navigator.pop(context),
+              child: const Text('إلغاء'),
+            ),
+            FilledButton(
+              onPressed: () {
+                if (title.text.trim().isEmpty) {
+                  return;
+                }
+
+                Navigator.pop(
+                  context,
+                  {
+                    'title': title.text.trim(),
+                    'customer':
+                        customer.text.trim(),
+                    'priority': priority,
+                    'status': 'مفتوحة',
+                  },
+                );
+              },
+              child: const Text('حفظ'),
+            ),
+          ],
+        );
+      },
+    ),
+  );
+
+  title.dispose();
+  customer.dispose();
+
+  return result;
+}
+
+/* =========================================================
+   ANALYTICS
+   ========================================================= */
 
 class AnalyticsPage extends StatefulWidget {
   const AnalyticsPage({super.key});
 
   @override
-  State<AnalyticsPage> createState() => _AnalyticsPageState();
+  State<AnalyticsPage> createState() =>
+      _AnalyticsPageState();
 }
 
-class _AnalyticsPageState extends State<AnalyticsPage> {
-  bool loading = true;
-  Map<String, dynamic> data = {};
+class _AnalyticsPageState
+    extends State<AnalyticsPage> {
+  int customers = 0;
+  int opportunities = 0;
+  int tasks = 0;
+  int completed = 0;
+  double pipeline = 0;
 
   @override
   void initState() {
     super.initState();
+
     load();
   }
 
   Future<void> load() async {
-    final guest = await guestModeEnabled();
+    if (await isGuest()) {
+      final c = await DemoStore.customers();
+      final o = await DemoStore.opportunities();
+      final t = await DemoStore.tasks();
 
-    if (guest) {
+      final total = o.fold<double>(
+        0,
+        (sum, item) =>
+            sum +
+            (double.tryParse(
+                  item['value'].toString(),
+                ) ??
+                0),
+      );
+
       if (!mounted) return;
 
       setState(() {
-        data = {
-          'إجمالي العملاء': 12,
-          'العملاء النشطون': 9,
-          'الفرص المفتوحة': 7,
-          'قيمة الفرص': 185000,
-          'المهام المكتملة': 24,
-          'معدل التحويل': '28%',
-        };
-        loading = false;
+        customers = c.length;
+        opportunities = o.length;
+        tasks = t.length;
+        completed = t
+            .where(
+              (e) => e['status'] == 'مكتملة',
+            )
+            .length;
+        pipeline = total;
       });
 
       return;
     }
 
     try {
-      final result = await api.get('/analytics/dashboard');
+      final data =
+          await api.get('/analytics/dashboard');
 
       if (!mounted) return;
 
-      if (result is Map) {
+      if (data is Map) {
         setState(() {
-          data = Map<String, dynamic>.from(result);
-          loading = false;
-        });
-      } else {
-        setState(() {
-          loading = false;
+          customers =
+              int.tryParse(
+                    data['customers']
+                            ?.toString() ??
+                        '',
+                  ) ??
+                  0;
+
+          opportunities =
+              int.tryParse(
+                    data['opportunities']
+                            ?.toString() ??
+                        '',
+                  ) ??
+                  0;
+
+          tasks =
+              int.tryParse(
+                    data['tasks']?.toString() ??
+                        '',
+                  ) ??
+                  0;
+
+          completed =
+              int.tryParse(
+                    data['completed']
+                            ?.toString() ??
+                        '',
+                  ) ??
+                  0;
         });
       }
-    } catch (e) {
-      if (!mounted) return;
-
-      setState(() {
-        loading = false;
-      });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'تعذر تحميل التحليلات: $e',
-          ),
-        ),
-      );
-    }
+    } catch (_) {}
   }
 
   @override
   Widget build(BuildContext context) {
-    final entries = data.entries.toList();
+    final conversion = opportunities == 0
+        ? 0
+        : ((completed / opportunities) * 100)
+            .round();
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('التحليلات'),
+        actions: [
+          IconButton(
+            onPressed: load,
+            icon: const Icon(Icons.refresh),
+          ),
+        ],
       ),
-      body: loading
-          ? const Center(
-              child: CircularProgressIndicator(),
-            )
-          : ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                const Text(
-                  'ملخص الأداء',
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                ...entries.map(
-                  (entry) => Card(
-                    child: ListTile(
-                      title: Text(entry.key),
-                      trailing: Text(
-                        entry.value.toString(),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          const Text(
+            'مؤشرات الأداء',
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
             ),
+          ),
+
+          const SizedBox(height: 16),
+
+          analyticsCard(
+            'إجمالي العملاء',
+            customers.toString(),
+            Icons.people,
+          ),
+
+          analyticsCard(
+            'الفرص',
+            opportunities.toString(),
+            Icons.trending_up,
+          ),
+
+          analyticsCard(
+            'إجمالي المهام',
+            tasks.toString(),
+            Icons.task,
+          ),
+
+          analyticsCard(
+            'المهام المكتملة',
+            completed.toString(),
+            Icons.check_circle,
+          ),
+
+          analyticsCard(
+            'قيمة Pipeline',
+            pipeline.toStringAsFixed(0),
+            Icons.attach_money,
+          ),
+
+          analyticsCard(
+            'مؤشر الإنجاز',
+            '$conversion%',
+            Icons.insights,
+          ),
+        ],
+      ),
     );
   }
-}
 
-class SubscriptionPage extends StatefulWidget {
-  const SubscriptionPage({super.key});
-
-  @override
-  State<SubscriptionPage> createState() =>
-      _SubscriptionPageState();
-}
-
-class _SubscriptionPageState extends State<SubscriptionPage> {
-  bool loading = true;
-  Map<String, dynamic> data = {};
-
-  @override
-  void initState() {
-    super.initState();
-    load();
-  }
-
-  Future<void> load() async {
-    final guest = await guestModeEnabled();
-
-    if (guest) {
-      if (!mounted) return;
-
-      setState(() {
-        data = {
-          'الخطة': 'تجريبية',
-          'الحالة': 'Demo',
-          'المستخدمون': 1,
-          'العملاء': 12,
-        };
-        loading = false;
-      });
-
-      return;
-    }
-
-    try {
-      final result = await api.get('/subscriptions/current');
-
-      if (!mounted) return;
-
-      if (result is Map) {
-        setState(() {
-          data = Map<String, dynamic>.from(result);
-          loading = false;
-        });
-      } else {
-        setState(() {
-          loading = false;
-        });
-      }
-    } catch (e) {
-      if (!mounted) return;
-
-      setState(() {
-        loading = false;
-      });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'تعذر تحميل الاشتراك: $e',
+  Widget analyticsCard(
+    String title,
+    String value,
+    IconData icon,
+  ) {
+    return Card(
+      child: ListTile(
+        leading: Icon(icon),
+        title: Text(title),
+        trailing: Text(
+          value,
+          style: const TextStyle(
+            fontSize: 19,
+            fontWeight: FontWeight.bold,
           ),
         ),
-      );
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('الاشتراك'),
       ),
-      body: loading
-          ? const Center(
-              child: CircularProgressIndicator(),
-            )
-          : ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                ...data.entries.map(
-                  (entry) => Card(
-                    child: ListTile(
-                      title: Text(entry.key),
-                      trailing: Text(
-                        entry.value.toString(),
-                      ),
-                    ),
-                  ),
-                ),
-                if (data.isNotEmpty)
-                  const Card(
-                    child: ListTile(
-                      leading: Icon(Icons.info_outline),
-                      title: Text('معلومات تجريبية'),
-                      subtitle: Text(
-                        'لا يوجد اشتراك حقيقي أثناء وضع الضيف.',
-                      ),
-                    ),
-                  ),
-              ],
-            ),
     );
   }
 }
+
+/* =========================================================
+   MORE
+   ========================================================= */
 
 class MorePage extends StatefulWidget {
   const MorePage({super.key});
 
   @override
-  State<MorePage> createState() => _MorePageState();
+  State<MorePage> createState() =>
+      _MorePageState();
 }
 
 class _MorePageState extends State<MorePage> {
@@ -1772,11 +2692,12 @@ class _MorePageState extends State<MorePage> {
   @override
   void initState() {
     super.initState();
-    loadMode();
+
+    load();
   }
 
-  Future<void> loadMode() async {
-    final value = await guestModeEnabled();
+  Future<void> load() async {
+    final value = await isGuest();
 
     if (!mounted) return;
 
@@ -1785,10 +2706,52 @@ class _MorePageState extends State<MorePage> {
     });
   }
 
-  Future<void> logout() async {
-    final storage = await SharedPreferences.getInstance();
+  Future<void> resetDemo() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text(
+          'إعادة بيانات التجربة',
+        ),
+        content: const Text(
+          'سيتم حذف التعديلات التي أجريتها وإعادة البيانات التجريبية الأصلية.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () =>
+                Navigator.pop(context, false),
+            child: const Text('إلغاء'),
+          ),
+          FilledButton(
+            onPressed: () =>
+                Navigator.pop(context, true),
+            child: const Text('إعادة'),
+          ),
+        ],
+      ),
+    );
 
-    await storage.clear();
+    if (confirm != true) return;
+
+    await DemoStore.reset();
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'تمت إعادة بيانات التجربة',
+        ),
+      ),
+    );
+
+    setState(() {});
+  }
+
+  Future<void> logout() async {
+    final p = await SharedPreferences.getInstance();
+
+    await p.clear();
 
     if (!mounted) return;
 
@@ -1802,7 +2765,7 @@ class _MorePageState extends State<MorePage> {
   }
 
   Future<void> exitGuest() async {
-    await disableGuestMode();
+    await disableGuest();
 
     if (!mounted) return;
 
@@ -1827,50 +2790,68 @@ class _MorePageState extends State<MorePage> {
             const Card(
               margin: EdgeInsets.all(12),
               child: ListTile(
-                leading: Icon(Icons.visibility),
-                title: Text('وضع الضيف'),
+                leading: Icon(
+                  Icons.visibility,
+                ),
+                title: Text(
+                  'وضع الضيف التفاعلي',
+                ),
                 subtitle: Text(
-                  'أنت تستخدم النسخة التجريبية المحلية.',
+                  'يمكنك إضافة وتعديل البيانات وتجربة النظام.',
                 ),
               ),
             ),
+
           ListTile(
-            leading: const Icon(Icons.insights),
-            title: const Text('التحليلات'),
-            trailing: const Icon(Icons.chevron_right),
+            leading: const Icon(
+              Icons.insights,
+            ),
+            title: const Text(
+              'التحليلات',
+            ),
+            trailing: const Icon(
+              Icons.chevron_right,
+            ),
             onTap: () {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => const AnalyticsPage(),
+                  builder: (_) =>
+                      const AnalyticsPage(),
                 ),
               );
             },
           ),
+
           ListTile(
-            leading: const Icon(Icons.card_membership),
-            title: const Text('الاشتراك'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const SubscriptionPage(),
-                ),
-              );
-            },
+            leading: const Icon(
+              Icons.refresh,
+            ),
+            title: const Text(
+              'إعادة بيانات التجربة',
+            ),
+            subtitle: const Text(
+              'إرجاع Demo إلى الحالة الأصلية',
+            ),
+            onTap: guest ? resetDemo : null,
           ),
+
           const Divider(),
+
           ListTile(
             leading: Icon(
-              guest ? Icons.login : Icons.logout,
+              guest
+                  ? Icons.logout
+                  : Icons.logout,
             ),
             title: Text(
               guest
                   ? 'الخروج من وضع الضيف'
                   : 'تسجيل الخروج',
             ),
-            onTap: guest ? exitGuest : logout,
+            onTap: guest
+                ? exitGuest
+                : logout,
           ),
         ],
       ),
