@@ -379,11 +379,11 @@ class _LoginPageState extends State<LoginPage> {
             );
       });
     } finally {
-      if (!mounted) return;
-
-      setState(() {
-        loading = false;
-      });
+      if (mounted) {
+        setState(() {
+          loading = false;
+        });
+      }
     }
   }
 
@@ -406,8 +406,7 @@ class _LoginPageState extends State<LoginPage> {
                 maxWidth: 430,
               ),
               child: Column(
-                crossAxisAlignment:
-                    CrossAxisAlignment.stretch,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   const Icon(
                     Icons.business_center,
@@ -425,8 +424,7 @@ class _LoginPageState extends State<LoginPage> {
                   const SizedBox(height: 30),
                   TextField(
                     controller: emailController,
-                    keyboardType:
-                        TextInputType.emailAddress,
+                    keyboardType: TextInputType.emailAddress,
                     decoration: const InputDecoration(
                       labelText: 'البريد الإلكتروني',
                       border: OutlineInputBorder(),
@@ -443,8 +441,7 @@ class _LoginPageState extends State<LoginPage> {
                   ),
                   if (error != null)
                     Padding(
-                      padding:
-                          const EdgeInsets.only(top: 10),
+                      padding: const EdgeInsets.only(top: 10),
                       child: Text(
                         error!,
                         style: const TextStyle(
@@ -469,8 +466,7 @@ class _LoginPageState extends State<LoginPage> {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (_) =>
-                                    const RegisterPage(),
+                                builder: (_) => const RegisterPage(),
                               ),
                             );
                           },
@@ -496,8 +492,7 @@ class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
 
   @override
-  State<RegisterPage> createState() =>
-      _RegisterPageState();
+  State<RegisterPage> createState() => _RegisterPageState();
 }
 
 class _RegisterPageState extends State<RegisterPage> {
@@ -529,36 +524,26 @@ class _RegisterPageState extends State<RegisterPage> {
       final data = await api.post(
         '/auth/register-company',
         {
-          'companyName':
-              companyController.text.trim(),
-          'ownerName':
-              ownerController.text.trim(),
-          'email':
-              emailController.text.trim(),
-          'password':
-              passwordController.text,
+          'companyName': companyController.text.trim(),
+          'ownerName': ownerController.text.trim(),
+          'email': emailController.text.trim(),
+          'password': passwordController.text,
         },
       );
 
       if (data is! Map) {
-        throw Exception(
-          'استجابة غير صحيحة من الخادم',
-        );
+        throw Exception('استجابة غير صحيحة من الخادم');
       }
 
       final accessToken = data['accessToken'];
       final refreshToken = data['refreshToken'];
       final company = data['company'];
 
-      if (accessToken == null ||
-          refreshToken == null) {
-        throw Exception(
-          'بيانات التسجيل غير مكتملة',
-        );
+      if (accessToken == null || refreshToken == null) {
+        throw Exception('بيانات التسجيل غير مكتملة');
       }
 
-      final storage =
-          await SharedPreferences.getInstance();
+      final storage = await SharedPreferences.getInstance();
 
       await storage.setString(
         'accessToken',
@@ -570,8 +555,7 @@ class _RegisterPageState extends State<RegisterPage> {
         refreshToken.toString(),
       );
 
-      if (company is Map &&
-          company['name'] != null) {
+      if (company is Map && company['name'] != null) {
         await storage.setString(
           'companyName',
           company['name'].toString(),
@@ -597,11 +581,11 @@ class _RegisterPageState extends State<RegisterPage> {
             );
       });
     } finally {
-      if (!mounted) return;
-
-      setState(() {
-        loading = false;
-      });
+      if (mounted) {
+        setState(() {
+          loading = false;
+        });
+      }
     }
   }
 
@@ -641,8 +625,7 @@ class _RegisterPageState extends State<RegisterPage> {
           const SizedBox(height: 12),
           TextField(
             controller: emailController,
-            keyboardType:
-                TextInputType.emailAddress,
+            keyboardType: TextInputType.emailAddress,
             decoration: const InputDecoration(
               labelText: 'البريد الإلكتروني',
               border: OutlineInputBorder(),
@@ -689,8 +672,7 @@ class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
   @override
-  State<HomePage> createState() =>
-      _HomePageState();
+  State<HomePage> createState() => _HomePageState();
 }
 
 class _HomePageState extends State<HomePage> {
@@ -720,44 +702,28 @@ class _HomePageState extends State<HomePage> {
         },
         destinations: const [
           NavigationDestination(
-            icon: Icon(
-              Icons.dashboard_outlined,
-            ),
-            selectedIcon: Icon(
-              Icons.dashboard,
-            ),
+            icon: Icon(Icons.dashboard_outlined),
+            selectedIcon: Icon(Icons.dashboard),
             label: 'الرئيسية',
           ),
           NavigationDestination(
-            icon: Icon(
-              Icons.people_outline,
-            ),
-            selectedIcon: Icon(
-              Icons.people,
-            ),
+            icon: Icon(Icons.people_outline),
+            selectedIcon: Icon(Icons.people),
             label: 'العملاء',
           ),
           NavigationDestination(
             icon: Icon(Icons.trending_up),
-            selectedIcon: Icon(
-              Icons.trending_up,
-            ),
+            selectedIcon: Icon(Icons.trending_up),
             label: 'الفرص',
           ),
           NavigationDestination(
-            icon: Icon(
-              Icons.task_alt_outlined,
-            ),
-            selectedIcon: Icon(
-              Icons.task_alt,
-            ),
+            icon: Icon(Icons.task_alt_outlined),
+            selectedIcon: Icon(Icons.task_alt),
             label: 'المهام',
           ),
           NavigationDestination(
             icon: Icon(Icons.more_horiz),
-            selectedIcon: Icon(
-              Icons.more_horiz,
-            ),
+            selectedIcon: Icon(Icons.more_horiz),
             label: 'المزيد',
           ),
         ],
@@ -774,12 +740,10 @@ class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
 
   @override
-  State<DashboardPage> createState() =>
-      _DashboardPageState();
+  State<DashboardPage> createState() => _DashboardPageState();
 }
 
-class _DashboardPageState
-    extends State<DashboardPage> {
+class _DashboardPageState extends State<DashboardPage> {
   Map<String, dynamic>? data;
   bool loading = true;
   String company = '';
@@ -791,11 +755,9 @@ class _DashboardPageState
   }
 
   Future<void> load() async {
-    final storage =
-        await SharedPreferences.getInstance();
+    final storage = await SharedPreferences.getInstance();
 
-    company =
-        storage.getString('companyName') ?? '';
+    company = storage.getString('companyName') ?? '';
 
     if (mounted) {
       setState(() {
@@ -804,23 +766,19 @@ class _DashboardPageState
     }
 
     try {
-      final result =
-          await api.get('/dashboard');
+      final result = await api.get('/dashboard');
 
       if (!mounted) return;
 
       if (result is Map) {
         setState(() {
-          data = Map<String, dynamic>.from(
-            result,
-          );
+          data = Map<String, dynamic>.from(result);
         });
       }
     } catch (e) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context)
-          .showSnackBar(
+      ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             'تعذر تحميل لوحة التحكم: $e',
@@ -828,11 +786,11 @@ class _DashboardPageState
         ),
       );
     } finally {
-      if (!mounted) return;
-
-      setState(() {
-        loading = false;
-      });
+      if (mounted) {
+        setState(() {
+          loading = false;
+        });
+      }
     }
   }
 
@@ -844,36 +802,26 @@ class _DashboardPageState
         actions: [
           IconButton(
             onPressed: load,
-            icon: const Icon(
-              Icons.refresh,
-            ),
+            icon: const Icon(Icons.refresh),
           ),
         ],
       ),
       body: RefreshIndicator(
         onRefresh: load,
         child: ListView(
-          physics:
-              const AlwaysScrollableScrollPhysics(),
+          physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.all(16),
           children: [
             Text(
               'مرحباً 👋',
-              style: Theme.of(context)
-                  .textTheme
-                  .headlineSmall,
+              style: Theme.of(context).textTheme.headlineSmall,
             ),
             Text(
-              company.isEmpty
-                  ? 'شركة جديدة'
-                  : company,
-              style: Theme.of(context)
-                  .textTheme
-                  .titleMedium,
+              company.isEmpty ? 'شركة جديدة' : company,
+              style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: 18),
-            if (loading)
-              const LinearProgressIndicator(),
+            if (loading) const LinearProgressIndicator(),
             const SizedBox(height: 12),
             Wrap(
               spacing: 10,
@@ -886,8 +834,7 @@ class _DashboardPageState
                 ),
                 Metric(
                   'الفرص المفتوحة',
-                  data?['openOpportunities'] ??
-                      '—',
+                  data?['openOpportunities'] ?? '—',
                   Icons.trending_up,
                 ),
                 Metric(
@@ -905,23 +852,19 @@ class _DashboardPageState
             const SizedBox(height: 18),
             Card(
               child: ListTile(
-                leading:
-                    const Icon(Icons.insights),
+                leading: const Icon(Icons.insights),
                 title: const Text(
                   'التقارير والتحليلات',
                 ),
                 subtitle: const Text(
                   'المبيعات، العملاء، المهام والأنشطة',
                 ),
-                trailing: const Icon(
-                  Icons.chevron_right,
-                ),
+                trailing: const Icon(Icons.chevron_right),
                 onTap: () {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) =>
-                          const AnalyticsPage(),
+                      builder: (_) => const AnalyticsPage(),
                     ),
                   );
                 },
@@ -929,22 +872,17 @@ class _DashboardPageState
             ),
             Card(
               child: ListTile(
-                leading: const Icon(
-                  Icons.card_membership,
-                ),
+                leading: const Icon(Icons.card_membership),
                 title: const Text('الاشتراك'),
                 subtitle: const Text(
                   'الخطة الحالية والاستخدام',
                 ),
-                trailing: const Icon(
-                  Icons.chevron_right,
-                ),
+                trailing: const Icon(Icons.chevron_right),
                 onTap: () {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) =>
-                          const SubscriptionPage(),
+                      builder: (_) => const SubscriptionPage(),
                     ),
                   );
                 },
@@ -976,14 +914,12 @@ class Metric extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width:
-          MediaQuery.sizeOf(context).width / 2 - 22,
+      width: MediaQuery.sizeOf(context).width / 2 - 22,
       child: Card(
         child: Padding(
           padding: const EdgeInsets.all(14),
           child: Column(
-            crossAxisAlignment:
-                CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Icon(icon),
               const SizedBox(height: 8),
@@ -1011,17 +947,14 @@ class CustomersPage extends StatefulWidget {
   const CustomersPage({super.key});
 
   @override
-  State<CustomersPage> createState() =>
-      _CustomersPageState();
+  State<CustomersPage> createState() => _CustomersPageState();
 }
 
-class _CustomersPageState
-    extends State<CustomersPage> {
+class _CustomersPageState extends State<CustomersPage> {
   List<dynamic> list = [];
   bool loading = true;
 
-  final searchController =
-      TextEditingController();
+  final searchController = TextEditingController();
 
   @override
   void initState() {
@@ -1035,8 +968,7 @@ class _CustomersPageState
     });
 
     try {
-      final query =
-          searchController.text.trim();
+      final query = searchController.text.trim();
 
       final path = query.isEmpty
           ? '/customers'
@@ -1058,18 +990,17 @@ class _CustomersPageState
     } catch (e) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context)
-          .showSnackBar(
+      ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('$e'),
         ),
       );
     } finally {
-      if (!mounted) return;
-
-      setState(() {
-        loading = false;
-      });
+      if (mounted) {
+        setState(() {
+          loading = false;
+        });
+      }
     }
   }
 
@@ -1087,9 +1018,7 @@ class _CustomersPageState
         actions: [
           IconButton(
             onPressed: load,
-            icon: const Icon(
-              Icons.refresh,
-            ),
+            icon: const Icon(Icons.refresh),
           ),
         ],
       ),
@@ -1101,16 +1030,12 @@ class _CustomersPageState
               controller: searchController,
               onSubmitted: (_) => load(),
               decoration: InputDecoration(
-                prefixIcon:
-                    const Icon(Icons.search),
+                prefixIcon: const Icon(Icons.search),
                 hintText: 'بحث عن عميل',
-                border:
-                    const OutlineInputBorder(),
+                border: const OutlineInputBorder(),
                 suffixIcon: IconButton(
                   onPressed: load,
-                  icon: const Icon(
-                    Icons.search,
-                  ),
+                  icon: const Icon(Icons.search),
                 ),
               ),
             ),
@@ -1118,43 +1043,26 @@ class _CustomersPageState
           Expanded(
             child: loading
                 ? const Center(
-                    child:
-                        CircularProgressIndicator(),
+                    child: CircularProgressIndicator(),
                   )
                 : list.isEmpty
                     ? const Center(
-                        child: Text(
-                          'لا يوجد عملاء',
-                        ),
+                        child: Text('لا يوجد عملاء'),
                       )
                     : ListView.separated(
                         itemCount: list.length,
-                        separatorBuilder:
-                            (_, __) =>
-                                const Divider(
-                          height: 1,
-                        ),
-                        itemBuilder:
-                            (context, index) {
+                        separatorBuilder: (_, __) =>
+                            const Divider(height: 1),
+                        itemBuilder: (context, index) {
                           final item = list[index];
 
-                          final customer =
-                              item is Map
-                                  ? Map<
-                                      String,
-                                      dynamic>.from(
-                                      item,
-                                    )
-                                  : <
-                                      String,
-                                      dynamic>{};
+                          final customer = item is Map
+                              ? Map<String, dynamic>.from(item)
+                              : <String, dynamic>{};
 
                           return ListTile(
-                            leading:
-                                const CircleAvatar(
-                              child: Icon(
-                                Icons.person,
-                              ),
+                            leading: const CircleAvatar(
+                              child: Icon(Icons.person),
                             ),
                             title: Text(
                               '${customer['name'] ?? ''}',
@@ -1168,8 +1076,7 @@ class _CustomersPageState
                                 MaterialPageRoute(
                                   builder: (_) =>
                                       Customer360Page(
-                                    customer:
-                                        customer,
+                                    customer: customer,
                                   ),
                                 ),
                               );
@@ -1188,8 +1095,7 @@ class _CustomersPageState
 // CUSTOMER 360
 // ============================================================
 
-class Customer360Page
-    extends StatelessWidget {
+class Customer360Page extends StatelessWidget {
   final Map<String, dynamic> customer;
 
   const Customer360Page({
@@ -1201,28 +1107,21 @@ class Customer360Page
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'Customer 360',
-        ),
+        title: const Text('Customer 360'),
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
           Text(
             '${customer['name'] ?? ''}',
-            style: Theme.of(context)
-                .textTheme
-                .headlineSmall,
+            style: Theme.of(context).textTheme.headlineSmall,
           ),
           if (customer['companyName'] != null)
-            Text(
-              '${customer['companyName']}',
-            ),
+            Text('${customer['companyName']}'),
           const SizedBox(height: 12),
           Card(
             child: ListTile(
-              leading:
-                  const Icon(Icons.phone),
+              leading: const Icon(Icons.phone),
               title: Text(
                 '${customer['phone'] ?? 'لا يوجد هاتف'}',
               ),
@@ -1230,8 +1129,7 @@ class Customer360Page
           ),
           Card(
             child: ListTile(
-              leading:
-                  const Icon(Icons.email),
+              leading: const Icon(Icons.email),
               title: Text(
                 '${customer['email'] ?? 'لا يوجد بريد'}',
               ),
@@ -1247,8 +1145,7 @@ class Customer360Page
 // OPPORTUNITIES
 // ============================================================
 
-class OpportunitiesPage
-    extends StatefulWidget {
+class OpportunitiesPage extends StatefulWidget {
   const OpportunitiesPage({super.key});
 
   @override
@@ -1274,25 +1171,19 @@ class _OpportunitiesPageState
 
     try {
       final result =
-          await api.get(
-        '/opportunities/pipeline',
-      );
+          await api.get('/opportunities/pipeline');
 
       if (!mounted) return;
 
       if (result is Map) {
         setState(() {
-          data =
-              Map<String, dynamic>.from(
-            result,
-          );
+          data = Map<String, dynamic>.from(result);
         });
       }
     } catch (e) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context)
-          .showSnackBar(
+      ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             'تعذر تحميل الفرص: $e',
@@ -1300,23 +1191,20 @@ class _OpportunitiesPageState
         ),
       );
     } finally {
-      if (!mounted) return;
-
-      setState(() {
-        loading = false;
-      });
+      if (mounted) {
+        setState(() {
+          loading = false;
+        });
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final rawStages =
-        data?['stages'];
+    final rawStages = data?['stages'];
 
     final stages = rawStages is Map
-        ? Map<String, dynamic>.from(
-            rawStages,
-          )
+        ? Map<String, dynamic>.from(rawStages)
         : <String, dynamic>{};
 
     const stageNames = [
@@ -1331,26 +1219,20 @@ class _OpportunitiesPageState
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'Sales Pipeline',
-        ),
+        title: const Text('Sales Pipeline'),
         actions: [
           IconButton(
             onPressed: load,
-            icon: const Icon(
-              Icons.refresh,
-            ),
+            icon: const Icon(Icons.refresh),
           ),
         ],
       ),
       body: loading
           ? const Center(
-              child:
-                  CircularProgressIndicator(),
+              child: CircularProgressIndicator(),
             )
           : ListView(
-              padding:
-                  const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(16),
               children: [
                 Card(
                   child: ListTile(
@@ -1374,24 +1256,15 @@ class _OpportunitiesPageState
                 ),
                 ...stageNames.map(
                   (stage) {
-                    final rawStage =
-                        stages[stage];
+                    final rawStage = stages[stage];
 
-                    final stageData =
-                        rawStage is Map
-                            ? Map<
-                                String,
-                                dynamic>.from(
-                                rawStage,
-                              )
-                            : <
-                                String,
-                                dynamic>{};
+                    final stageData = rawStage is Map
+                        ? Map<String, dynamic>.from(rawStage)
+                        : <String, dynamic>{};
 
                     return Card(
                       child: ListTile(
-                        leading:
-                            CircleAvatar(
+                        leading: CircleAvatar(
                           child: Text(
                             '${stageData['count'] ?? 0}',
                           ),
@@ -1414,17 +1287,14 @@ class _OpportunitiesPageState
 // TASKS
 // ============================================================
 
-class TasksPage
-    extends StatefulWidget {
+class TasksPage extends StatefulWidget {
   const TasksPage({super.key});
 
   @override
-  State<TasksPage> createState() =>
-      _TasksPageState();
+  State<TasksPage> createState() => _TasksPageState();
 }
 
-class _TasksPageState
-    extends State<TasksPage> {
+class _TasksPageState extends State<TasksPage> {
   List<dynamic> list = [];
   bool loading = true;
 
@@ -1440,8 +1310,7 @@ class _TasksPageState
     });
 
     try {
-      final result =
-          await api.get('/tasks');
+      final result = await api.get('/tasks');
 
       if (!mounted) return;
 
@@ -1457,8 +1326,7 @@ class _TasksPageState
     } catch (e) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context)
-          .showSnackBar(
+      ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             'تعذر تحميل المهام: $e',
@@ -1466,11 +1334,11 @@ class _TasksPageState
         ),
       );
     } finally {
-      if (!mounted) return;
-
-      setState(() {
-        loading = false;
-      });
+      if (mounted) {
+        setState(() {
+          loading = false;
+        });
+      }
     }
   }
 
@@ -1478,61 +1346,41 @@ class _TasksPageState
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'مهام المتابعة',
-        ),
+        title: const Text('مهام المتابعة'),
         actions: [
           IconButton(
             onPressed: load,
-            icon: const Icon(
-              Icons.refresh,
-            ),
+            icon: const Icon(Icons.refresh),
           ),
         ],
       ),
       body: loading
           ? const Center(
-              child:
-                  CircularProgressIndicator(),
+              child: CircularProgressIndicator(),
             )
           : list.isEmpty
               ? const Center(
-                  child: Text(
-                    'لا توجد مهام',
-                  ),
+                  child: Text('لا توجد مهام'),
                 )
               : ListView.separated(
                   itemCount: list.length,
-                  separatorBuilder:
-                      (_, __) =>
-                          const Divider(),
-                  itemBuilder:
-                      (context, index) {
-                    final item =
-                        list[index];
+                  separatorBuilder: (_, __) =>
+                      const Divider(),
+                  itemBuilder: (context, index) {
+                    final item = list[index];
 
-                    final task =
-                        item is Map
-                            ? Map<
-                                String,
-                                dynamic>.from(
-                                item,
-                              )
-                            : <
-                                String,
-                                dynamic>{};
+                    final task = item is Map
+                        ? Map<String, dynamic>.from(item)
+                        : <String, dynamic>{};
 
                     final completed =
-                        task['status'] ==
-                            'COMPLETED';
+                        task['status'] == 'COMPLETED';
 
                     return ListTile(
                       leading: Icon(
                         completed
-                            ? Icons
-                                .check_circle
-                            : Icons
-                                .radio_button_unchecked,
+                            ? Icons.check_circle
+                            : Icons.radio_button_unchecked,
                       ),
                       title: Text(
                         '${task['title'] ?? ''}',
@@ -1551,8 +1399,7 @@ class _TasksPageState
 // ANALYTICS
 // ============================================================
 
-class AnalyticsPage
-    extends StatefulWidget {
+class AnalyticsPage extends StatefulWidget {
   const AnalyticsPage({super.key});
 
   @override
@@ -1574,25 +1421,19 @@ class _AnalyticsPageState
   Future<void> load() async {
     try {
       final result =
-          await api.get(
-        '/analytics/dashboard',
-      );
+          await api.get('/analytics/dashboard');
 
       if (!mounted) return;
 
       if (result is Map) {
         setState(() {
-          data =
-              Map<String, dynamic>.from(
-            result,
-          );
+          data = Map<String, dynamic>.from(result);
         });
       }
     } catch (e) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context)
-          .showSnackBar(
+      ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             'تعذر تحميل التحليلات: $e',
@@ -1600,33 +1441,28 @@ class _AnalyticsPageState
         ),
       );
     } finally {
-      if (!mounted) return;
-
-      setState(() {
-        loading = false;
-      });
+      if (mounted) {
+        setState(() {
+          loading = false;
+        });
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final entries =
-        data?.entries.toList() ?? [];
+    final entries = data?.entries.toList() ?? [];
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'التقارير والتحليلات',
-        ),
+        title: const Text('التقارير والتحليلات'),
       ),
       body: loading
           ? const Center(
-              child:
-                  CircularProgressIndicator(),
+              child: CircularProgressIndicator(),
             )
           : ListView(
-              padding:
-                  const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(16),
               children: [
                 Text(
                   'ملخص الأداء',
@@ -1667,8 +1503,7 @@ class _AnalyticsPageState
 // SUBSCRIPTION
 // ============================================================
 
-class SubscriptionPage
-    extends StatefulWidget {
+class SubscriptionPage extends StatefulWidget {
   const SubscriptionPage({super.key});
 
   @override
@@ -1690,25 +1525,19 @@ class _SubscriptionPageState
   Future<void> load() async {
     try {
       final result =
-          await api.get(
-        '/subscriptions/current',
-      );
+          await api.get('/subscriptions/current');
 
       if (!mounted) return;
 
       if (result is Map) {
         setState(() {
-          data =
-              Map<String, dynamic>.from(
-            result,
-          );
+          data = Map<String, dynamic>.from(result);
         });
       }
     } catch (e) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context)
-          .showSnackBar(
+      ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             'تعذر تحميل الاشتراك: $e',
@@ -1716,59 +1545,48 @@ class _SubscriptionPageState
         ),
       );
     } finally {
-      if (!mounted) return;
-
-      setState(() {
-        loading = false;
-      });
+      if (mounted) {
+        setState(() {
+          loading = false;
+        });
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final rawPlan =
-        data?['plan'];
+    final rawPlan = data?['plan'];
 
     String planName = '—';
 
-    if (rawPlan is Map &&
-        rawPlan['name'] != null) {
-      planName =
-          rawPlan['name'].toString();
+    if (rawPlan is Map && rawPlan['name'] != null) {
+      planName = rawPlan['name'].toString();
     } else if (data?['planName'] != null) {
-      planName =
-          data!['planName'].toString();
+      planName = data!['planName'].toString();
     }
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'الاشتراك',
-        ),
+        title: const Text('الاشتراك'),
       ),
       body: loading
           ? const Center(
-              child:
-                  CircularProgressIndicator(),
+              child: CircularProgressIndicator(),
             )
           : ListView(
-              padding:
-                  const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(16),
               children: [
                 Card(
                   child: ListTile(
                     title: const Text(
                       'الخطة الحالية',
                     ),
-                    subtitle:
-                        Text(planName),
+                    subtitle: Text(planName),
                   ),
                 ),
                 Card(
                   child: ListTile(
-                    title: const Text(
-                      'الحالة',
-                    ),
+                    title: const Text('الحالة'),
                     subtitle: Text(
                       '${data?['status'] ?? '—'}',
                     ),
@@ -1784,16 +1602,12 @@ class _SubscriptionPageState
 // MORE
 // ============================================================
 
-class MorePage
-    extends StatelessWidget {
+class MorePage extends StatelessWidget {
   const MorePage({super.key});
 
-  Future<void> logout(
-    BuildContext context,
-  ) async {
+  Future<void> logout(BuildContext context) async {
     final storage =
-        await SharedPreferences
-            .getInstance();
+        await SharedPreferences.getInstance();
 
     await storage.clear();
 
@@ -1802,8 +1616,7 @@ class MorePage
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(
-        builder: (_) =>
-            const LoginPage(),
+        builder: (_) => const LoginPage(),
       ),
       (_) => false,
     );
@@ -1813,15 +1626,12 @@ class MorePage
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'المزيد',
-        ),
+        title: const Text('المزيد'),
       ),
       body: ListView(
         children: [
           ListTile(
-            leading:
-                const Icon(Icons.insights),
+            leading: const Icon(Icons.insights),
             title: const Text(
               'التقارير والتحليلات',
             ),
@@ -1829,8 +1639,7 @@ class MorePage
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) =>
-                      const AnalyticsPage(),
+                  builder: (_) => const AnalyticsPage(),
                 ),
               );
             },
@@ -1839,9 +1648,7 @@ class MorePage
             leading: const Icon(
               Icons.card_membership,
             ),
-            title: const Text(
-              'الاشتراك',
-            ),
+            title: const Text('الاشتراك'),
             onTap: () {
               Navigator.push(
                 context,
@@ -1853,13 +1660,9 @@ class MorePage
             },
           ),
           ListTile(
-            leading:
-                const Icon(Icons.logout),
-            title: const Text(
-              'تسجيل الخروج',
-            ),
-            onTap: () =>
-                logout(context),
+            leading: const Icon(Icons.logout),
+            title: const Text('تسجيل الخروج'),
+            onTap: () => logout(context),
           ),
         ],
       ),
