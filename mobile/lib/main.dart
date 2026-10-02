@@ -1,514 +1,18 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
-const String apiBaseUrl = 'http://10.0.2.2:3000/api';
-
-const Color primaryColor = Color(0xFF155EEF);
-const Color successColor = Color(0xFF12B76A);
-const Color warningColor = Color(0xFFF79009);
-const Color dangerColor = Color(0xFFF04438);
-
-const List<String> opportunityStages = [
-  'جديد',
-  'مؤهل',
-  'اجتماع',
-  'عرض سعر',
-  'تفاوض',
-  'مغلقة',
-  'خاسرة',
-];
-
-const List<String> taskStatuses = [
-  'مفتوحة',
-  'قيد التنفيذ',
-  'مكتملة',
-];
-
-const List<String> priorities = [
-  'عالية',
-  'متوسطة',
-  'منخفضة',
-];
-
-const List<String> activityTypes = [
-  'مكالمة',
-  'زيارة',
-  'اجتماع',
-  'بريد',
-  'ملاحظة',
-];
-
-String money(num value) {
-  return '\$${value.toStringAsFixed(0)}';
+void main() {
+  runApp(const CRMBusinessApp());
 }
 
-String shortDate(String? value) {
-  if (value == null || value.isEmpty) {
-    return '-';
-  }
-
-  return value.length >= 10 ? value.substring(0, 10) : value;
-}
-
-bool isOverdue(String? date) {
-  if (date == null || date.isEmpty) {
-    return false;
-  }
-
-  final d = DateTime.tryParse(date);
-
-  if (d == null) {
-    return false;
-  }
-
-  final today = DateTime.now();
-  final t = DateTime(today.year, today.month, today.day);
-
-  return d.isBefore(t);
-}
-
-class DemoStore {
-  final SharedPreferences prefs;
-
-  DemoStore(this.prefs);
-
-  List<Map<String, dynamic>> _list(String key) {
-    final raw = prefs.getString(key);
-
-    if (raw == null || raw.isEmpty) {
-      return [];
-    }
-
-    final decoded = jsonDecode(raw);
-
-    if (decoded is! List) {
-      return [];
-    }
-
-    return decoded
-        .map((e) => Map<String, dynamic>.from(e as Map))
-        .toList();
-  }
-
-  Future<void> _save(
-    String key,
-    List<Map<String, dynamic>> data,
-  ) async {
-    await prefs.setString(key, jsonEncode(data));
-  }
-
-  List<Map<String, dynamic>> get customers {
-    return _list('demo_customers');
-  }
-
-  List<Map<String, dynamic>> get opportunities {
-    return _list('demo_opportunities');
-  }
-
-  List<Map<String, dynamic>> get tasks {
-    return _list('demo_tasks');
-  }
-
-  List<Map<String, dynamic>> get activities {
-    return _list('demo_activities');
-  }
-
-  Future<void> initialize() async {
-    if (prefs.getBool('demo_initialized') == true) {
-      return;
-    }
-
-    await reset();
-    await prefs.setBool('demo_initialized', true);
-  }
-
-  Future<void> reset() async {
-    final now = DateTime.now().toIso8601String();
-
-    await _save('demo_customers', [
-      {
-        'id': 'c1',
-        'name': 'مؤسسة البكري للكهرباء والطاقة الشمسية',
-        'contactName': 'محمد البكري',
-        'phone': '777000001',
-        'email': 'info@bakri.example',
-        'sector': 'الكهرباء والطاقة الشمسية',
-        'status': 'نشط',
-        'notes': 'عميل استراتيجي في مجال الطاقة الشمسية.',
-      },
-      {
-        'id': 'c2',
-        'name': 'شركة النور التجارية',
-        'contactName': 'أحمد النور',
-        'phone': '777000002',
-        'email': 'sales@alnoor.example',
-        'sector': 'تجارة عامة',
-        'status': 'نشط',
-        'notes': 'فرص توسع محتملة.',
-      },
-      {
-        'id': 'c3',
-        'name': 'مؤسسة الأفق للمقاولات',
-        'contactName': 'علي الأفق',
-        'phone': '777000003',
-        'email': 'info@alofoq.example',
-        'sector': 'مقاولات',
-        'status': 'متابعة',
-        'notes': 'يحتاج إلى متابعة دورية.',
-      },
-    ]);
-
-    await _save('demo_opportunities', [
-      {
-        'id': 'o1',
-        'customerId': 'c1',
-        'title': 'مشروع منظومة طاقة شمسية',
-        'value': 75000,
-        'probability': 60,
-        'stage': 'عرض سعر',
-        'expectedClose': '2026-10-22',
-      },
-      {
-        'id': 'o2',
-        'customerId': 'c2',
-        'title': 'توريد معدات كهربائية',
-        'value': 50000,
-        'probability': 40,
-        'stage': 'مؤهل',
-        'expectedClose': '2026-10-15',
-      },
-      {
-        'id': 'o3',
-        'customerId': 'c3',
-        'title': 'مشروع تجهيز كهربائي',
-        'value': 60000,
-        'probability': 75,
-        'stage': 'تفاوض',
-        'expectedClose': '2026-11-05',
-      },
-    ]);
-
-    await _save('demo_tasks', [
-      {
-        'id': 't1',
-        'customerId': 'c1',
-        'title': 'متابعة عرض مشروع الطاقة الشمسية',
-        'priority': 'عالية',
-        'dueDate': '2026-10-04',
-        'status': 'مفتوحة',
-      },
-      {
-        'id': 't2',
-        'customerId': 'c2',
-        'title': 'الاتصال بالعميل',
-        'priority': 'متوسطة',
-        'dueDate': '2026-10-06',
-        'status': 'قيد التنفيذ',
-      },
-      {
-        'id': 't3',
-        'customerId': 'c3',
-        'title': 'مراجعة متطلبات المشروع',
-        'priority': 'عالية',
-        'dueDate': '2026-09-28',
-        'status': 'مفتوحة',
-      },
-    ]);
-
-    await _save('demo_activities', [
-      {
-        'id': 'a1',
-        'customerId': 'c1',
-        'type': 'اجتماع',
-        'title': 'اجتماع مع العميل',
-        'note': 'مناقشة عرض منظومة الطاقة الشمسية.',
-        'date': now,
-      },
-      {
-        'id': 'a2',
-        'customerId': 'c2',
-        'type': 'مكالمة',
-        'title': 'مكالمة متابعة',
-        'note': 'العميل مهتم بالتوسع.',
-        'date': now,
-      },
-      {
-        'id': 'a3',
-        'customerId': 'c3',
-        'type': 'زيارة',
-        'title': 'زيارة ميدانية',
-        'note': 'مراجعة احتياجات المشروع.',
-        'date': now,
-      },
-    ]);
-  }
-
-  String newId(String prefix) {
-    return '$prefix-${DateTime.now().microsecondsSinceEpoch}';
-  }
-
-  Future<void> addCustomer(Map<String, dynamic> item) async {
-    final data = customers;
-    data.add(item);
-    await _save('demo_customers', data);
-  }
-
-  Future<void> updateCustomer(Map<String, dynamic> item) async {
-    final data = customers;
-    final index = data.indexWhere((x) => x['id'] == item['id']);
-
-    if (index >= 0) {
-      data[index] = item;
-      await _save('demo_customers', data);
-    }
-  }
-
-  Future<void> deleteCustomer(String id) async {
-    final customerData =
-        customers.where((x) => x['id'] != id).toList();
-
-    await _save('demo_customers', customerData);
-
-    final opportunitiesData =
-        opportunities.where((x) => x['customerId'] != id).toList();
-
-    final tasksData =
-        tasks.where((x) => x['customerId'] != id).toList();
-
-    final activitiesData =
-        activities.where((x) => x['customerId'] != id).toList();
-
-    await _save(
-      'demo_opportunities',
-      opportunitiesData,
-    );
-
-    await _save(
-      'demo_tasks',
-      tasksData,
-    );
-
-    await _save(
-      'demo_activities',
-      activitiesData,
-    );
-  }
-
-  Future<void> addOpportunity(
-    Map<String, dynamic> item,
-  ) async {
-    final data = opportunities;
-    data.add(item);
-
-    await _save(
-      'demo_opportunities',
-      data,
-    );
-  }
-
-  Future<void> updateOpportunity(
-    Map<String, dynamic> item,
-  ) async {
-    final data = opportunities;
-
-    final index = data.indexWhere(
-      (x) => x['id'] == item['id'],
-    );
-
-    if (index >= 0) {
-      data[index] = item;
-
-      await _save(
-        'demo_opportunities',
-        data,
-      );
-    }
-  }
-
-  Future<void> addTask(
-    Map<String, dynamic> item,
-  ) async {
-    final data = tasks;
-    data.add(item);
-
-    await _save(
-      'demo_tasks',
-      data,
-    );
-  }
-
-  Future<void> updateTask(
-    Map<String, dynamic> item,
-  ) async {
-    final data = tasks;
-
-    final index = data.indexWhere(
-      (x) => x['id'] == item['id'],
-    );
-
-    if (index >= 0) {
-      data[index] = item;
-
-      await _save(
-        'demo_tasks',
-        data,
-      );
-    }
-  }
-
-  Future<void> addActivity(
-    Map<String, dynamic> item,
-  ) async {
-    final data = activities;
-    data.add(item);
-
-    await _save(
-      'demo_activities',
-      data,
-    );
-  }
-
-  Map<String, dynamic>? customerById(String id) {
-    for (final customer in customers) {
-      if (customer['id'] == id) {
-        return customer;
-      }
-    }
-
-    return null;
-  }
-
-  String customerName(String id) {
-    return customerById(id)?['name']?.toString() ??
-        'عميل غير معروف';
-  }
-
-  double pipelineValue() {
-    return opportunities
-        .where(
-          (o) =>
-              o['stage'] != 'مغلقة' &&
-              o['stage'] != 'خاسرة',
-        )
-        .fold<double>(
-          0,
-          (sum, o) =>
-              sum + (o['value'] as num).toDouble(),
-        );
-  }
-
-  double weightedPipeline() {
-    return opportunities
-        .where(
-          (o) =>
-              o['stage'] != 'مغلقة' &&
-              o['stage'] != 'خاسرة',
-        )
-        .fold<double>(
-          0,
-          (sum, o) =>
-              sum +
-              (o['value'] as num).toDouble() *
-                  ((o['probability'] as num).toDouble() /
-                      100),
-        );
-  }
-
-  double wonValue() {
-    return opportunities
-        .where((o) => o['stage'] == 'مغلقة')
-        .fold<double>(
-          0,
-          (sum, o) =>
-              sum + (o['value'] as num).toDouble(),
-        );
-  }
-
-  int overdueTasks() {
-    return tasks
-        .where(
-          (t) =>
-              t['status'] != 'مكتملة' &&
-              isOverdue(
-                t['dueDate']?.toString(),
-              ),
-        )
-        .length;
-  }
-
-  int highPriorityOpportunities() {
-    return opportunities
-        .where(
-          (o) =>
-              o['stage'] != 'مغلقة' &&
-              o['stage'] != 'خاسرة' &&
-              (o['probability'] as num) >= 60,
-        )
-        .length;
-  }
-}
-
-class ApiClient {
-  String? accessToken;
-  String? refreshToken;
-
-  Future<Map<String, dynamic>> post(
-    String path,
-    Map<String, dynamic> body,
-  ) async {
-    final response = await http.post(
-      Uri.parse('$apiBaseUrl$path'),
-      headers: {
-        'Content-Type': 'application/json',
-        if (accessToken != null)
-          'Authorization': 'Bearer $accessToken',
-      },
-      body: jsonEncode(body),
-    );
-
-    final data = response.body.isEmpty
-        ? <String, dynamic>{}
-        : jsonDecode(response.body)
-            as Map<String, dynamic>;
-
-    if (response.statusCode >= 400) {
-      throw Exception(
-        data['message']?.toString() ??
-            'حدث خطأ في الاتصال بالخادم',
-      );
-    }
-
-    return data;
-  }
-}
-
-Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-
-  final prefs =
-      await SharedPreferences.getInstance();
-
-  final store = DemoStore(prefs);
-
-  await store.initialize();
-
-  runApp(
-    CrmBusinessApp(
-      store: store,
-    ),
-  );
-}
-
-class CrmBusinessApp extends StatelessWidget {
-  final DemoStore store;
-
-  const CrmBusinessApp({
-    super.key,
-    required this.store,
-  });
+// ============================================================
+// APP
+// ============================================================
+
+class CRMBusinessApp extends StatelessWidget {
+  const CRMBusinessApp({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -517,154 +21,929 @@ class CrmBusinessApp extends StatelessWidget {
       title: 'CRM Business',
       theme: ThemeData(
         useMaterial3: true,
-        colorSchemeSeed: primaryColor,
-        scaffoldBackgroundColor:
-            const Color(0xFFF7F8FA),
-        inputDecorationTheme:
-            InputDecorationTheme(
+        fontFamily: 'Arial',
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFF1565C0),
+        ),
+        scaffoldBackgroundColor: const Color(0xFFF5F7FA),
+        inputDecorationTheme: InputDecorationTheme(
           filled: true,
           fillColor: Colors.white,
           border: OutlineInputBorder(
-            borderRadius:
-                BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(14),
             borderSide: BorderSide.none,
           ),
-        ),
-        cardTheme: CardThemeData(
-          elevation: 0,
-          color: Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius:
-                BorderRadius.circular(18),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide.none,
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: const BorderSide(
+              color: Color(0xFF1565C0),
+              width: 1.5,
+            ),
           ),
         ),
       ),
-      builder: (context, child) {
-        return Directionality(
-          textDirection: TextDirection.rtl,
-          child: child!,
-        );
-      },
-      home: StartupPage(
-        store: store,
-      ),
+      home: const DemoHomePage(),
     );
   }
 }
 
-class StartupPage extends StatelessWidget {
+// ============================================================
+// MODELS
+// ============================================================
+
+class Customer {
+  String id;
+  String name;
+  String company;
+  String phone;
+  String email;
+  String sector;
+  String status;
+  int healthScore;
+  String notes;
+
+  Customer({
+    required this.id,
+    required this.name,
+    required this.company,
+    required this.phone,
+    required this.email,
+    required this.sector,
+    required this.status,
+    required this.healthScore,
+    required this.notes,
+  });
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'company': company,
+      'phone': phone,
+      'email': email,
+      'sector': sector,
+      'status': status,
+      'healthScore': healthScore,
+      'notes': notes,
+    };
+  }
+
+  factory Customer.fromJson(Map<String, dynamic> json) {
+    return Customer(
+      id: json['id'] ?? '',
+      name: json['name'] ?? '',
+      company: json['company'] ?? '',
+      phone: json['phone'] ?? '',
+      email: json['email'] ?? '',
+      sector: json['sector'] ?? '',
+      status: json['status'] ?? 'Active',
+      healthScore: json['healthScore'] ?? 70,
+      notes: json['notes'] ?? '',
+    );
+  }
+}
+
+class Opportunity {
+  String id;
+  String title;
+  String customer;
+  double value;
+  String stage;
+  String owner;
+
+  Opportunity({
+    required this.id,
+    required this.title,
+    required this.customer,
+    required this.value,
+    required this.stage,
+    required this.owner,
+  });
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'title': title,
+      'customer': customer,
+      'value': value,
+      'stage': stage,
+      'owner': owner,
+    };
+  }
+
+  factory Opportunity.fromJson(Map<String, dynamic> json) {
+    return Opportunity(
+      id: json['id'] ?? '',
+      title: json['title'] ?? '',
+      customer: json['customer'] ?? '',
+      value: (json['value'] ?? 0).toDouble(),
+      stage: json['stage'] ?? 'Lead',
+      owner: json['owner'] ?? '',
+    );
+  }
+}
+
+class CRMTask {
+  String id;
+  String title;
+  String customer;
+  String dueDate;
+  String priority;
+  String status;
+
+  CRMTask({
+    required this.id,
+    required this.title,
+    required this.customer,
+    required this.dueDate,
+    required this.priority,
+    required this.status,
+  });
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'title': title,
+      'customer': customer,
+      'dueDate': dueDate,
+      'priority': priority,
+      'status': status,
+    };
+  }
+
+  factory CRMTask.fromJson(Map<String, dynamic> json) {
+    return CRMTask(
+      id: json['id'] ?? '',
+      title: json['title'] ?? '',
+      customer: json['customer'] ?? '',
+      dueDate: json['dueDate'] ?? '',
+      priority: json['priority'] ?? 'Medium',
+      status: json['status'] ?? 'Open',
+    );
+  }
+}
+
+class Activity {
+  String id;
+  String customer;
+  String type;
+  String description;
+  String date;
+
+  Activity({
+    required this.id,
+    required this.customer,
+    required this.type,
+    required this.description,
+    required this.date,
+  });
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'customer': customer,
+      'type': type,
+      'description': description,
+      'date': date,
+    };
+  }
+
+  factory Activity.fromJson(Map<String, dynamic> json) {
+    return Activity(
+      id: json['id'] ?? '',
+      customer: json['customer'] ?? '',
+      type: json['type'] ?? 'Note',
+      description: json['description'] ?? '',
+      date: json['date'] ?? '',
+    );
+  }
+}
+
+// ============================================================
+// LOCAL STORE
+// ============================================================
+
+class DemoStore extends ChangeNotifier {
+  static const String storageKey = 'crm_business_demo_data';
+
+  List<Customer> customers = [];
+  List<Opportunity> opportunities = [];
+  List<CRMTask> tasks = [];
+  List<Activity> activities = [];
+
+  bool initialized = false;
+
+  Future<void> initialize() async {
+    if (initialized) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(storageKey);
+
+    if (raw == null) {
+      _seed();
+      await save();
+    } else {
+      try {
+        final data = jsonDecode(raw);
+
+        customers = (data['customers'] as List? ?? [])
+            .map((e) => Customer.fromJson(Map<String, dynamic>.from(e)))
+            .toList();
+
+        opportunities = (data['opportunities'] as List? ?? [])
+            .map(
+              (e) => Opportunity.fromJson(
+                Map<String, dynamic>.from(e),
+              ),
+            )
+            .toList();
+
+        tasks = (data['tasks'] as List? ?? [])
+            .map(
+              (e) => CRMTask.fromJson(
+                Map<String, dynamic>.from(e),
+              ),
+            )
+            .toList();
+
+        activities = (data['activities'] as List? ?? [])
+            .map(
+              (e) => Activity.fromJson(
+                Map<String, dynamic>.from(e),
+              ),
+            )
+            .toList();
+      } catch (_) {
+        _seed();
+        await save();
+      }
+    }
+
+    initialized = true;
+    notifyListeners();
+  }
+
+  void _seed() {
+    customers = [
+      Customer(
+        id: 'c1',
+        name: 'محمد أحمد',
+        company: 'شركة النور التجارية',
+        phone: '777123456',
+        email: 'info@alnoor.example',
+        sector: 'تجارة',
+        status: 'Active',
+        healthScore: 88,
+        notes: 'عميل استراتيجي ومهتم بالتوسع.',
+      ),
+      Customer(
+        id: 'c2',
+        name: 'عبدالله صالح',
+        company: 'مؤسسة المستقبل',
+        phone: '733456789',
+        email: 'contact@future.example',
+        sector: 'مقاولات',
+        status: 'Active',
+        healthScore: 74,
+        notes: 'فرصة لتمويل مشروع جديد.',
+      ),
+      Customer(
+        id: 'c3',
+        name: 'أحمد علي',
+        company: 'شركة التقنية الحديثة',
+        phone: '711987654',
+        email: 'sales@tech.example',
+        sector: 'تقنية',
+        status: 'Prospect',
+        healthScore: 61,
+        notes: 'يحتاج متابعة من مسؤول العلاقة.',
+      ),
+      Customer(
+        id: 'c4',
+        name: 'سالم حسن',
+        company: 'شركة الطاقة الشمسية',
+        phone: '700112233',
+        email: 'info@solar.example',
+        sector: 'طاقة',
+        status: 'Active',
+        healthScore: 92,
+        notes: 'عميل ذو قيمة عالية.',
+      ),
+    ];
+
+    opportunities = [
+      Opportunity(
+        id: 'o1',
+        title: 'تمويل توسعة',
+        customer: 'شركة النور التجارية',
+        value: 250000,
+        stage: 'Proposal',
+        owner: 'مسؤول العلاقة',
+      ),
+      Opportunity(
+        id: 'o2',
+        title: 'حلول طاقة شمسية',
+        customer: 'شركة الطاقة الشمسية',
+        value: 180000,
+        stage: 'Negotiation',
+        owner: 'مسؤول العلاقة',
+      ),
+      Opportunity(
+        id: 'o3',
+        title: 'خدمات شركات',
+        customer: 'مؤسسة المستقبل',
+        value: 95000,
+        stage: 'Lead',
+        owner: 'مسؤول العلاقة',
+      ),
+    ];
+
+    tasks = [
+      CRMTask(
+        id: 't1',
+        title: 'الاتصال بالعميل',
+        customer: 'شركة النور التجارية',
+        dueDate: '2026-10-04',
+        priority: 'High',
+        status: 'Open',
+      ),
+      CRMTask(
+        id: 't2',
+        title: 'إرسال العرض',
+        customer: 'مؤسسة المستقبل',
+        dueDate: '2026-10-05',
+        priority: 'Medium',
+        status: 'In Progress',
+      ),
+      CRMTask(
+        id: 't3',
+        title: 'مراجعة احتياجات العميل',
+        customer: 'شركة التقنية الحديثة',
+        dueDate: '2026-10-06',
+        priority: 'High',
+        status: 'Open',
+      ),
+    ];
+
+    activities = [
+      Activity(
+        id: 'a1',
+        customer: 'شركة النور التجارية',
+        type: 'Call',
+        description: 'تم الاتصال ومناقشة التوسع.',
+        date: '2026-10-02',
+      ),
+      Activity(
+        id: 'a2',
+        customer: 'شركة الطاقة الشمسية',
+        type: 'Meeting',
+        description: 'اجتماع لمناقشة مشروع الطاقة.',
+        date: '2026-10-01',
+      ),
+    ];
+  }
+
+  Future<void> save() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    final data = {
+      'customers': customers.map((e) => e.toJson()).toList(),
+      'opportunities': opportunities.map((e) => e.toJson()).toList(),
+      'tasks': tasks.map((e) => e.toJson()).toList(),
+      'activities': activities.map((e) => e.toJson()).toList(),
+    };
+
+    await prefs.setString(storageKey, jsonEncode(data));
+    notifyListeners();
+  }
+
+  Future<void> reset() async {
+    _seed();
+    await save();
+  }
+
+  double get pipelineValue {
+    return opportunities.fold(
+      0,
+      (sum, item) => sum + item.value,
+    );
+  }
+
+  int get openTasks {
+    return tasks.where((e) => e.status != 'Completed').length;
+  }
+
+  double get weightedPipeline {
+    double total = 0;
+
+    for (final opportunity in opportunities) {
+      double probability;
+
+      switch (opportunity.stage) {
+        case 'Lead':
+          probability = 0.20;
+          break;
+        case 'Qualified':
+          probability = 0.40;
+          break;
+        case 'Proposal':
+          probability = 0.60;
+          break;
+        case 'Negotiation':
+          probability = 0.80;
+          break;
+        case 'Won':
+          probability = 1.00;
+          break;
+        default:
+          probability = 0.20;
+      }
+
+      total += opportunity.value * probability;
+    }
+
+    return total;
+  }
+}
+
+// ============================================================
+// HOME
+// ============================================================
+
+class DemoHomePage extends StatefulWidget {
+  const DemoHomePage({super.key});
+
+  @override
+  State<DemoHomePage> createState() => _DemoHomePageState();
+}
+
+class _DemoHomePageState extends State<DemoHomePage> {
+  final DemoStore store = DemoStore();
+
+  int selectedIndex = 0;
+
+  final List<String> titles = [
+    'لوحة التحكم',
+    'العملاء',
+    'الفرص البيعية',
+    'المهام',
+    'التحليلات',
+    'المساعد الذكي',
+    'المزيد',
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    store.initialize();
+  }
+
+  Widget currentPage() {
+    switch (selectedIndex) {
+      case 1:
+        return CustomersPage(store: store);
+      case 2:
+        return OpportunitiesPage(store: store);
+      case 3:
+        return TasksPage(store: store);
+      case 4:
+        return AnalyticsPage(store: store);
+      case 5:
+        return AssistantPage(store: store);
+      case 6:
+        return MorePage(store: store);
+      default:
+        return DashboardPage(store: store);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: store,
+      builder: (context, _) {
+        if (!store.initialized) {
+          return const Scaffold(
+            body: Center(
+              child: CircularProgressIndicator(),
+            ),
+          );
+        }
+
+        return Scaffold(
+          appBar: AppBar(
+            elevation: 0,
+            backgroundColor: Colors.white,
+            title: Text(
+              titles[selectedIndex],
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            actions: [
+              IconButton(
+                tooltip: 'الإشعارات',
+                onPressed: () {
+                  showDialog<void>(
+                    context: context,
+                    builder: (context) {
+                      return AlertDialog(
+                        title: const Text('الإشعارات'),
+                        content: const Text(
+                          'لا توجد إشعارات جديدة حاليًا.',
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context),
+                            child: const Text('إغلاق'),
+                          ),
+                        ],
+                      );
+                    },
+                  );
+                },
+                icon: const Icon(Icons.notifications_none),
+              ),
+              const SizedBox(width: 8),
+            ],
+          ),
+          body: currentPage(),
+          bottomNavigationBar: NavigationBar(
+            selectedIndex: selectedIndex > 4 ? 0 : selectedIndex,
+            onDestinationSelected: (index) {
+              if (index <= 4) {
+                setState(() {
+                  selectedIndex = index;
+                });
+              }
+            },
+            destinations: const [
+              NavigationDestination(
+                icon: Icon(Icons.dashboard_outlined),
+                selectedIcon: Icon(Icons.dashboard),
+                label: 'الرئيسية',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.people_outline),
+                selectedIcon: Icon(Icons.people),
+                label: 'العملاء',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.trending_up),
+                selectedIcon: Icon(Icons.trending_up),
+                label: 'الفرص',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.task_alt),
+                selectedIcon: Icon(Icons.task_alt),
+                label: 'المهام',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.analytics_outlined),
+                selectedIcon: Icon(Icons.analytics),
+                label: 'التحليلات',
+              ),
+            ],
+          ),
+          floatingActionButton: selectedIndex == 1
+              ? FloatingActionButton(
+                  onPressed: () => showCustomerDialog(
+                    context,
+                    store,
+                  ),
+                  child: const Icon(Icons.add),
+                )
+              : selectedIndex == 2
+                  ? FloatingActionButton(
+                      onPressed: () => showOpportunityDialog(
+                        context,
+                        store,
+                      ),
+                      child: const Icon(Icons.add),
+                    )
+                  : selectedIndex == 3
+                      ? FloatingActionButton(
+                          onPressed: () => showTaskDialog(
+                            context,
+                            store,
+                          ),
+                          child: const Icon(Icons.add),
+                        )
+                      : null,
+        );
+      },
+    );
+  }
+}
+
+// ============================================================
+// DASHBOARD
+// ============================================================
+
+class DashboardPage extends StatelessWidget {
   final DemoStore store;
 
-  const StartupPage({
+  const DashboardPage({
     super.key,
     required this.store,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: ConstrainedBox(
-              constraints:
-                  const BoxConstraints(
-                maxWidth: 520,
+    return RefreshIndicator(
+      onRefresh: store.save,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          const Text(
+            'مرحبًا بك في CRM Business 👋',
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'نظرة تنفيذية سريعة على نشاط العملاء والمبيعات.',
+            style: TextStyle(
+              color: Colors.grey.shade700,
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          GridView.count(
+            crossAxisCount: 2,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
+            childAspectRatio: 1.35,
+            children: [
+              StatCard(
+                title: 'العملاء',
+                value: '${store.customers.length}',
+                icon: Icons.people,
               ),
+              StatCard(
+                title: 'قيمة Pipeline',
+                value: formatMoney(store.pipelineValue),
+                icon: Icons.trending_up,
+              ),
+              StatCard(
+                title: 'Forecast',
+                value: formatMoney(store.weightedPipeline),
+                icon: Icons.auto_graph,
+              ),
+              StatCard(
+                title: 'المهام المفتوحة',
+                value: '${store.openTasks}',
+                icon: Icons.task_alt,
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 20),
+
+          const SectionTitle(
+            title: 'Executive Brief',
+            icon: Icons.insights,
+          ),
+
+          const SizedBox(height: 10),
+
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(18),
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    width: 88,
-                    height: 88,
-                    decoration:
-                        BoxDecoration(
-                      color: primaryColor,
-                      borderRadius:
-                          BorderRadius.circular(24),
-                    ),
-                    child: const Icon(
-                      Icons.business_center,
-                      color: Colors.white,
-                      size: 46,
-                    ),
+                  InsightRow(
+                    icon: Icons.trending_up,
+                    title: 'قوة المبيعات',
+                    value:
+                        '${store.opportunities.length} فرص نشطة',
                   ),
-                  const SizedBox(height: 24),
-                  const Text(
-                    'CRM Business',
-                    style: TextStyle(
-                      fontSize: 32,
-                      fontWeight:
-                          FontWeight.bold,
-                    ),
+                  const Divider(height: 24),
+                  InsightRow(
+                    icon: Icons.favorite,
+                    title: 'Customer Health',
+                    value: averageHealth(store),
                   ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'منصة حديثة لإدارة العملاء والمبيعات والنمو',
-                    textAlign:
-                        TextAlign.center,
-                    style: TextStyle(
-                      color: Colors.black54,
-                      fontSize: 16,
-                    ),
+                  const Divider(height: 24),
+                  InsightRow(
+                    icon: Icons.warning_amber,
+                    title: 'Next Best Action',
+                    value: nextBestAction(store),
                   ),
-                  const SizedBox(height: 36),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 54,
-                    child: FilledButton.icon(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) =>
-                                HomePage(
-                              store: store,
-                              guest: true,
-                            ),
-                          ),
-                        );
-                      },
-                      icon: const Icon(
-                        Icons.rocket_launch,
-                      ),
-                      label: const Text(
-                        'الدخول كضيف وتجربة النظام',
-                        style: TextStyle(
-                          fontSize: 16,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 54,
-                    child: OutlinedButton.icon(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) =>
-                                LoginPage(
-                              store: store,
-                            ),
-                          ),
-                        );
-                      },
-                      icon: const Icon(
-                        Icons.login,
-                      ),
-                      label: const Text(
-                        'تسجيل الدخول',
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  const DemoInfoCard(),
                 ],
               ),
             ),
+          ),
+
+          const SizedBox(height: 20),
+
+          const SectionTitle(
+            title: 'أحدث الأنشطة',
+            icon: Icons.history,
+          ),
+
+          const SizedBox(height: 10),
+
+          ...store.activities.reversed.take(5).map(
+                (activity) => ActivityCard(
+                  activity: activity,
+                ),
+              ),
+        ],
+      ),
+    );
+  }
+}
+
+// ============================================================
+// CUSTOMERS
+// ============================================================
+
+class CustomersPage extends StatefulWidget {
+  final DemoStore store;
+
+  const CustomersPage({
+    super.key,
+    required this.store,
+  });
+
+  @override
+  State<CustomersPage> createState() => _CustomersPageState();
+}
+
+class _CustomersPageState extends State<CustomersPage> {
+  String search = '';
+
+  @override
+  Widget build(BuildContext context) {
+    final filtered = widget.store.customers.where((customer) {
+      final query = search.toLowerCase();
+
+      return customer.name.toLowerCase().contains(query) ||
+          customer.company.toLowerCase().contains(query) ||
+          customer.phone.toLowerCase().contains(query) ||
+          customer.sector.toLowerCase().contains(query);
+    }).toList();
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+          child: TextField(
+            onChanged: (value) {
+              setState(() {
+                search = value;
+              });
+            },
+            decoration: const InputDecoration(
+              prefixIcon: Icon(Icons.search),
+              hintText: 'ابحث عن عميل أو شركة...',
+            ),
+          ),
+        ),
+        Expanded(
+          child: filtered.isEmpty
+              ? const Center(
+                  child: Text('لا توجد نتائج'),
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: filtered.length,
+                  itemBuilder: (context, index) {
+                    final customer = filtered[index];
+
+                    return CustomerCard(
+                      customer: customer,
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => Customer360Page(
+                              store: widget.store,
+                              customer: customer,
+                            ),
+                          ),
+                        );
+                      },
+                      onEdit: () {
+                        showCustomerDialog(
+                          context,
+                          widget.store,
+                          existing: customer,
+                        );
+                      },
+                      onDelete: () async {
+                        final confirmed =
+                            await confirmDelete(context);
+
+                        if (confirmed) {
+                          widget.store.customers.removeWhere(
+                            (e) => e.id == customer.id,
+                          );
+
+                          await widget.store.save();
+                        }
+                      },
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+}
+
+class CustomerCard extends StatelessWidget {
+  final Customer customer;
+  final VoidCallback onTap;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+
+  const CustomerCard({
+    super.key,
+    required this.customer,
+    required this.onTap,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              CircleAvatar(
+                radius: 26,
+                child: Text(
+                  customer.name.isEmpty
+                      ? '?'
+                      : customer.name.substring(0, 1),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment:
+                      CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      customer.name,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(customer.company),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${customer.sector} • ${customer.phone}',
+                      style: TextStyle(
+                        color: Colors.grey.shade600,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              PopupMenuButton<String>(
+                onSelected: (value) {
+                  if (value == 'edit') {
+                    onEdit();
+                  } else {
+                    onDelete();
+                  }
+                },
+                itemBuilder: (_) => const [
+                  PopupMenuItem(
+                    value: 'edit',
+                    child: Text('تعديل'),
+                  ),
+                  PopupMenuItem(
+                    value: 'delete',
+                    child: Text('حذف'),
+                  ),
+                ],
+              ),
+            ],
           ),
         ),
       ),
@@ -672,38 +951,336 @@ class StartupPage extends StatelessWidget {
   }
 }
 
-class DemoInfoCard extends StatelessWidget {
-  const DemoInfoCard({super.key});
+// ============================================================
+// CUSTOMER 360
+// ============================================================
+
+class Customer360Page extends StatelessWidget {
+  final DemoStore store;
+  final Customer customer;
+
+  const Customer360Page({
+    super.key,
+    required this.store,
+    required this.customer,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding:
-            const EdgeInsets.all(18),
-        child: const Column(
-          children: [
-            Row(
-              children: [
-                Icon(
-                  Icons.auto_awesome,
-                  color: primaryColor,
-                ),
-                SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'تجربة Demo متكاملة',
-                    style: TextStyle(
-                      fontWeight:
-                          FontWeight.bold,
+    final customerActivities = store.activities
+        .where((e) => e.customer == customer.company)
+        .toList();
+
+    final customerOpportunities = store.opportunities
+        .where((e) => e.customer == customer.company)
+        .toList();
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Customer 360'),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                children: [
+                  CircleAvatar(
+                    radius: 38,
+                    child: Text(
+                      customer.name.substring(0, 1),
+                      style: const TextStyle(fontSize: 26),
                     ),
                   ),
+                  const SizedBox(height: 12),
+                  Text(
+                    customer.name,
+                    style: const TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Text(customer.company),
+                  const SizedBox(height: 16),
+                  HealthScore(score: customer.healthScore),
+                  const SizedBox(height: 16),
+                  Text(customer.notes),
+                ],
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          const SectionTitle(
+            title: 'بيانات العميل',
+            icon: Icons.person_outline,
+          ),
+
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  DetailRow(
+                    label: 'الهاتف',
+                    value: customer.phone,
+                  ),
+                  DetailRow(
+                    label: 'البريد',
+                    value: customer.email,
+                  ),
+                  DetailRow(
+                    label: 'القطاع',
+                    value: customer.sector,
+                  ),
+                  DetailRow(
+                    label: 'الحالة',
+                    value: customer.status,
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          const SectionTitle(
+            title: 'الفرص',
+            icon: Icons.trending_up,
+          ),
+
+          ...customerOpportunities.map(
+            (opportunity) => OpportunityCard(
+              opportunity: opportunity,
+              compact: true,
+              onStageChanged: (_) {},
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          const SectionTitle(
+            title: 'الأنشطة',
+            icon: Icons.history,
+          ),
+
+          ...customerActivities.map(
+            (activity) => ActivityCard(
+              activity: activity,
+            ),
+          ),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () {
+          showActivityDialog(
+            context,
+            store,
+            customer,
+          );
+        },
+        icon: const Icon(Icons.add),
+        label: const Text('نشاط'),
+      ),
+    );
+  }
+}
+
+// ============================================================
+// OPPORTUNITIES
+// ============================================================
+
+class OpportunitiesPage extends StatelessWidget {
+  final DemoStore store;
+
+  const OpportunitiesPage({
+    super.key,
+    required this.store,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final stages = [
+      'Lead',
+      'Qualified',
+      'Proposal',
+      'Negotiation',
+      'Won',
+    ];
+
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        const Text(
+          'Sales Pipeline',
+          style: TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'إدارة الفرص ومتابعة تقدمها حتى الإغلاق.',
+          style: TextStyle(
+            color: Colors.grey.shade700,
+          ),
+        ),
+        const SizedBox(height: 18),
+
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(18),
+            child: Column(
+              crossAxisAlignment:
+                  CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'إجمالي Pipeline',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  formatMoney(store.pipelineValue),
+                  style: const TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Forecast: ${formatMoney(store.weightedPipeline)}',
                 ),
               ],
             ),
-            SizedBox(height: 12),
+          ),
+        ),
+
+        const SizedBox(height: 18),
+
+        ...stages.map(
+          (stage) {
+            final items = store.opportunities
+                .where((e) => e.stage == stage)
+                .toList();
+
+            final value = items.fold<double>(
+              0,
+              (sum, e) => sum + e.value,
+            );
+
+            return Card(
+              margin: const EdgeInsets.only(bottom: 14),
+              child: ExpansionTile(
+                title: Text(
+                  stageName(stage),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                subtitle: Text(
+                  '${items.length} فرص • ${formatMoney(value)}',
+                ),
+                children: items.isEmpty
+                    ? [
+                        const Padding(
+                          padding: EdgeInsets.all(16),
+                          child: Text('لا توجد فرص'),
+                        ),
+                      ]
+                    : items.map(
+                        (opportunity) {
+                          return OpportunityCard(
+                            opportunity: opportunity,
+                            onStageChanged: (newStage) async {
+                              opportunity.stage = newStage;
+                              await store.save();
+                            },
+                          );
+                        },
+                      ).toList(),
+              ),
+            );
+          },
+        ),
+      ],
+    );
+  }
+}
+
+class OpportunityCard extends StatelessWidget {
+  final Opportunity opportunity;
+  final bool compact;
+  final ValueChanged<String> onStageChanged;
+
+  const OpportunityCard({
+    super.key,
+    required this.opportunity,
+    required this.onStageChanged,
+    this.compact = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final stages = [
+      'Lead',
+      'Qualified',
+      'Proposal',
+      'Negotiation',
+      'Won',
+    ];
+
+    return Card(
+      margin: compact
+          ? const EdgeInsets.only(bottom: 8)
+          : const EdgeInsets.symmetric(
+              horizontal: 8,
+              vertical: 6,
+            ),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment:
+              CrossAxisAlignment.start,
+          children: [
             Text(
-              'يمكنك إضافة العملاء والفرص والمهام والأنشطة وتغيير المراحل، وستتغير المؤشرات والتحليلات تلقائيًا.',
+              opportunity.title,
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 5),
+            Text(opportunity.customer),
+            const SizedBox(height: 5),
+            Text(
+              formatMoney(opportunity.value),
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 10),
+            DropdownButtonFormField<String>(
+              initialValue: opportunity.stage,
+              decoration: const InputDecoration(
+                labelText: 'المرحلة',
+              ),
+              items: stages
+                  .map(
+                    (stage) => DropdownMenuItem(
+                      value: stage,
+                      child: Text(stageName(stage)),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (value) {
+                if (value != null) {
+                  onStageChanged(value);
+                }
+              },
             ),
           ],
         ),
@@ -712,175 +1289,271 @@ class DemoInfoCard extends StatelessWidget {
   }
 }
 
-class LoginPage extends StatefulWidget {
+// ============================================================
+// TASKS
+// ============================================================
+
+class TasksPage extends StatelessWidget {
   final DemoStore store;
 
-  const LoginPage({
+  const TasksPage({
     super.key,
     required this.store,
   });
 
   @override
-  State<LoginPage> createState() =>
-      _LoginPageState();
-}
-
-class _LoginPageState
-    extends State<LoginPage> {
-  final email =
-      TextEditingController();
-
-  final password =
-      TextEditingController();
-
-  bool loading = false;
-
-  String? error;
-
-  Future<void> login() async {
-    setState(() {
-      loading = true;
-      error = null;
-    });
-
-    try {
-      final api = ApiClient();
-
-      final data = await api.post(
-        '/auth/login',
-        {
-          'email': email.text.trim(),
-          'password': password.text,
-        },
-      );
-
-      final prefs =
-          await SharedPreferences
-              .getInstance();
-
-      if (data['accessToken'] != null) {
-        await prefs.setString(
-          'accessToken',
-          data['accessToken'].toString(),
-        );
-      }
-
-      if (data['refreshToken'] != null) {
-        await prefs.setString(
-          'refreshToken',
-          data['refreshToken'].toString(),
-        );
-      }
-
-      if (!mounted) {
-        return;
-      }
-
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (_) => HomePage(
-            store: widget.store,
-            guest: false,
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        const Text(
+          'Tasks & Workflows',
+          style: TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.bold,
           ),
         ),
-      );
-    } catch (e) {
-      setState(() {
-        error = e
-            .toString()
-            .replaceFirst(
-              'Exception: ',
-              '',
-            );
-      });
-    } finally {
-      if (mounted) {
-        setState(() {
-          loading = false;
-        });
-      }
-    }
+        const SizedBox(height: 6),
+        Text(
+          'حوّل المتابعة اليومية إلى سير عمل واضح.',
+          style: TextStyle(
+            color: Colors.grey.shade700,
+          ),
+        ),
+        const SizedBox(height: 18),
+        ...store.tasks.map(
+          (task) => TaskCard(
+            task: task,
+            onStatusChanged: (status) async {
+              task.status = status;
+              await store.save();
+            },
+          ),
+        ),
+      ],
+    );
   }
+}
 
-  @override
-  void dispose() {
-    email.dispose();
-    password.dispose();
-    super.dispose();
-  }
+class TaskCard extends StatelessWidget {
+  final CRMTask task;
+  final ValueChanged<String> onStatusChanged;
+
+  const TaskCard({
+    super.key,
+    required this.task,
+    required this.onStatusChanged,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'تسجيل الدخول',
-        ),
-      ),
-      body: Center(
-        child: SingleChildScrollView(
-          padding:
-              const EdgeInsets.all(20),
-          child: ConstrainedBox(
-            constraints:
-                const BoxConstraints(
-              maxWidth: 520,
-            ),
-            child: Column(
+    final statuses = [
+      'Open',
+      'In Progress',
+      'Completed',
+    ];
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment:
+              CrossAxisAlignment.start,
+          children: [
+            Row(
               children: [
-                TextField(
-                  controller: email,
-                  keyboardType:
-                      TextInputType.emailAddress,
-                  decoration:
-                      const InputDecoration(
-                    labelText:
-                        'البريد الإلكتروني',
-                    prefixIcon: Icon(
-                      Icons.email_outlined,
+                Icon(
+                  task.status == 'Completed'
+                      ? Icons.check_circle
+                      : Icons.radio_button_unchecked,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    task.title,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
                     ),
                   ),
                 ),
-                const SizedBox(height: 14),
-                TextField(
-                  controller: password,
-                  obscureText: true,
-                  decoration:
-                      const InputDecoration(
-                    labelText:
-                        'كلمة المرور',
-                    prefixIcon: Icon(
-                      Icons.lock_outline,
-                    ),
-                  ),
-                ),
-                if (error != null) ...[
-                  const SizedBox(height: 14),
-                  Text(
-                    error!,
-                    style:
-                        const TextStyle(
-                      color: dangerColor,
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 20),
-                SizedBox(
-                  width: double.infinity,
-                  height: 52,
-                  child: FilledButton(
-                    onPressed:
-                        loading ? null : login,
-                    child: loading
-                        ? const CircularProgressIndicator()
-                        : const Text(
-                            'دخول',
-                          ),
-                  ),
+                PriorityBadge(
+                  priority: task.priority,
                 ),
               ],
             ),
+            const SizedBox(height: 10),
+            Text(task.customer),
+            const SizedBox(height: 5),
+            Text('الاستحقاق: ${task.dueDate}'),
+            const SizedBox(height: 10),
+            DropdownButtonFormField<String>(
+              initialValue: task.status,
+              decoration: const InputDecoration(
+                labelText: 'الحالة',
+              ),
+              items: statuses
+                  .map(
+                    (status) => DropdownMenuItem(
+                      value: status,
+                      child: Text(taskStatusName(status)),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (value) {
+                if (value != null) {
+                  onStatusChanged(value);
+                }
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ============================================================
+// ANALYTICS
+// ============================================================
+
+class AnalyticsPage extends StatelessWidget {
+  final DemoStore store;
+
+  const AnalyticsPage({
+    super.key,
+    required this.store,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final activeCustomers = store.customers
+        .where((e) => e.status == 'Active')
+        .length;
+
+    final completedTasks = store.tasks
+        .where((e) => e.status == 'Completed')
+        .length;
+
+    final won = store.opportunities
+        .where((e) => e.stage == 'Won')
+        .fold<double>(
+          0,
+          (sum, e) => sum + e.value,
+        );
+
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        const Text(
+          'Analytics',
+          style: TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 18),
+
+        AnalyticsCard(
+          title: 'العملاء النشطون',
+          value: '$activeCustomers',
+          subtitle:
+              'من إجمالي ${store.customers.length} عميل',
+          icon: Icons.people,
+        ),
+
+        AnalyticsCard(
+          title: 'Pipeline',
+          value: formatMoney(store.pipelineValue),
+          subtitle:
+              '${store.opportunities.length} فرص',
+          icon: Icons.trending_up,
+        ),
+
+        AnalyticsCard(
+          title: 'Forecast',
+          value: formatMoney(store.weightedPipeline),
+          subtitle: 'القيمة المرجحة حسب المرحلة',
+          icon: Icons.auto_graph,
+        ),
+
+        AnalyticsCard(
+          title: 'المبيعات المغلقة',
+          value: formatMoney(won),
+          subtitle: 'الفرص في مرحلة Won',
+          icon: Icons.check_circle,
+        ),
+
+        AnalyticsCard(
+          title: 'المهام المكتملة',
+          value: '$completedTasks',
+          subtitle:
+              'من إجمالي ${store.tasks.length} مهام',
+          icon: Icons.task_alt,
+        ),
+
+        const SizedBox(height: 16),
+
+        const SectionTitle(
+          title: 'Customer Health',
+          icon: Icons.favorite,
+        ),
+
+        const SizedBox(height: 10),
+
+        ...store.customers.map(
+          (customer) => Card(
+            child: ListTile(
+              leading: HealthScore(
+                score: customer.healthScore,
+                compact: true,
+              ),
+              title: Text(customer.company),
+              subtitle: Text(customer.name),
+              trailing: Text(
+                '${customer.healthScore}',
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class AnalyticsCard extends StatelessWidget {
+  final String title;
+  final String value;
+  final String subtitle;
+  final IconData icon;
+
+  const AnalyticsCard({
+    super.key,
+    required this.title,
+    required this.value,
+    required this.subtitle,
+    required this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: ListTile(
+        leading: CircleAvatar(
+          child: Icon(icon),
+        ),
+        title: Text(title),
+        subtitle: Text(subtitle),
+        trailing: Text(
+          value,
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 17,
           ),
         ),
       ),
@@ -888,554 +1561,974 @@ class _LoginPageState
   }
 }
 
-class HomePage extends StatefulWidget {
-  final DemoStore store;
-  final bool guest;
+// ============================================================
+// AI ASSISTANT
+// ============================================================
 
-  const HomePage({
+class AssistantPage extends StatelessWidget {
+  final DemoStore store;
+
+  const AssistantPage({
     super.key,
     required this.store,
-    required this.guest,
   });
 
   @override
-  State<HomePage> createState() =>
-      _HomePageState();
+  Widget build(BuildContext context) {
+    final action = nextBestAction(store);
+
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(22),
+            child: Column(
+              children: [
+                const CircleAvatar(
+                  radius: 34,
+                  child: Icon(
+                    Icons.auto_awesome,
+                    size: 34,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                const Text(
+                  'مساعد CRM Business',
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'تحليل سريع للبيانات الحالية واقتراح الخطوة التالية.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.grey.shade700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+
+        const SizedBox(height: 18),
+
+        const SectionTitle(
+          title: 'Next Best Action',
+          icon: Icons.lightbulb,
+        ),
+
+        const SizedBox(height: 10),
+
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Row(
+              crossAxisAlignment:
+                  CrossAxisAlignment.start,
+              children: [
+                const Icon(
+                  Icons.arrow_forward,
+                  size: 28,
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Text(
+                    action,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      height: 1.5,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+
+        const SizedBox(height: 18),
+
+        const SectionTitle(
+          title: 'Smart Insights',
+          icon: Icons.insights,
+        ),
+
+        const SizedBox(height: 10),
+
+        InsightCard(
+          title: 'Pipeline',
+          text:
+              'إجمالي قيمة الفرص الحالية ${formatMoney(store.pipelineValue)}.',
+          icon: Icons.trending_up,
+        ),
+
+        InsightCard(
+          title: 'Forecast',
+          text:
+              'القيمة المرجحة للفرص ${formatMoney(store.weightedPipeline)}.',
+          icon: Icons.auto_graph,
+        ),
+
+        InsightCard(
+          title: 'Customer Health',
+          text:
+              'متوسط صحة العملاء ${averageHealth(store)}.',
+          icon: Icons.favorite,
+        ),
+
+        InsightCard(
+          title: 'Tasks',
+          text:
+              'لديك ${store.openTasks} مهام تحتاج إلى متابعة.',
+          icon: Icons.task_alt,
+        ),
+      ],
+    );
+  }
 }
-              if (existing == null) {
-                await store.addCustomer(item);
-              } else {
-                await store.updateCustomer(item);
+
+class InsightCard extends StatelessWidget {
+  final String title;
+  final String text;
+  final IconData icon;
+
+  const InsightCard({
+    super.key,
+    required this.title,
+    required this.text,
+    required this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: ListTile(
+        leading: Icon(icon),
+        title: Text(
+          title,
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        subtitle: Padding(
+          padding: const EdgeInsets.only(top: 5),
+          child: Text(text),
+        ),
+      ),
+    );
+  }
+}
+
+// ============================================================
+// MORE
+// ============================================================
+
+class MorePage extends StatelessWidget {
+  final DemoStore store;
+
+  const MorePage({
+    super.key,
+    required this.store,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Card(
+          child: ListTile(
+            leading: const CircleAvatar(
+              child: Icon(Icons.business),
+            ),
+            title: const Text(
+              'CRM Business Demo',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            subtitle: const Text(
+              'بيئة تجريبية محلية',
+            ),
+          ),
+        ),
+
+        const SizedBox(height: 12),
+
+        Card(
+          child: Column(
+            children: [
+              ListTile(
+                leading: const Icon(Icons.refresh),
+                title: const Text(
+                  'إعادة بيانات Demo',
+                ),
+                subtitle: const Text(
+                  'إرجاع البيانات إلى الحالة الأصلية',
+                ),
+                onTap: () async {
+                  final confirmed =
+                      await showDialog<bool>(
+                    context: context,
+                    builder: (context) {
+                      return AlertDialog(
+                        title: const Text(
+                          'إعادة البيانات؟',
+                        ),
+                        content: const Text(
+                          'سيتم حذف التعديلات المحلية وإرجاع بيانات Demo.',
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () =>
+                                Navigator.pop(
+                              context,
+                              false,
+                            ),
+                            child: const Text('إلغاء'),
+                          ),
+                          FilledButton(
+                            onPressed: () =>
+                                Navigator.pop(
+                              context,
+                              true,
+                            ),
+                            child: const Text('إعادة'),
+                          ),
+                        ],
+                      );
+                    },
+                  );
+
+                  if (confirmed == true) {
+                    await store.reset();
+
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context)
+                          .showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'تمت إعادة بيانات Demo.',
+                          ),
+                        ),
+                      );
+                    }
+                  }
+                },
+              ),
+              const Divider(height: 1),
+              ListTile(
+                leading: const Icon(Icons.info_outline),
+                title: const Text('عن النظام'),
+                subtitle: const Text(
+                  'CRM Business • Demo Edition',
+                ),
+                onTap: () {
+                  showAboutDialog(
+                    context: context,
+                    applicationName: 'CRM Business',
+                    applicationVersion: '1.6.0',
+                    applicationLegalese:
+                        'Demo Edition',
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 20),
+
+        const Card(
+          child: Padding(
+            padding: EdgeInsets.all(18),
+            child: Column(
+              crossAxisAlignment:
+                  CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'خارطة التطوير',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                SizedBox(height: 12),
+                Text('✓ Customer 360'),
+                Text('✓ Sales Pipeline'),
+                Text('✓ Forecasting'),
+                Text('✓ Customer Health Score'),
+                Text('✓ Smart Assistant'),
+                Text('✓ Tasks & Workflows'),
+                Text('→ Backend API'),
+                Text('→ PostgreSQL Multi-Tenant'),
+                Text('→ Authentication & RBAC'),
+                Text('→ Audit Trail'),
+                Text('→ Automation Engine'),
+                Text('→ AI Copilot'),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ============================================================
+// DIALOGS
+// ============================================================
+
+Future<void> showCustomerDialog(
+  BuildContext context,
+  DemoStore store, {
+  Customer? existing,
+}) async {
+  final nameController = TextEditingController(
+    text: existing?.name ?? '',
+  );
+
+  final companyController = TextEditingController(
+    text: existing?.company ?? '',
+  );
+
+  final phoneController = TextEditingController(
+    text: existing?.phone ?? '',
+  );
+
+  final emailController = TextEditingController(
+    text: existing?.email ?? '',
+  );
+
+  final sectorController = TextEditingController(
+    text: existing?.sector ?? '',
+  );
+
+  final notesController = TextEditingController(
+    text: existing?.notes ?? '',
+  );
+
+  await showDialog<void>(
+    context: context,
+    builder: (context) {
+      return AlertDialog(
+        title: Text(
+          existing == null
+              ? 'إضافة عميل'
+              : 'تعديل العميل',
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameController,
+                decoration: const InputDecoration(
+                  labelText: 'اسم الشخص',
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: companyController,
+                decoration: const InputDecoration(
+                  labelText: 'اسم الشركة',
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: phoneController,
+                keyboardType: TextInputType.phone,
+                decoration: const InputDecoration(
+                  labelText: 'الهاتف',
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: emailController,
+                keyboardType:
+                    TextInputType.emailAddress,
+                decoration: const InputDecoration(
+                  labelText: 'البريد الإلكتروني',
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: sectorController,
+                decoration: const InputDecoration(
+                  labelText: 'القطاع',
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: notesController,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  labelText: 'ملاحظات',
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('إلغاء'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              if (nameController.text.trim().isEmpty ||
+                  companyController.text.trim().isEmpty) {
+                return;
               }
 
-              if (dialogContext.mounted) {
-                Navigator.pop(dialogContext);
+              if (existing == null) {
+                store.customers.add(
+                  Customer(
+                    id: DateTime.now()
+                        .microsecondsSinceEpoch
+                        .toString(),
+                    name: nameController.text.trim(),
+                    company:
+                        companyController.text.trim(),
+                    phone: phoneController.text.trim(),
+                    email: emailController.text.trim(),
+                    sector: sectorController.text.trim(),
+                    status: 'Prospect',
+                    healthScore: 70,
+                    notes: notesController.text.trim(),
+                  ),
+                );
+              } else {
+                existing.name =
+                    nameController.text.trim();
+                existing.company =
+                    companyController.text.trim();
+                existing.phone =
+                    phoneController.text.trim();
+                existing.email =
+                    emailController.text.trim();
+                existing.sector =
+                    sectorController.text.trim();
+                existing.notes =
+                    notesController.text.trim();
+              }
+
+              await store.save();
+
+              if (context.mounted) {
+                Navigator.pop(context);
               }
             },
-            child: const Text('حفظ'),
+            child: Text(
+              existing == null ? 'إضافة' : 'حفظ',
+            ),
           ),
         ],
       );
     },
   );
 
-  name.dispose();
-  contact.dispose();
-  phone.dispose();
-  email.dispose();
-  sector.dispose();
-  notes.dispose();
+  nameController.dispose();
+  companyController.dispose();
+  phoneController.dispose();
+  emailController.dispose();
+  sectorController.dispose();
+  notesController.dispose();
 }
 
-class Customer360Page extends StatefulWidget {
-  final DemoStore store;
-  final String customerId;
+Future<void> showOpportunityDialog(
+  BuildContext context,
+  DemoStore store,
+) async {
+  final titleController = TextEditingController();
+  final valueController = TextEditingController();
 
-  const Customer360Page({
-    super.key,
-    required this.store,
-    required this.customerId,
-  });
+  String? customer;
 
-  @override
-  State<Customer360Page> createState() =>
-      _Customer360PageState();
-}
-
-class _Customer360PageState
-    extends State<Customer360Page> {
-  Future<void> addActivity() async {
-    final title =
-        TextEditingController();
-
-    final note =
-        TextEditingController();
-
-    String type = activityTypes.first;
-
-    await showDialog(
-      context: context,
-      builder: (dialogContext) {
-        return StatefulBuilder(
-          builder:
-              (context, setDialogState) {
-            return AlertDialog(
-              title: const Text(
-                'إضافة نشاط',
-              ),
-              content:
-                  SingleChildScrollView(
-                child: Column(
-                  children: [
-                    DropdownButtonFormField<
-                        String>(
-                      initialValue: type,
-                      decoration:
-                          const InputDecoration(
-                        labelText: 'نوع النشاط',
-                      ),
-                      items:
-                          activityTypes.map(
-                        (item) {
-                          return DropdownMenuItem(
-                            value: item,
-                            child:
-                                Text(item),
-                          );
-                        },
-                      ).toList(),
-                      onChanged:
-                          (value) {
-                        if (value == null) {
-                          return;
-                        }
-
-                        setDialogState(() {
-                          type = value;
-                        });
-                      },
-                    ),
-                    const SizedBox(
-                      height: 12,
-                    ),
-                    TextField(
-                      controller: title,
-                      decoration:
-                          const InputDecoration(
-                        labelText:
-                            'عنوان النشاط',
-                      ),
-                    ),
-                    const SizedBox(
-                      height: 12,
-                    ),
-                    TextField(
-                      controller: note,
-                      maxLines: 4,
-                      decoration:
-                          const InputDecoration(
-                        labelText:
-                            'التفاصيل',
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () =>
-                      Navigator.pop(
-                    dialogContext,
-                  ),
-                  child:
-                      const Text('إلغاء'),
-                ),
-                FilledButton(
-                  onPressed: () async {
-                    if (title.text
-                        .trim()
-                        .isEmpty) {
-                      return;
-                    }
-
-                    await widget.store
-                        .addActivity({
-                      'id': widget.store
-                          .newId('activity'),
-                      'customerId':
-                          widget.customerId,
-                      'type': type,
-                      'title':
-                          title.text.trim(),
-                      'note':
-                          note.text.trim(),
-                      'date': DateTime.now()
-                          .toIso8601String(),
-                    });
-
-                    if (dialogContext
-                        .mounted) {
-                      Navigator.pop(
-                        dialogContext,
-                      );
-                    }
-
-                    if (mounted) {
-                      setState(() {});
-                    }
-                  },
-                  child:
-                      const Text('حفظ'),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-
-    title.dispose();
-    note.dispose();
+  if (store.customers.isNotEmpty) {
+    customer = store.customers.first.company;
   }
 
-  Future<void> editCustomer(
-    Map<String, dynamic> customer,
-  ) async {
-    await showCustomerDialog(
-      context,
-      widget.store,
-      existing: customer,
-    );
-
-    if (mounted) {
-      setState(() {});
-    }
-  }
-
-  Future<void> deleteCustomer() async {
-    final confirmed =
-        await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text(
-            'حذف العميل',
-          ),
-          content: const Text(
-            'سيتم حذف العميل والفرص والمهام والأنشطة المرتبطة به. هل تريد المتابعة؟',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () =>
-                  Navigator.pop(
-                dialogContext,
-                false,
-              ),
-              child:
-                  const Text('إلغاء'),
-            ),
-            FilledButton(
-              onPressed: () =>
-                  Navigator.pop(
-                dialogContext,
-                true,
-              ),
-              child:
-                  const Text('حذف'),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (confirmed != true) {
-      return;
-    }
-
-    await widget.store.deleteCustomer(
-      widget.customerId,
-    );
-
-    if (!mounted) {
-      return;
-    }
-
-    Navigator.pop(context);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final customer =
-        widget.store.customerById(
-      widget.customerId,
-    );
-
-    if (customer == null) {
-      return Scaffold(
-        appBar: AppBar(),
-        body: const Center(
-          child: Text(
-            'العميل غير موجود',
-          ),
-        ),
-      );
-    }
-
-    final opportunities =
-        widget.store.opportunities
-            .where(
-              (o) =>
-                  o['customerId'] ==
-                  widget.customerId,
-            )
-            .toList();
-
-    final tasks =
-        widget.store.tasks
-            .where(
-              (t) =>
-                  t['customerId'] ==
-                  widget.customerId,
-            )
-            .toList();
-
-    final activities =
-        widget.store.activities
-            .where(
-              (a) =>
-                  a['customerId'] ==
-                  widget.customerId,
-            )
-            .toList();
-
-    final opportunityValue =
-        opportunities.fold<double>(
-      0,
-      (sum, item) =>
-          sum +
-          (item['value'] as num)
-              .toDouble(),
-    );
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'Customer 360',
-        ),
-        actions: [
-          IconButton(
-            onPressed: () =>
-                editCustomer(customer),
-            icon:
-                const Icon(Icons.edit),
-          ),
-          IconButton(
-            onPressed: deleteCustomer,
-            icon: const Icon(
-              Icons.delete_outline,
-            ),
-          ),
-        ],
-      ),
-      floatingActionButton:
-          FloatingActionButton.extended(
-        onPressed: addActivity,
-        icon:
-            const Icon(Icons.add),
-        label:
-            const Text('نشاط'),
-      ),
-      body: ListView(
-        padding:
-            const EdgeInsets.all(16),
-        children: [
-          Card(
-            child: Padding(
-              padding:
-                  const EdgeInsets.all(18),
+  await showDialog<void>(
+    context: context,
+    builder: (context) {
+      return StatefulBuilder(
+        builder: (context, setState) {
+          return AlertDialog(
+            title: const Text('إضافة فرصة'),
+            content: SingleChildScrollView(
               child: Column(
-                crossAxisAlignment:
-                    CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Row(
-                    children: [
-                      const CircleAvatar(
-                        radius: 30,
-                        child: Icon(
-                          Icons.business,
-                          size: 30,
-                        ),
-                      ),
-                      const SizedBox(
-                        width: 14,
-                      ),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment:
-                              CrossAxisAlignment
-                                  .start,
-                          children: [
-                            Text(
-                              customer[
-                                      'name']
-                                  .toString(),
-                              style:
-                                  const TextStyle(
-                                fontSize: 19,
-                                fontWeight:
-                                    FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(
-                              height: 4,
-                            ),
-                            Text(
-                              customer[
-                                      'sector']
-                                  .toString(),
-                              style:
-                                  const TextStyle(
-                                color:
-                                    Colors.black54,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
+                  TextField(
+                    controller: titleController,
+                    decoration: const InputDecoration(
+                      labelText: 'اسم الفرصة',
+                    ),
                   ),
-                  const Divider(
-                    height: 28,
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: valueController,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: const InputDecoration(
+                      labelText: 'القيمة',
+                    ),
                   ),
-                  InfoRow(
-                    label:
-                        'جهة الاتصال',
-                    value:
-                        customer[
-                                'contactName']
-                            .toString(),
-                  ),
-                  InfoRow(
-                    label: 'الهاتف',
-                    value:
-                        customer['phone']
-                            .toString(),
-                  ),
-                  InfoRow(
-                    label: 'البريد',
-                    value:
-                        customer['email']
-                            .toString(),
-                  ),
-                  InfoRow(
-                    label: 'الحالة',
-                    value:
-                        customer['status']
-                            .toString(),
+                  const SizedBox(height: 10),
+                  DropdownButtonFormField<String>(
+                    initialValue: customer,
+                    decoration: const InputDecoration(
+                      labelText: 'العميل',
+                    ),
+                    items: store.customers
+                        .map(
+                          (c) => DropdownMenuItem(
+                            value: c.company,
+                            child: Text(c.company),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) {
+                      setState(() {
+                        customer = value;
+                      });
+                    },
                   ),
                 ],
               ),
             ),
-          ),
-          const SizedBox(
-            height: 14,
-          ),
-          Row(
-            children: [
-              Expanded(
-                child: MiniMetric(
-                  title: 'الفرص',
-                  value:
-                      '${opportunities.length}',
-                ),
+            actions: [
+              TextButton(
+                onPressed: () =>
+                    Navigator.pop(context),
+                child: const Text('إلغاء'),
               ),
-              const SizedBox(
-                width: 10,
-              ),
-              Expanded(
-                child: MiniMetric(
-                  title: 'قيمة الفرص',
-                  value:
-                      money(opportunityValue),
-                ),
-              ),
-              const SizedBox(
-                width: 10,
-              ),
-              Expanded(
-                child: MiniMetric(
-                  title: 'المهام',
-                  value:
-                      '${tasks.length}',
-                ),
+              FilledButton(
+                onPressed: () async {
+                  final value = double.tryParse(
+                    valueController.text.trim(),
+                  );
+
+                  if (titleController.text
+                          .trim()
+                          .isEmpty ||
+                      value == null ||
+                      customer == null) {
+                    return;
+                  }
+
+                  store.opportunities.add(
+                    Opportunity(
+                      id: DateTime.now()
+                          .microsecondsSinceEpoch
+                          .toString(),
+                      title:
+                          titleController.text.trim(),
+                      customer: customer!,
+                      value: value,
+                      stage: 'Lead',
+                      owner: 'مسؤول العلاقة',
+                    ),
+                  );
+
+                  await store.save();
+
+                  if (context.mounted) {
+                    Navigator.pop(context);
+                  }
+                },
+                child: const Text('إضافة'),
               ),
             ],
-          ),
-          const SizedBox(
-            height: 20,
-          ),
-          const SectionTitle(
-            icon: Icons.trending_up,
-            title: 'الفرص',
-          ),
-          const SizedBox(
-            height: 8,
-          ),
-          if (opportunities.isEmpty)
-            const EmptyCard(
-              text:
-                  'لا توجد فرص لهذا العميل.',
+          );
+        },
+      );
+    },
+  );
+
+  titleController.dispose();
+  valueController.dispose();
+}
+
+Future<void> showTaskDialog(
+  BuildContext context,
+  DemoStore store,
+) async {
+  final titleController = TextEditingController();
+  final dateController = TextEditingController();
+
+  String? customer;
+
+  if (store.customers.isNotEmpty) {
+    customer = store.customers.first.company;
+  }
+
+  String priority = 'Medium';
+
+  await showDialog<void>(
+    context: context,
+    builder: (context) {
+      return StatefulBuilder(
+        builder: (context, setState) {
+          return AlertDialog(
+            title: const Text('إضافة مهمة'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: titleController,
+                    decoration: const InputDecoration(
+                      labelText: 'عنوان المهمة',
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  DropdownButtonFormField<String>(
+                    initialValue: customer,
+                    decoration: const InputDecoration(
+                      labelText: 'العميل',
+                    ),
+                    items: store.customers
+                        .map(
+                          (c) => DropdownMenuItem(
+                            value: c.company,
+                            child: Text(c.company),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) {
+                      setState(() {
+                        customer = value;
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: dateController,
+                    decoration: const InputDecoration(
+                      labelText: 'تاريخ الاستحقاق',
+                      hintText: '2026-10-10',
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  DropdownButtonFormField<String>(
+                    initialValue: priority,
+                    decoration: const InputDecoration(
+                      labelText: 'الأولوية',
+                    ),
+                    items: const [
+                      DropdownMenuItem(
+                        value: 'Low',
+                        child: Text('منخفضة'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'Medium',
+                        child: Text('متوسطة'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'High',
+                        child: Text('عالية'),
+                      ),
+                    ],
+                    onChanged: (value) {
+                      if (value != null) {
+                        setState(() {
+                          priority = value;
+                        });
+                      }
+                    },
+                  ),
+                ],
+              ),
             ),
-          ...opportunities.map(
-            (opportunity) =>
-                OpportunityCompactCard(
-              store: widget.store,
-              opportunity:
-                  opportunity,
-              onChanged: () {
-                setState(() {});
-              },
+            actions: [
+              TextButton(
+                onPressed: () =>
+                    Navigator.pop(context),
+                child: const Text('إلغاء'),
+              ),
+              FilledButton(
+                onPressed: () async {
+                  if (titleController.text
+                          .trim()
+                          .isEmpty ||
+                      customer == null) {
+                    return;
+                  }
+
+                  store.tasks.add(
+                    CRMTask(
+                      id: DateTime.now()
+                          .microsecondsSinceEpoch
+                          .toString(),
+                      title:
+                          titleController.text.trim(),
+                      customer: customer!,
+                      dueDate:
+                          dateController.text.trim().isEmpty
+                              ? 'غير محدد'
+                              : dateController.text
+                                  .trim(),
+                      priority: priority,
+                      status: 'Open',
+                    ),
+                  );
+
+                  await store.save();
+
+                  if (context.mounted) {
+                    Navigator.pop(context);
+                  }
+                },
+                child: const Text('إضافة'),
+              ),
+            ],
+          );
+        },
+      );
+    },
+  );
+
+  titleController.dispose();
+  dateController.dispose();
+}
+
+Future<void> showActivityDialog(
+  BuildContext context,
+  DemoStore store,
+  Customer customer,
+) async {
+  final descriptionController =
+      TextEditingController();
+
+  String type = 'Call';
+
+  await showDialog<void>(
+    context: context,
+    builder: (context) {
+      return StatefulBuilder(
+        builder: (context, setState) {
+          return AlertDialog(
+            title: const Text('إضافة نشاط'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                DropdownButtonFormField<String>(
+                  initialValue: type,
+                  decoration: const InputDecoration(
+                    labelText: 'نوع النشاط',
+                  ),
+                  items: const [
+                    DropdownMenuItem(
+                      value: 'Call',
+                      child: Text('مكالمة'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'Meeting',
+                      child: Text('اجتماع'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'Email',
+                      child: Text('بريد'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'Note',
+                      child: Text('ملاحظة'),
+                    ),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) {
+                      setState(() {
+                        type = value;
+                      });
+                    }
+                  },
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: descriptionController,
+                  maxLines: 4,
+                  decoration: const InputDecoration(
+                    labelText: 'الوصف',
+                  ),
+                ),
+              ],
             ),
-          ),
-          const SizedBox(
-            height: 18,
-          ),
-          const SectionTitle(
-            icon: Icons.task_alt,
-            title: 'المهام',
-          ),
-          const SizedBox(
-            height: 8,
-          ),
-          if (tasks.isEmpty)
-            const EmptyCard(
-              text:
-                  'لا توجد مهام لهذا العميل.',
+            actions: [
+              TextButton(
+                onPressed: () =>
+                    Navigator.pop(context),
+                child: const Text('إلغاء'),
+              ),
+              FilledButton(
+                onPressed: () async {
+                  if (descriptionController.text
+                      .trim()
+                      .isEmpty) {
+                    return;
+                  }
+
+                  store.activities.add(
+                    Activity(
+                      id: DateTime.now()
+                          .microsecondsSinceEpoch
+                          .toString(),
+                      customer: customer.company,
+                      type: type,
+                      description:
+                          descriptionController.text
+                              .trim(),
+                      date: DateTime.now()
+                          .toIso8601String()
+                          .substring(0, 10),
+                    ),
+                  );
+
+                  await store.save();
+
+                  if (context.mounted) {
+                    Navigator.pop(context);
+                  }
+                },
+                child: const Text('إضافة'),
+              ),
+            ],
+          );
+        },
+      );
+    },
+  );
+
+  descriptionController.dispose();
+}
+
+// ============================================================
+// UI COMPONENTS
+// ============================================================
+
+class StatCard extends StatelessWidget {
+  final String title;
+  final String value;
+  final IconData icon;
+
+  const StatCard({
+    super.key,
+    required this.title,
+    required this.value,
+    required this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment:
+              CrossAxisAlignment.start,
+          mainAxisAlignment:
+              MainAxisAlignment.spaceBetween,
+          children: [
+            CircleAvatar(
+              child: Icon(icon),
             ),
-          ...tasks.map(
-            (task) => TaskCompactCard(
-              store: widget.store,
-              task: task,
-              onChanged: () {
-                setState(() {});
-              },
+            Text(
+              value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
             ),
-          ),
-          const SizedBox(
-            height: 18,
-          ),
-          const SectionTitle(
-            icon: Icons.timeline,
-            title: 'Timeline',
-          ),
-          const SizedBox(
-            height: 8,
-          ),
-          if (activities.isEmpty)
-            const EmptyCard(
-              text:
-                  'لا توجد أنشطة مسجلة.',
+            Text(
+              title,
+              style: TextStyle(
+                color: Colors.grey.shade700,
+              ),
             ),
-          ...activities.reversed.map(
-            (activity) =>
-                ActivityCard(
-              activity: activity,
-            ),
-          ),
-          const SizedBox(
-            height: 80,
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 }
 
-class InfoRow extends StatelessWidget {
+class SectionTitle extends StatelessWidget {
+  final String title;
+  final IconData icon;
+
+  const SectionTitle({
+    super.key,
+    required this.title,
+    required this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, size: 21),
+        const SizedBox(width: 8),
+        Text(
+          title,
+          style: const TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class InsightRow extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String value;
+
+  const InsightRow({
+    super.key,
+    required this.icon,
+    required this.title,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            title,
+            style: const TextStyle(
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        Flexible(
+          child: Text(
+            value,
+            textAlign: TextAlign.end,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class DetailRow extends StatelessWidget {
   final String label;
   final String value;
 
-  const InfoRow({
+  const DetailRow({
     super.key,
     required this.label,
     required this.value,
@@ -1444,1029 +2537,284 @@ class InfoRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding:
-          const EdgeInsets.only(
-        bottom: 9,
-      ),
+      padding: const EdgeInsets.only(bottom: 12),
       child: Row(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 105,
+            width: 90,
             child: Text(
               label,
-              style:
-                  const TextStyle(
-                color: Colors.black54,
+              style: TextStyle(
+                color: Colors.grey.shade600,
               ),
             ),
           ),
           Expanded(
             child: Text(
-              value,
-              style:
-                  const TextStyle(
-                fontWeight:
-                    FontWeight.w600,
-              ),
+              value.isEmpty ? '-' : value,
+              textAlign: TextAlign.end,
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class MiniMetric extends StatelessWidget {
-  final String title;
-  final String value;
-
-  const MiniMetric({
-    super.key,
-    required this.title,
-    required this.value,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding:
-            const EdgeInsets.all(14),
-        child: Column(
-          children: [
-            Text(
-              value,
-              style:
-                  const TextStyle(
-                fontWeight:
-                    FontWeight.bold,
-                fontSize: 18,
-              ),
-            ),
-            const SizedBox(
-              height: 4,
-            ),
-            Text(
-              title,
-              style:
-                  const TextStyle(
-                color: Colors.black54,
-                fontSize: 12,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class EmptyCard extends StatelessWidget {
-  final String text;
-
-  const EmptyCard({
-    super.key,
-    required this.text,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding:
-            const EdgeInsets.all(18),
-        child: Center(
-          child: Text(
-            text,
-            style:
-                const TextStyle(
-              color: Colors.black54,
-            ),
-          ),
-        ),
       ),
     );
   }
 }
 
 class ActivityCard extends StatelessWidget {
-  final Map<String, dynamic> activity;
+  final Activity activity;
 
   const ActivityCard({
     super.key,
     required this.activity,
   });
 
-  IconData get icon {
-    switch (activity['type']) {
-      case 'مكالمة':
-        return Icons.phone;
-      case 'زيارة':
-        return Icons.location_on;
-      case 'اجتماع':
-        return Icons.groups;
-      case 'بريد':
-        return Icons.email;
-      default:
-        return Icons.notes;
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Card(
-      margin:
-          const EdgeInsets.only(
-        bottom: 10,
-      ),
+      margin: const EdgeInsets.only(bottom: 10),
       child: ListTile(
         leading: CircleAvatar(
-          child: Icon(icon),
+          child: Icon(activityIcon(activity.type)),
         ),
-        title: Text(
-          activity['title']
-              .toString(),
-          style:
-              const TextStyle(
-            fontWeight:
-                FontWeight.bold,
-          ),
-        ),
+        title: Text(activity.description),
         subtitle: Text(
-          activity['note']
-                  ?.toString() ??
-              '',
-        ),
-        trailing: Text(
-          shortDate(
-            activity['date']
-                ?.toString(),
-          ),
+          '${activity.customer} • ${activity.date}',
         ),
       ),
     );
   }
 }
 
-class OpportunityCompactCard
-    extends StatelessWidget {
-  final DemoStore store;
-  final Map<String, dynamic> opportunity;
-  final VoidCallback onChanged;
+class HealthScore extends StatelessWidget {
+  final int score;
+  final bool compact;
 
-  const OpportunityCompactCard({
+  const HealthScore({
     super.key,
-    required this.store,
-    required this.opportunity,
-    required this.onChanged,
+    required this.score,
+    this.compact = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      margin:
-          const EdgeInsets.only(
-        bottom: 10,
-      ),
-      child: ListTile(
-        title: Text(
-          opportunity['title']
-              .toString(),
-        ),
-        subtitle: Text(
-          '${opportunity['stage']} • ${opportunity['probability']}%',
-        ),
-        trailing: Text(
-          money(
-            opportunity['value']
-                as num,
-          ),
-          style:
-              const TextStyle(
-            fontWeight:
-                FontWeight.bold,
-          ),
-        ),
-        onTap: () async {
-          await Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) =>
-                  OpportunityDetailsPage(
-                store: store,
-                opportunityId:
-                    opportunity[
-                            'id']
-                        .toString(),
+    final label = score >= 80
+        ? 'Healthy'
+        : score >= 60
+            ? 'Watch'
+            : 'At Risk';
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          width: compact ? 36 : 70,
+          height: compact ? 36 : 70,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              CircularProgressIndicator(
+                value: score / 100,
+                strokeWidth: compact ? 4 : 7,
               ),
-            ),
-          );
-
-          onChanged();
-        },
-      ),
-    );
-  }
-}
-
-class TaskCompactCard
-    extends StatelessWidget {
-  final DemoStore store;
-  final Map<String, dynamic> task;
-  final VoidCallback onChanged;
-
-  const TaskCompactCard({
-    super.key,
-    required this.store,
-    required this.task,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      margin:
-          const EdgeInsets.only(
-        bottom: 10,
-      ),
-      child: ListTile(
-        leading: Icon(
-          task['priority'] == 'عالية'
-              ? Icons.priority_high
-              : Icons.task_alt,
-          color:
-              task['priority'] == 'عالية'
-                  ? dangerColor
-                  : primaryColor,
-        ),
-        title: Text(
-          task['title']
-              .toString(),
-        ),
-        subtitle: Text(
-          '${task['status']} • ${shortDate(task['dueDate']?.toString())}',
-        ),
-        trailing:
-            isOverdue(
-              task['dueDate']
-                  ?.toString(),
-            ) &&
-                    task['status'] !=
-                        'مكتملة'
-                ? const Icon(
-                    Icons.warning_amber,
-                    color:
-                        dangerColor,
-                  )
-                : null,
-        onTap: () async {
-          await showTaskDialog(
-            context,
-            store,
-            existing: task,
-          );
-
-          onChanged();
-        },
-      ),
-    );
-  }
-}                        .customers
-                        .map(
-                      (customer) =>
-                          DropdownMenuItem(
-                        value:
-                            customer['id']
-                                .toString(),
-                        child: Text(
-                          customer['name']
-                              .toString(),
-                          overflow:
-                              TextOverflow.ellipsis,
-                        ),
-                      ),
-                    )
-                        .toList(),
-                    onChanged:
-                        (value) {
-                      setDialogState(() {
-                        customerId =
-                            value;
-                      });
-                    },
-                    decoration:
-                        const InputDecoration(
-                      labelText:
-                          'العميل',
-                    ),
-                  ),
-                  const SizedBox(
-                    height: 10,
-                  ),
-                  TextField(
-                    controller: title,
-                    decoration:
-                        const InputDecoration(
-                      labelText:
-                          'اسم الفرصة',
-                    ),
-                  ),
-                  const SizedBox(
-                    height: 10,
-                  ),
-                  TextField(
-                    controller: value,
-                    keyboardType:
-                        const TextInputType
-                            .numberWithOptions(
-                          decimal: true,
-                        ),
-                    decoration:
-                        const InputDecoration(
-                      labelText:
-                          'قيمة الفرصة',
-                    ),
-                  ),
-                  const SizedBox(
-                    height: 10,
-                  ),
-                  TextField(
-                    controller:
-                        probability,
-                    keyboardType:
-                        TextInputType.number,
-                    decoration:
-                        const InputDecoration(
-                      labelText:
-                          'احتمال الإغلاق %',
-                    ),
-                  ),
-                  const SizedBox(
-                    height: 10,
-                  ),
-                  DropdownButtonFormField<
-                      String>(
-                    initialValue:
-                        stage,
-                    items:
-                        opportunityStages
-                            .map(
-                      (item) =>
-                          DropdownMenuItem(
-                        value: item,
-                        child:
-                            Text(item),
-                      ),
-                    ).toList(),
-                    onChanged:
-                        (value) {
-                      if (value == null) {
-                        return;
-                      }
-
-                      setDialogState(() {
-                        stage = value;
-                      });
-                    },
-                    decoration:
-                        const InputDecoration(
-                      labelText:
-                          'مرحلة البيع',
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () =>
-                    Navigator.pop(
-                  dialogContext,
+              Text(
+                '$score',
+                style: TextStyle(
+                  fontSize: compact ? 11 : 16,
+                  fontWeight: FontWeight.bold,
                 ),
-                child:
-                    const Text('إلغاء'),
-              ),
-              FilledButton(
-                onPressed: () async {
-                  final parsedValue =
-                      double.tryParse(
-                    value.text
-                        .trim(),
-                  );
-
-                  final parsedProbability =
-                      int.tryParse(
-                    probability.text
-                        .trim(),
-                  );
-
-                  if (title.text
-                          .trim()
-                          .isEmpty ||
-                      customerId == null ||
-                      parsedValue == null ||
-                      parsedProbability ==
-                          null) {
-                    return;
-                  }
-
-                  final item = {
-                    'id': existing?[
-                            'id'] ??
-                        store.newId(
-                          'opportunity',
-                        ),
-                    'customerId':
-                        customerId,
-                    'title':
-                        title.text.trim(),
-                    'value':
-                        parsedValue,
-                    'probability':
-                        parsedProbability
-                            .clamp(0, 100),
-                    'stage': stage,
-                    'expectedClose':
-                        existing?[
-                                'expectedClose'] ??
-                            DateTime.now()
-                                .add(
-                              const Duration(
-                                days: 30,
-                              ),
-                            )
-                                .toIso8601String()
-                                .substring(
-                                  0,
-                                  10,
-                                ),
-                  };
-
-                  if (existing == null) {
-                    await store
-                        .addOpportunity(
-                      item,
-                    );
-                  } else {
-                    await store
-                        .updateOpportunity(
-                      item,
-                    );
-                  }
-
-                  if (dialogContext
-                      .mounted) {
-                    Navigator.pop(
-                      dialogContext,
-                    );
-                  }
-                },
-                child:
-                    const Text('حفظ'),
               ),
             ],
-          );
-        },
+          ),
+        ),
+        if (!compact) ...[
+          const SizedBox(width: 12),
+          Text(label),
+        ],
+      ],
+    );
+  }
+}
+
+class PriorityBadge extends StatelessWidget {
+  final String priority;
+
+  const PriorityBadge({
+    super.key,
+    required this.priority,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 10,
+        vertical: 5,
+      ),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        color: priority == 'High'
+            ? Colors.red.shade50
+            : priority == 'Medium'
+                ? Colors.orange.shade50
+                : Colors.green.shade50,
+      ),
+      child: Text(
+        priorityName(priority),
+        style: const TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
+  }
+}
+
+// ============================================================
+// HELPERS
+// ============================================================
+
+String formatMoney(double value) {
+  if (value >= 1000000) {
+    return '${(value / 1000000).toStringAsFixed(1)}M';
+  }
+
+  if (value >= 1000) {
+    return '${(value / 1000).toStringAsFixed(0)}K';
+  }
+
+  return value.toStringAsFixed(0);
+}
+
+String averageHealth(DemoStore store) {
+  if (store.customers.isEmpty) {
+    return '0';
+  }
+
+  final total = store.customers.fold<int>(
+    0,
+    (sum, customer) => sum + customer.healthScore,
+  );
+
+  return '${(total / store.customers.length).round()}/100';
+}
+
+String nextBestAction(DemoStore store) {
+  final risky = store.customers
+      .where((e) => e.healthScore < 60)
+      .toList();
+
+  if (risky.isNotEmpty) {
+    return 'التواصل مع ${risky.first.company} لأن Customer Health Score منخفض ويحتاج متابعة.';
+  }
+
+  final openHighPriority = store.tasks
+      .where(
+        (e) =>
+            e.priority == 'High' &&
+            e.status != 'Completed',
+      )
+      .toList();
+
+  if (openHighPriority.isNotEmpty) {
+    return 'تنفيذ المهمة ذات الأولوية العالية: ${openHighPriority.first.title}.';
+  }
+
+  final negotiation = store.opportunities
+      .where((e) => e.stage == 'Negotiation')
+      .toList();
+
+  if (negotiation.isNotEmpty) {
+    return 'متابعة فرصة ${negotiation.first.title} مع ${negotiation.first.customer} لدفعها نحو الإغلاق.';
+  }
+
+  return 'مراجعة العملاء النشطين وتحديد فرص البيع المتقاطع والبيع الإضافي.';
+}
+
+String stageName(String stage) {
+  switch (stage) {
+    case 'Lead':
+      return 'Lead — عميل محتمل';
+    case 'Qualified':
+      return 'Qualified — مؤهل';
+    case 'Proposal':
+      return 'Proposal — عرض';
+    case 'Negotiation':
+      return 'Negotiation — تفاوض';
+    case 'Won':
+      return 'Won — مغلق';
+    default:
+      return stage;
+  }
+}
+
+String taskStatusName(String status) {
+  switch (status) {
+    case 'Open':
+      return 'مفتوحة';
+    case 'In Progress':
+      return 'قيد التنفيذ';
+    case 'Completed':
+      return 'مكتملة';
+    default:
+      return status;
+  }
+}
+
+String priorityName(String priority) {
+  switch (priority) {
+    case 'High':
+      return 'عالية';
+    case 'Medium':
+      return 'متوسطة';
+    case 'Low':
+      return 'منخفضة';
+    default:
+      return priority;
+  }
+}
+
+IconData activityIcon(String type) {
+  switch (type) {
+    case 'Call':
+      return Icons.phone;
+    case 'Meeting':
+      return Icons.groups;
+    case 'Email':
+      return Icons.email;
+    default:
+      return Icons.note;
+  }
+}
+
+Future<bool> confirmDelete(BuildContext context) async {
+  final result = await showDialog<bool>(
+    context: context,
+    builder: (context) {
+      return AlertDialog(
+        title: const Text('حذف العميل؟'),
+        content: const Text(
+          'سيتم حذف العميل من بيانات Demo المحلية.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(
+              context,
+              false,
+            ),
+            child: const Text('إلغاء'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(
+              context,
+              true,
+            ),
+            child: const Text('حذف'),
+          ),
+        ],
       );
     },
   );
 
-  title.dispose();
-  value.dispose();
-  probability.dispose();
-}
-
-class OpportunityDetailsPage
-    extends StatefulWidget {
-  final DemoStore store;
-  final String opportunityId;
-
-  const OpportunityDetailsPage({
-    super.key,
-    required this.store,
-    required this.opportunityId,
-  });
-
-  @override
-  State<OpportunityDetailsPage>
-      createState() =>
-          _OpportunityDetailsPageState();
-}
-
-class _OpportunityDetailsPageState
-    extends State<
-        OpportunityDetailsPage> {
-  Future<void> changeStage(
-    String stage,
-  ) async {
-    final opportunities =
-        widget.store.opportunities;
-
-    final index =
-        opportunities.indexWhere(
-      (item) =>
-          item['id'] ==
-          widget.opportunityId,
-    );
-
-    if (index < 0) {
-      return;
-    }
-
-    final updated = {
-      ...opportunities[index],
-      'stage': stage,
-    };
-
-    await widget.store
-        .updateOpportunity(
-      updated,
-    );
-
-    if (mounted) {
-      setState(() {});
-    }
-  }
-
-  Future<void> edit() async {
-    final opportunity =
-        widget.store.opportunities
-            .cast<Map<String, dynamic>?>()
-            .firstWhere(
-              (item) =>
-                  item?['id'] ==
-                  widget.opportunityId,
-              orElse: () => null,
-            );
-
-    if (opportunity == null) {
-      return;
-    }
-
-    await showOpportunityDialog(
-      context,
-      widget.store,
-      existing: opportunity,
-    );
-
-    if (mounted) {
-      setState(() {});
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    Map<String, dynamic>? opportunity;
-
-    for (final item
-        in widget.store.opportunities) {
-      if (item['id'] ==
-          widget.opportunityId) {
-        opportunity = item;
-        break;
-      }
-    }
-
-    if (opportunity == null) {
-      return Scaffold(
-        appBar: AppBar(),
-        body: const Center(
-          child: Text(
-            'الفرصة غير موجودة',
-          ),
-        ),
-      );
-    }
-
-    final value =
-        (opportunity['value']
-                as num)
-            .toDouble();
-
-    final probability =
-        (opportunity[
-                'probability']
-            as num)
-            .toDouble();
-
-    final weighted =
-        value *
-            probability /
-            100;
-
-    return Scaffold(
-      appBar: AppBar(
-        title:
-            const Text('تفاصيل الفرصة'),
-        actions: [
-          IconButton(
-            onPressed: edit,
-            icon:
-                const Icon(Icons.edit),
-          ),
-        ],
-      ),
-      body: ListView(
-        padding:
-            const EdgeInsets.all(16),
-        children: [
-          Card(
-            child: Padding(
-              padding:
-                  const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment:
-                    CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    opportunity[
-                            'title']
-                        .toString(),
-                    style:
-                        const TextStyle(
-                      fontSize: 23,
-                      fontWeight:
-                          FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(
-                    height: 8,
-                  ),
-                  Text(
-                    widget.store
-                        .customerName(
-                      opportunity[
-                              'customerId']
-                          .toString(),
-                    ),
-                    style:
-                        const TextStyle(
-                      color:
-                          Colors.black54,
-                    ),
-                  ),
-                  const SizedBox(
-                    height: 20,
-                  ),
-                  Row(
-                    children: [
-                      Expanded(
-                        child:
-                            MiniStat(
-                          title:
-                              'القيمة',
-                          value:
-                              money(value),
-                        ),
-                      ),
-                      const SizedBox(
-                        width: 10,
-                      ),
-                      Expanded(
-                        child:
-                            MiniStat(
-                          title:
-                              'الاحتمال',
-                          value:
-                              '${probability.toInt()}%',
-                        ),
-                      ),
-                      const SizedBox(
-                        width: 10,
-                      ),
-                      Expanded(
-                        child:
-                            MiniStat(
-                          title:
-                              'Weighted',
-                          value:
-                              money(weighted),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(
-            height: 18,
-          ),
-          const SectionTitle(
-            icon:
-                Icons.alt_route,
-            title:
-                'مسار الفرصة',
-          ),
-          const SizedBox(
-            height: 10,
-          ),
-          ...opportunityStages.map(
-            (stage) {
-              final selected =
-                  opportunity![
-                          'stage'] ==
-                      stage;
-
-              return Card(
-                margin:
-                    const EdgeInsets
-                        .only(
-                  bottom: 8,
-                ),
-                child: ListTile(
-                  leading:
-                      CircleAvatar(
-                    backgroundColor:
-                        selected
-                            ? primaryColor
-                            : Colors.black12,
-                    child: Icon(
-                      selected
-                          ? Icons.check
-                          : Icons.circle_outlined,
-                      color: selected
-                          ? Colors.white
-                          : Colors.black54,
-                    ),
-                  ),
-                  title:
-                      Text(stage),
-                  trailing:
-                      selected
-                          ? const Text(
-                              'الحالية',
-                              style:
-                                  TextStyle(
-                                color:
-                                    primaryColor,
-                                fontWeight:
-                                    FontWeight.bold,
-                              ),
-                            )
-                          : null,
-                  onTap: () =>
-                      changeStage(
-                    stage,
-                  ),
-                ),
-              );
-            },
-          ),
-          const SizedBox(
-            height: 10,
-          ),
-          Card(
-            child: Padding(
-              padding:
-                  const EdgeInsets.all(18),
-              child: Column(
-                crossAxisAlignment:
-                    CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'تاريخ الإغلاق المتوقع',
-                    style:
-                        TextStyle(
-                      color:
-                          Colors.black54,
-                    ),
-                  ),
-                  const SizedBox(
-                    height: 6,
-                  ),
-                  Text(
-                    shortDate(
-                      opportunity[
-                              'expectedClose']
-                          ?.toString(),
-                    ),
-                    style:
-                        const TextStyle(
-                      fontSize: 17,
-                      fontWeight:
-                          FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class TasksPage
-    extends StatefulWidget {
-  final DemoStore store;
-  final VoidCallback onChanged;
-
-  const TasksPage({
-    super.key,
-    required this.store,
-    required this.onChanged,
-  });
-
-  @override
-  State<TasksPage> createState() =>
-      _TasksPageState();
-}
-
-class _TasksPageState
-    extends State<TasksPage> {
-  String filter = 'الكل';
-
-  Future<void> addTask() async {
-    await showTaskDialog(
-      context,
-      widget.store,
-    );
-
-    setState(() {});
-    widget.onChanged();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final filters = [
-      'الكل',
-      ...taskStatuses,
-    ];
-
-    final list =
-        filter == 'الكل'
-            ? widget.store.tasks
-            : widget.store.tasks
-                .where(
-                  (t) =>
-                      t['status'] ==
-                      filter,
-                )
-                .toList();
-
-    return Scaffold(
-      appBar: AppBar(
-        title:
-            const Text('المهام'),
-        actions: [
-          IconButton(
-            onPressed: addTask,
-            icon:
-                const Icon(Icons.add_task),
-          ),
-        ],
-      ),
-      floatingActionButton:
-          FloatingActionButton.extended(
-        onPressed: addTask,
-        icon:
-            const Icon(Icons.add),
-        label:
-            const Text('مهمة'),
-      ),
-      body: ListView(
-        padding:
-            const EdgeInsets.all(16),
-        children: [
-          SizedBox(
-            height: 46,
-            child: ListView
-                .separated(
-              scrollDirection:
-                  Axis.horizontal,
-              itemCount:
-                  filters.length,
-              separatorBuilder:
-                  (_, __) =>
-                      const SizedBox(
-                width: 8,
-              ),
-              itemBuilder:
-                  (_, index) {
-                final item =
-                    filters[index];
-
-                return ChoiceChip(
-                  label:
-                      Text(item),
-                  selected:
-                      filter == item,
-                  onSelected:
-                      (_) {
-                    setState(() {
-                      filter = item;
-                    });
-                  },
-                );
-              },
-            ),
-          ),
-          const SizedBox(
-            height: 14,
-          ),
-          ...list.map(
-            (task) =>
-                TaskListCard(
-              store:
-                  widget.store,
-              task: task,
-              onChanged: () {
-                setState(() {});
-                widget.onChanged();
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class TaskListCard
-    extends StatelessWidget {
-  final DemoStore store;
-  final Map<String, dynamic> task;
-  final VoidCallback onChanged;
-
-  const TaskListCard({
-    super.key,
-    required this.store,
-    required this.task,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final overdue =
-        task['status'] !=
-                'مكتملة' &&
-            isOverdue(
-              task['dueDate']
-                  ?.toString(),
-            );
-
-    return Card(
-      margin:
-          const EdgeInsets.only(
-        bottom: 10,
-      ),
-      child: ListTile(
-        leading:
-            CircleAvatar(
-          backgroundColor:
-              overdue
-                  ? dangerColor.withValues(
-                      alpha: .1,
-                    )
-                  : primaryColor.withValues(
-                      alpha: .1,
-                    ),
-          child: Icon(
-            task['status'] ==
-                    'مكتملة'
-                ? Icons.check
-                : Icons.task_alt,
-            color: overdue
-                ? dangerColor
-                : primaryColor,
-          ),
-        ),
-        title: Text(
-          task['title']
-              .toString(),
-          style:
-              const TextStyle(
-            fontWeight:
-                FontWeight.bold,
-          ),
-        ),
-        subtitle: Text(
-          '${store.customerName(task['customerId'].toString())}\n'
-          '${task['status']} • ${task['priority']} • ${shortDate(task['dueDate']?.toString())}',
-        ),
-        isThreeLine: true,
-        trailing:
-            overdue
-                ? const Icon(
-                    Icons.warning_amber,
-                    color:
-                        dangerColor,
-                  )
-                : null,
-        onTap: () async {
-          await showTaskDialog(
-            context,
-            store,
-            existing: task,
-          );
-
-          onChanged();
-        },
-      ),
-    );
-  }
+  return result ?? false;
 }
