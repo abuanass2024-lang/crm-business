@@ -1,50 +1,1639 @@
 import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
-const apiBase = String.fromEnvironment('API_BASE_URL', defaultValue: 'http://10.0.2.2:3000/api');
+const apiBase = String.fromEnvironment(
+  'API_BASE_URL',
+  defaultValue: 'http://10.0.2.2:3000/api',
+);
 
 class ApiClient {
-  Future<String?> _token() async { final p=await SharedPreferences.getInstance(); return p.getString('accessToken'); }
-  Future<String?> _refresh() async { final p=await SharedPreferences.getInstance(); final rtk=p.getString('refreshToken'); if(rtk==null)return null; final r=await http.post(Uri.parse('$apiBase/auth/refresh'),headers:{'Content-Type':'application/json'},body:jsonEncode({'refreshToken':rtk})); if(r.statusCode>=400)return null; final d=jsonDecode(r.body); await p.setString('accessToken',d['accessToken']); await p.setString('refreshToken',d['refreshToken']); return d['accessToken']; }
-  Future<http.Response> request(String method,String path,{Map<String,dynamic>? body,bool retry=true}) async { var t=await _token(); final h={'Content-Type':'application/json',if(t!=null)'Authorization':'Bearer $t'}; final u=Uri.parse('$apiBase$path'); final b=body==null?null:jsonEncode(body); http.Response r; switch(method){case 'POST':r=await http.post(u,headers:h,body:b);break;case 'PATCH':r=await http.patch(u,headers:h,body:b);break;case 'DELETE':r=await http.delete(u,headers:h);break;default:r=await http.get(u,headers:h);} if(r.statusCode==401&&retry&&path!='/auth/refresh'){if(await _refresh()!=null)return request(method,path,body:body,retry:false);} return r; }
-  Future<dynamic> get(String p)=>_parse(request('GET',p)); Future<dynamic> post(String p,Map<String,dynamic>b)=>_parse(request('POST',p,body:b)); Future<dynamic> patch(String p,Map<String,dynamic>b)=>_parse(request('PATCH',p,body:b));
-  Future<dynamic> _parse(Future<http.Response> f) async {final r=await f; final d=r.body.isEmpty?{}:jsonDecode(r.body); if(r.statusCode>=400)throw Exception(d is Map?d['message']??'حدث خطأ':'حدث خطأ'); return d;}
+  Future<String?> _token() async {
+    final p = await SharedPreferences.getInstance();
+    return p.getString('accessToken');
+  }
+
+  Future<String?> _refresh() async {
+    final p = await SharedPreferences.getInstance();
+    final rtk = p.getString('refreshToken');
+
+    if (rtk == null || rtk.isEmpty) {
+      return null;
+    }
+
+    final r = await http.post(
+      Uri.parse('$apiBase/auth/refresh'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'refreshToken': rtk}),
+    );
+
+    if (r.statusCode >= 400) {
+      return null;
+    }
+
+    final d = jsonDecode(r.body);
+
+    await p.setString('accessToken', d['accessToken']);
+    await p.setString('refreshToken', d['refreshToken']);
+
+    return d['accessToken'];
+  }
+
+  Future<http.Response> request(
+    String method,
+    String path, {
+    Map<String, dynamic>? body,
+    bool retry = true,
+  }) async {
+    final t = await _token();
+
+    final headers = {
+      'Content-Type': 'application/json',
+      if (t != null) 'Authorization': 'Bearer $t',
+    };
+
+    final url = Uri.parse('$apiBase$path');
+    final encodedBody = body == null ? null : jsonEncode(body);
+
+    late http.Response response;
+
+    switch (method) {
+      case 'POST':
+        response = await http.post(
+          url,
+          headers: headers,
+          body: encodedBody,
+        );
+        break;
+
+      case 'PATCH':
+        response = await http.patch(
+          url,
+          headers: headers,
+          body: encodedBody,
+        );
+        break;
+
+      case 'DELETE':
+        response = await http.delete(
+          url,
+          headers: headers,
+        );
+        break;
+
+      default:
+        response = await http.get(
+          url,
+          headers: headers,
+        );
+    }
+
+    if (response.statusCode == 401 &&
+        retry &&
+        path != '/auth/refresh') {
+      final newToken = await _refresh();
+
+      if (newToken != null) {
+        return request(
+          method,
+          path,
+          body: body,
+          retry: false,
+        );
+      }
+    }
+
+    return response;
+  }
+
+  Future<dynamic> get(String path) {
+    return _parse(request('GET', path));
+  }
+
+  Future<dynamic> post(
+    String path,
+    Map<String, dynamic> body,
+  ) {
+    return _parse(
+      request(
+        'POST',
+        path,
+        body: body,
+      ),
+    );
+  }
+
+  Future<dynamic> patch(
+    String path,
+    Map<String, dynamic> body,
+  ) {
+    return _parse(
+      request(
+        'PATCH',
+        path,
+        body: body,
+      ),
+    );
+  }
+
+  Future<dynamic> _parse(Future<http.Response> future) async {
+    final response = await future;
+
+    final data = response.body.isEmpty
+        ? {}
+        : jsonDecode(response.body);
+
+    if (response.statusCode >= 400) {
+      throw Exception(
+        data is Map
+            ? data['message'] ?? 'حدث خطأ'
+            : 'حدث خطأ',
+      );
+    }
+
+    return data;
+  }
 }
-final api=ApiClient();
 
-void main()=>runApp(const CrmApp());
-class CrmApp extends StatelessWidget{const CrmApp({super.key});@override Widget build(BuildContext c)=>MaterialApp(debugShowCheckedModeBanner:false,title:'CRM Business',theme:ThemeData(useMaterial3:true,colorSchemeSeed:Colors.indigo),home:const StartupPage());}
+final api = ApiClient();
 
-class StartupPage extends StatefulWidget{const StartupPage({super.key});@override State<StartupPage>createState()=>_StartupPageState();}
-class _StartupPageState extends State<StartupPage>{@override void initState(){super.initState();_restore();}Future<void>_restore()async{final s=await SharedPreferences.getInstance();final t=s.getString('accessToken');if(t==null||t.isEmpty){if(mounted)Navigator.pushReplacement(context,MaterialPageRoute(builder:(_)=>const LoginPage()));return;}try{await api.get('/auth/me');if(mounted)Navigator.pushReplacement(context,MaterialPageRoute(builder:(_)=>const HomePage()));}catch(_){await s.clear();if(mounted)Navigator.pushReplacement(context,MaterialPageRoute(builder:(_)=>const LoginPage()));}}@override Widget build(BuildContext c)=>const Scaffold(body:Center(child:CircularProgressIndicator()));}
+void main() {
+  runApp(const CrmApp());
+}
 
-class LoginPage extends StatefulWidget{const LoginPage({super.key});@override State<LoginPage>createState()=>_LoginPageState();}
-class _LoginPageState extends State<LoginPage>{final e=TextEditingController(),p=TextEditingController();bool loading=false;String? err;Future<void>go()async{setState(()=>loading=true);try{final d=await api.post('/auth/login',{'email':e.text.trim(),'password':p.text});final s=await SharedPreferences.getInstance();await s.setString('accessToken',d['accessToken']);await s.setString('refreshToken',d['refreshToken']);await s.setString('companyName',d['company']['name']);if(mounted)Navigator.pushReplacement(context,MaterialPageRoute(builder:(_)=>const HomePage()));}catch(x){if(mounted)setState(()=>err=x.toString().replaceFirst('Exception: ',''));}finally{if(mounted)setState(()=>loading=false);}}@override Widget build(BuildContext c)=>Scaffold(body:SafeArea(child:Center(child:SingleChildScrollView(padding:const EdgeInsets.all(24),child:ConstrainedBox(constraints:const BoxConstraints(maxWidth:430),child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[const Icon(Icons.business_center,size:70),const SizedBox(height:8),Text('CRM Business',textAlign:TextAlign.center,style:TextStyle(fontSize:30,fontWeight:FontWeight.bold)),const SizedBox(height:30),TextField(controller:e,keyboardType:TextInputType.emailAddress,decoration:const InputDecoration(labelText:'البريد الإلكتروني',border:OutlineInputBorder())),const SizedBox(height:12),TextField(controller:p,obscureText:true,decoration:const InputDecoration(labelText:'كلمة المرور',border:OutlineInputBorder())),if(err!=null)Padding(padding:const EdgeInsets.only(top:10),child:Text(err!,style:const TextStyle(color:Colors.red))),const SizedBox(height:18),FilledButton(onPressed:loading?null:go,child:Text(loading?'جاري الدخول...':'تسجيل الدخول')),const SizedBox(height:8),OutlinedButton(onPressed:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>const RegisterPage())),child:const Text('إنشاء شركة جديدة'))])))));}
+class CrmApp extends StatelessWidget {
+  const CrmApp({super.key});
 
-class RegisterPage extends StatefulWidget{const RegisterPage({super.key});@override State<RegisterPage>createState()=>_RegisterPageState();}
-class _RegisterPageState extends State<RegisterPage>{final c=TextEditingController(),n=TextEditingController(),e=TextEditingController(),p=TextEditingController();bool loading=false;String?err;Future<void>go()async{setState(()=>loading=true);try{final d=await api.post('/auth/register-company',{'companyName':c.text.trim(),'ownerName':n.text.trim(),'email':e.text.trim(),'password':p.text});final s=await SharedPreferences.getInstance();await s.setString('accessToken',d['accessToken']);await s.setString('refreshToken',d['refreshToken']);await s.setString('companyName',d['company']['name']);if(mounted)Navigator.pushAndRemoveUntil(context,MaterialPageRoute(builder:(_)=>const HomePage()),(_)=>false);}catch(x){if(mounted)setState(()=>err=x.toString().replaceFirst('Exception: ',''));}finally{if(mounted)setState(()=>loading=false);}}@override Widget build(BuildContext x)=>Scaffold(appBar:AppBar(title:const Text('إنشاء شركة')),body:ListView(padding:const EdgeInsets.all(20),children:[TextField(controller:c,decoration:const InputDecoration(labelText:'اسم الشركة',border:OutlineInputBorder())),const SizedBox(height:12),TextField(controller:n,decoration:const InputDecoration(labelText:'اسم المسؤول',border:OutlineInputBorder())),const SizedBox(height:12),TextField(controller:e,decoration:const InputDecoration(labelText:'البريد الإلكتروني',border:OutlineInputBorder())),const SizedBox(height:12),TextField(controller:p,obscureText:true,decoration:const InputDecoration(labelText:'كلمة المرور',border:OutlineInputBorder())),if(err!=null)Text(err!,style:const TextStyle(color:Colors.red)),const SizedBox(height:18),FilledButton(onPressed:loading?null:go,child:Text(loading?'جاري الإنشاء...':'إنشاء الشركة'))]));}
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      title: 'CRM Business',
+      theme: ThemeData(
+        useMaterial3: true,
+        colorSchemeSeed: Colors.indigo,
+      ),
+      home: const StartupPage(),
+    );
+  }
+}
 
-class HomePage extends StatefulWidget{const HomePage({super.key});@override State<HomePage>createState()=>_HomePageState();}
-class _HomePageState extends State<HomePage>{int tab=0;final pages=const[DashboardPage(),CustomersPage(),OpportunitiesPage(),TasksPage(),MorePage()];@override Widget build(BuildContext c)=>Scaffold(body:IndexedStack(index:tab,children:pages),bottomNavigationBar:NavigationBar(selectedIndex:tab,onDestinationSelected:(i)=>setState(()=>tab=i),destinations:const[NavigationDestination(icon:Icon(Icons.dashboard_outlined),selectedIcon:Icon(Icons.dashboard),label:'الرئيسية'),NavigationDestination(icon:Icon(Icons.people_outline),selectedIcon:Icon(Icons.people),label:'العملاء'),NavigationDestination(icon:Icon(Icons.trending_up),label:'الفرص'),NavigationDestination(icon:Icon(Icons.task_alt),label:'المهام'),NavigationDestination(icon:Icon(Icons.more_horiz),label:'المزيد')]));}
+// ============================================================
+// STARTUP
+// ============================================================
 
-class DashboardPage extends StatefulWidget{const DashboardPage({super.key});@override State<DashboardPage>createState()=>_DashboardPageState();}
-class _DashboardPageState extends State<DashboardPage>{Map<String,dynamic>?d;bool loading=true;String company='';Future<void>load()async{final s=await SharedPreferences.getInstance();company=s.getString('companyName')??'';try{final x=await api.get('/dashboard');if(mounted)setState(()=>d=Map<String,dynamic>.from(x));}catch(_){}finally{if(mounted)setState(()=>loading=false);}}@override void initState(){super.initState();load();}@override Widget build(BuildContext c)=>Scaffold(appBar:AppBar(title:const Text('CRM Business'),actions:[IconButton(onPressed:load,icon:const Icon(Icons.refresh))]),body:RefreshIndicator(onRefresh:load,child:ListView(padding:const EdgeInsets.all(16),children:[Text('مرحباً 👋',style:Theme.of(c).textTheme.headlineSmall),Text(company,style:Theme.of(c).textTheme.titleMedium),const SizedBox(height:18),if(loading)const LinearProgressIndicator(),Wrap(spacing:10,runSpacing:10,children:[Metric('العملاء',d?['customers']??'—',Icons.people),Metric('الفرص المفتوحة',d?['openOpportunities']??'—',Icons.trending_up),Metric('المهام',d?['tasks']??'—',Icons.task_alt),Metric('المتأخرة',d?['tasksOverdue']??'—',Icons.warning_amber)]),const SizedBox(height:18),Card(child:ListTile(leading:const Icon(Icons.insights),title:const Text('التقارير والتحليلات'),subtitle:const Text('المبيعات، العملاء، المهام والأنشطة'),trailing:const Icon(Icons.chevron_right),onTap:()=>Navigator.push(c,MaterialPageRoute(builder:(_)=>const AnalyticsPage())))),Card(child:ListTile(leading:const Icon(Icons.card_membership),title:const Text('الاشتراك'),subtitle:const Text('الخطة الحالية والاستخدام'),trailing:const Icon(Icons.chevron_right),onTap:()=>Navigator.push(c,MaterialPageRoute(builder:(_)=>const SubscriptionPage()))))])));}
-class Metric extends StatelessWidget{final String title;final dynamic value;final IconData icon;const Metric(this.title,this.value,this.icon,{super.key});@override Widget build(BuildContext c)=>SizedBox(width:MediaQuery.sizeOf(c).width/2-22,child:Card(child:Padding(padding:const EdgeInsets.all(14),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Icon(icon),const SizedBox(height:8),Text(title),Text('$value',style:const TextStyle(fontSize:24,fontWeight:FontWeight.bold))]))));}
+class StartupPage extends StatefulWidget {
+  const StartupPage({super.key});
 
-class CustomersPage extends StatefulWidget{const CustomersPage({super.key});@override State<CustomersPage>createState()=>_CustomersPageState();}
-class _CustomersPageState extends State<CustomersPage>{List list=[];bool loading=true;final q=TextEditingController();Future<void>load()async{setState(()=>loading=true);try{final x=await api.get('/customers${q.text.trim().isEmpty?'':'?q=${Uri.encodeQueryComponent(q.text.trim())}'}');if(mounted)setState(()=>list=List.from(x));}catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('$e')));}finally{if(mounted)setState(()=>loading=false);}}@override void initState(){super.initState();load();}@override Widget build(BuildContext c)=>Scaffold(appBar:AppBar(title:const Text('العملاء'),actions:[IconButton(onPressed:load,icon:const Icon(Icons.refresh))]),body:Column(children:[Padding(padding:const EdgeInsets.all(12),child:TextField(controller:q,onSubmitted:(_)=>load(),decoration:InputDecoration(prefixIcon:const Icon(Icons.search),hintText:'بحث عن عميل',border:const OutlineInputBorder(),suffixIcon:IconButton(onPressed:load,icon:const Icon(Icons.search))))),Expanded(child:loading?const Center(child:CircularProgressIndicator()):list.isEmpty?const Center(child:Text('لا يوجد عملاء')):ListView.separated(itemCount:list.length,separatorBuilder:(_,__)=>const Divider(height:1),itemBuilder:(c,i){final x=Map<String,dynamic>.from(list[i]);return ListTile(leading:const CircleAvatar(child:Icon(Icons.person)),title:Text('${x['name']??''}'),subtitle:Text('${x['phone']??x['email']??'—'}'),onTap:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>Customer360Page(customer:x))));}))]));}
-class Customer360Page extends StatelessWidget{final Map<String,dynamic>customer;const Customer360Page({super.key,required this.customer});@override Widget build(BuildContext c)=>Scaffold(appBar:AppBar(title:const Text('Customer 360')),body:ListView(padding:const EdgeInsets.all(16),children:[Text('${customer['name']??''}',style:Theme.of(c).textTheme.headlineSmall),if(customer['companyName']!=null)Text('${customer['companyName']}'),const SizedBox(height:12),Card(child:ListTile(leading:const Icon(Icons.phone),title:Text('${customer['phone']??'لا يوجد هاتف'}'))),Card(child:ListTile(leading:const Icon(Icons.email),title:Text('${customer['email']??'لا يوجد بريد'}')))]));}
+  @override
+  State<StartupPage> createState() => _StartupPageState();
+}
 
-class OpportunitiesPage extends StatefulWidget{const OpportunitiesPage({super.key});@override State<OpportunitiesPage>createState()=>_OpportunitiesPageState();}
-class _OpportunitiesPageState extends State<OpportunitiesPage>{Map<String,dynamic>?d;bool loading=true;Future<void>load()async{setState(()=>loading=true);try{final x=await api.get('/opportunities/pipeline');if(mounted)setState(()=>d=Map<String,dynamic>.from(x));}catch(e){}finally{if(mounted)setState(()=>loading=false);}}@override void initState(){super.initState();load();}@override Widget build(BuildContext c){final stages=Map<String,dynamic>.from((d?['stages'] as Map?)??{});return Scaffold(appBar:AppBar(title:const Text('Sales Pipeline'),actions:[IconButton(onPressed:load,icon:const Icon(Icons.refresh))]),body:loading?const Center(child:CircularProgressIndicator()):ListView(padding:const EdgeInsets.all(16),children:[Card(child:ListTile(title:const Text('Pipeline Value'),trailing:Text('${d?['pipelineValue']??0}'))),Card(child:ListTile(title:const Text('Weighted Pipeline'),trailing:Text('${d?['weightedPipeline']??0}'))),...['LEAD','QUALIFIED','MEETING','PROPOSAL','NEGOTIATION','WON','LOST'].map((k){final x=Map<String,dynamic>.from((stages[k] as Map?)??{});return Card(child:ListTile(leading:CircleAvatar(child:Text('${x['count']??0}')),title:Text(k),subtitle:Text('Value: ${x['value']??0}')));})]));}}
+class _StartupPageState extends State<StartupPage> {
+  @override
+  void initState() {
+    super.initState();
+    _restore();
+  }
 
-class TasksPage extends StatefulWidget{const TasksPage({super.key});@override State<TasksPage>createState()=>_TasksPageState();}
-class _TasksPageState extends State<TasksPage>{List list=[];bool loading=true;Future<void>load()async{setState(()=>loading=true);try{final x=await api.get('/tasks');if(mounted)setState(()=>list=List.from(x));}catch(_){}finally{if(mounted)setState(()=>loading=false);}}@override void initState(){super.initState();load();}@override Widget build(BuildContext c)=>Scaffold(appBar:AppBar(title:const Text('مهام المتابعة'),actions:[IconButton(onPressed:load,icon:const Icon(Icons.refresh))]),body:loading?const Center(child:CircularProgressIndicator()):ListView.separated(itemCount:list.length,separatorBuilder:(_,__)=>const Divider(),itemBuilder:(c,i){final x=Map<String,dynamic>.from(list[i]);return ListTile(leading:Icon(x['status']=='COMPLETED'?Icons.check_circle:Icons.radio_button_unchecked),title:Text('${x['title']??''}'),subtitle:Text('${x['priority']??''} • ${x['status']??''}'));}));}
+  Future<void> _restore() async {
+    final storage = await SharedPreferences.getInstance();
+    final token = storage.getString('accessToken');
 
-class AnalyticsPage extends StatefulWidget{const AnalyticsPage({super.key});@override State<AnalyticsPage>createState()=>_AnalyticsPageState();}
-class _AnalyticsPageState extends State<AnalyticsPage>{Map<String,dynamic>?d;bool loading=true;@override void initState(){super.initState();load();}Future<void>load()async{try{final x=await api.get('/analytics/dashboard');if(mounted)setState(()=>d=Map<String,dynamic>.from(x));}finally{if(mounted)setState(()=>loading=false);}}@override Widget build(BuildContext c)=>Scaffold(appBar:AppBar(title:const Text('التقارير والتحليلات')),body:loading?const Center(child:CircularProgressIndicator()):ListView(padding:const EdgeInsets.all(16),children:[Text('ملخص الأداء',style:Theme.of(c).textTheme.titleLarge),...(d??{}).entries.map((e)=>Card(child:ListTile(title:Text(e.key),trailing:Text('${e.value}'))))]));}
-class SubscriptionPage extends StatefulWidget{const SubscriptionPage({super.key});@override State<SubscriptionPage>createState()=>_SubscriptionPageState();}
-class _SubscriptionPageState extends State<SubscriptionPage>{Map<String,dynamic>?d;bool loading=true;@override void initState(){super.initState();load();}Future<void>load()async{try{final x=await api.get('/subscriptions/current');if(mounted)setState(()=>d=Map<String,dynamic>.from(x));}finally{if(mounted)setState(()=>loading=false);}}@override Widget build(BuildContext c)=>Scaffold(appBar:AppBar(title:const Text('الاشتراك')),body:loading?const Center(child:CircularProgressIndicator()):ListView(padding:const EdgeInsets.all(16),children:[Card(child:ListTile(title:const Text('الخطة الحالية'),subtitle:Text('${d?['plan']?['name']??d?['planName']??'—'}'))),Card(child:ListTile(title:const Text('الحالة'),subtitle:Text('${d?['status']??'—'}')))]));}
-class MorePage extends StatelessWidget{const MorePage({super.key});Future<void>logout(BuildContext c)async{final s=await SharedPreferences.getInstance();await s.clear();if(c.mounted)Navigator.pushAndRemoveUntil(c,MaterialPageRoute(builder:(_)=>const LoginPage()),(_)=>false);}@override Widget build(BuildContext c)=>Scaffold(appBar:AppBar(title:const Text('المزيد')),body:ListView(children:[ListTile(leading:const Icon(Icons.insights),title:const Text('التقارير والتحليلات'),onTap:()=>Navigator.push(c,MaterialPageRoute(builder:(_)=>const AnalyticsPage()))),ListTile(leading:const Icon(Icons.card_membership),title:const Text('الاشتراك'),onTap:()=>Navigator.push(c,MaterialPageRoute(builder:(_)=>const SubscriptionPage()))),ListTile(leading:const Icon(Icons.logout),title:const Text('تسجيل الخروج'),onTap:()=>logout(c))]));}
+    if (token == null || token.isEmpty) {
+      if (!mounted) return;
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const LoginPage(),
+        ),
+      );
+
+      return;
+    }
+
+    try {
+      await api.get('/auth/me');
+
+      if (!mounted) return;
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const HomePage(),
+        ),
+      );
+    } catch (_) {
+      await storage.clear();
+
+      if (!mounted) return;
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const LoginPage(),
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(
+      body: Center(
+        child: CircularProgressIndicator(),
+      ),
+    );
+  }
+}
+
+// ============================================================
+// LOGIN
+// ============================================================
+
+class LoginPage extends StatefulWidget {
+  const LoginPage({super.key});
+
+  @override
+  State<LoginPage> createState() => _LoginPageState();
+}
+
+class _LoginPageState extends State<LoginPage> {
+  final emailController = TextEditingController();
+  final passwordController = TextEditingController();
+
+  bool loading = false;
+  String? error;
+
+  Future<void> login() async {
+    setState(() {
+      loading = true;
+      error = null;
+    });
+
+    try {
+      final data = await api.post(
+        '/auth/login',
+        {
+          'email': emailController.text.trim(),
+          'password': passwordController.text,
+        },
+      );
+
+      final storage = await SharedPreferences.getInstance();
+
+      await storage.setString(
+        'accessToken',
+        data['accessToken'],
+      );
+
+      await storage.setString(
+        'refreshToken',
+        data['refreshToken'],
+      );
+
+      await storage.setString(
+        'companyName',
+        data['company']['name'],
+      );
+
+      if (!mounted) return;
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const HomePage(),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        error = e
+            .toString()
+            .replaceFirst('Exception: ', '');
+      });
+    } finally {
+      if (!mounted) return;
+
+      setState(() {
+        loading = false;
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    emailController.dispose();
+    passwordController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(
+                maxWidth: 430,
+              ),
+              child: Column(
+                crossAxisAlignment:
+                    CrossAxisAlignment.stretch,
+                children: [
+                  const Icon(
+                    Icons.business_center,
+                    size: 70,
+                  ),
+
+                  const SizedBox(height: 8),
+
+                  const Text(
+                    'CRM Business',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 30,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+
+                  const SizedBox(height: 30),
+
+                  TextField(
+                    controller: emailController,
+                    keyboardType:
+                        TextInputType.emailAddress,
+                    decoration: const InputDecoration(
+                      labelText: 'البريد الإلكتروني',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  TextField(
+                    controller: passwordController,
+                    obscureText: true,
+                    decoration: const InputDecoration(
+                      labelText: 'كلمة المرور',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+
+                  if (error != null)
+                    Padding(
+                      padding:
+                          const EdgeInsets.only(top: 10),
+                      child: Text(
+                        error!,
+                        style: const TextStyle(
+                          color: Colors.red,
+                        ),
+                      ),
+                    ),
+
+                  const SizedBox(height: 18),
+
+                  FilledButton(
+                    onPressed:
+                        loading ? null : login,
+                    child: Text(
+                      loading
+                          ? 'جاري الدخول...'
+                          : 'تسجيل الدخول',
+                    ),
+                  ),
+
+                  const SizedBox(height: 8),
+
+                  OutlinedButton(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              const RegisterPage(),
+                        ),
+                      );
+                    },
+                    child: const Text(
+                      'إنشاء شركة جديدة',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ============================================================
+// REGISTER COMPANY
+// ============================================================
+
+class RegisterPage extends StatefulWidget {
+  const RegisterPage({super.key});
+
+  @override
+  State<RegisterPage> createState() =>
+      _RegisterPageState();
+}
+
+class _RegisterPageState extends State<RegisterPage> {
+  final companyController = TextEditingController();
+  final ownerController = TextEditingController();
+  final emailController = TextEditingController();
+  final passwordController = TextEditingController();
+
+  bool loading = false;
+  String? error;
+
+  Future<void> register() async {
+    setState(() {
+      loading = true;
+      error = null;
+    });
+
+    try {
+      final data = await api.post(
+        '/auth/register-company',
+        {
+          'companyName':
+              companyController.text.trim(),
+          'ownerName':
+              ownerController.text.trim(),
+          'email':
+              emailController.text.trim(),
+          'password':
+              passwordController.text,
+        },
+      );
+
+      final storage =
+          await SharedPreferences.getInstance();
+
+      await storage.setString(
+        'accessToken',
+        data['accessToken'],
+      );
+
+      await storage.setString(
+        'refreshToken',
+        data['refreshToken'],
+      );
+
+      await storage.setString(
+        'companyName',
+        data['company']['name'],
+      );
+
+      if (!mounted) return;
+
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const HomePage(),
+        ),
+        (_) => false,
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        error = e
+            .toString()
+            .replaceFirst('Exception: ', '');
+      });
+    } finally {
+      if (!mounted) return;
+
+      setState(() {
+        loading = false;
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    companyController.dispose();
+    ownerController.dispose();
+    emailController.dispose();
+    passwordController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('إنشاء شركة'),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(20),
+        children: [
+          TextField(
+            controller: companyController,
+            decoration: const InputDecoration(
+              labelText: 'اسم الشركة',
+              border: OutlineInputBorder(),
+            ),
+          ),
+
+          const SizedBox(height: 12),
+
+          TextField(
+            controller: ownerController,
+            decoration: const InputDecoration(
+              labelText: 'اسم المسؤول',
+              border: OutlineInputBorder(),
+            ),
+          ),
+
+          const SizedBox(height: 12),
+
+          TextField(
+            controller: emailController,
+            keyboardType:
+                TextInputType.emailAddress,
+            decoration: const InputDecoration(
+              labelText: 'البريد الإلكتروني',
+              border: OutlineInputBorder(),
+            ),
+          ),
+
+          const SizedBox(height: 12),
+
+          TextField(
+            controller: passwordController,
+            obscureText: true,
+            decoration: const InputDecoration(
+              labelText: 'كلمة المرور',
+              border: OutlineInputBorder(),
+            ),
+          ),
+
+          if (error != null) ...[
+            const SizedBox(height: 10),
+            Text(
+              error!,
+              style: const TextStyle(
+                color: Colors.red,
+              ),
+            ),
+          ],
+
+          const SizedBox(height: 18),
+
+          FilledButton(
+            onPressed:
+                loading ? null : register,
+            child: Text(
+              loading
+                  ? 'جاري الإنشاء...'
+                  : 'إنشاء الشركة',
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ============================================================
+// HOME
+// ============================================================
+
+class HomePage extends StatefulWidget {
+  const HomePage({super.key});
+
+  @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
+  int tab = 0;
+
+  final pages = const [
+    DashboardPage(),
+    CustomersPage(),
+    OpportunitiesPage(),
+    TasksPage(),
+    MorePage(),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: IndexedStack(
+        index: tab,
+        children: pages,
+      ),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: tab,
+        onDestinationSelected: (index) {
+          setState(() {
+            tab = index;
+          });
+        },
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.dashboard_outlined),
+            selectedIcon:
+                Icon(Icons.dashboard),
+            label: 'الرئيسية',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.people_outline),
+            selectedIcon: Icon(Icons.people),
+            label: 'العملاء',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.trending_up),
+            selectedIcon:
+                Icon(Icons.trending_up),
+            label: 'الفرص',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.task_alt),
+            selectedIcon:
+                Icon(Icons.task_alt),
+            label: 'المهام',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.more_horiz),
+            selectedIcon:
+                Icon(Icons.more_horiz),
+            label: 'المزيد',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ============================================================
+// DASHBOARD
+// ============================================================
+
+class DashboardPage extends StatefulWidget {
+  const DashboardPage({super.key});
+
+  @override
+  State<DashboardPage> createState() =>
+      _DashboardPageState();
+}
+
+class _DashboardPageState
+    extends State<DashboardPage> {
+  Map<String, dynamic>? data;
+  bool loading = true;
+  String company = '';
+
+  Future<void> load() async {
+    final storage =
+        await SharedPreferences.getInstance();
+
+    company =
+        storage.getString('companyName') ?? '';
+
+    setState(() {
+      loading = true;
+    });
+
+    try {
+      final result =
+          await api.get('/dashboard');
+
+      if (!mounted) return;
+
+      setState(() {
+        data =
+            Map<String, dynamic>.from(result);
+      });
+    } catch (_) {
+      // يمكن إضافة رسالة خطأ لاحقًا
+    } finally {
+      if (!mounted) return;
+
+      setState(() {
+        loading = false;
+      });
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    load();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('CRM Business'),
+        actions: [
+          IconButton(
+            onPressed: load,
+            icon: const Icon(Icons.refresh),
+          ),
+        ],
+      ),
+      body: RefreshIndicator(
+        onRefresh: load,
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            Text(
+              'مرحباً 👋',
+              style: Theme.of(context)
+                  .textTheme
+                  .headlineSmall,
+            ),
+
+            Text(
+              company,
+              style: Theme.of(context)
+                  .textTheme
+                  .titleMedium,
+            ),
+
+            const SizedBox(height: 18),
+
+            if (loading)
+              const LinearProgressIndicator(),
+
+            const SizedBox(height: 12),
+
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                Metric(
+                  'العملاء',
+                  data?['customers'] ?? '—',
+                  Icons.people,
+                ),
+                Metric(
+                  'الفرص المفتوحة',
+                  data?['openOpportunities'] ?? '—',
+                  Icons.trending_up,
+                ),
+                Metric(
+                  'المهام',
+                  data?['tasks'] ?? '—',
+                  Icons.task_alt,
+                ),
+                Metric(
+                  'المتأخرة',
+                  data?['tasksOverdue'] ?? '—',
+                  Icons.warning_amber,
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 18),
+
+            Card(
+              child: ListTile(
+                leading:
+                    const Icon(Icons.insights),
+                title: const Text(
+                  'التقارير والتحليلات',
+                ),
+                subtitle: const Text(
+                  'المبيعات، العملاء، المهام والأنشطة',
+                ),
+                trailing: const Icon(
+                  Icons.chevron_right,
+                ),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) =>
+                          const AnalyticsPage(),
+                    ),
+                  );
+                },
+              ),
+            ),
+
+            Card(
+              child: ListTile(
+                leading: const Icon(
+                  Icons.card_membership,
+                ),
+                title:
+                    const Text('الاشتراك'),
+                subtitle: const Text(
+                  'الخطة الحالية والاستخدام',
+                ),
+                trailing: const Icon(
+                  Icons.chevron_right,
+                ),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) =>
+                          const SubscriptionPage(),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ============================================================
+// METRIC
+// ============================================================
+
+class Metric extends StatelessWidget {
+  final String title;
+  final dynamic value;
+  final IconData icon;
+
+  const Metric(
+    this.title,
+    this.value,
+    this.icon, {
+    super.key,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width:
+          MediaQuery.sizeOf(context).width / 2 -
+              22,
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment:
+                CrossAxisAlignment.start,
+            children: [
+              Icon(icon),
+              const SizedBox(height: 8),
+              Text(title),
+              Text(
+                '$value',
+                style: const TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ============================================================
+// CUSTOMERS
+// ============================================================
+
+class CustomersPage extends StatefulWidget {
+  const CustomersPage({super.key});
+
+  @override
+  State<CustomersPage> createState() =>
+      _CustomersPageState();
+}
+
+class _CustomersPageState
+    extends State<CustomersPage> {
+  List list = [];
+  bool loading = true;
+
+  final searchController =
+      TextEditingController();
+
+  Future<void> load() async {
+    setState(() {
+      loading = true;
+    });
+
+    try {
+      final query =
+          searchController.text.trim();
+
+      final path = query.isEmpty
+          ? '/customers'
+          : '/customers?q=${Uri.encodeQueryComponent(query)}';
+
+      final result = await api.get(path);
+
+      if (!mounted) return;
+
+      setState(() {
+        list = List.from(result);
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context)
+          .showSnackBar(
+        SnackBar(
+          content: Text('$e'),
+        ),
+      );
+    } finally {
+      if (!mounted) return;
+
+      setState(() {
+        loading = false;
+      });
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    load();
+  }
+
+  @override
+  void dispose() {
+    searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('العملاء'),
+        actions: [
+          IconButton(
+            onPressed: load,
+            icon: const Icon(Icons.refresh),
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: TextField(
+              controller: searchController,
+              onSubmitted: (_) => load(),
+              decoration: InputDecoration(
+                prefixIcon:
+                    const Icon(Icons.search),
+                hintText: 'بحث عن عميل',
+                border:
+                    const OutlineInputBorder(),
+                suffixIcon: IconButton(
+                  onPressed: load,
+                  icon:
+                      const Icon(Icons.search),
+                ),
+              ),
+            ),
+          ),
+
+          Expanded(
+            child: loading
+                ? const Center(
+                    child:
+                        CircularProgressIndicator(),
+                  )
+                : list.isEmpty
+                    ? const Center(
+                        child: Text(
+                          'لا يوجد عملاء',
+                        ),
+                      )
+                    : ListView.separated(
+                        itemCount: list.length,
+                        separatorBuilder:
+                            (_, __) =>
+                                const Divider(
+                          height: 1,
+                        ),
+                        itemBuilder:
+                            (context, index) {
+                          final customer =
+                              Map<String,
+                                  dynamic>.from(
+                            list[index],
+                          );
+
+                          return ListTile(
+                            leading:
+                                const CircleAvatar(
+                              child: Icon(
+                                Icons.person,
+                              ),
+                            ),
+                            title: Text(
+                              '${customer['name'] ?? ''}',
+                            ),
+                            subtitle: Text(
+                              '${customer['phone'] ?? customer['email'] ?? '—'}',
+                            ),
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      Customer360Page(
+                                    customer:
+                                        customer,
+                                  ),
+                                ),
+                              );
+                            },
+                          );
+                        },
+                      ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ============================================================
+// CUSTOMER 360
+// ============================================================
+
+class Customer360Page
+    extends StatelessWidget {
+  final Map<String, dynamic> customer;
+
+  const Customer360Page({
+    super.key,
+    required this.customer,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Customer 360'),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Text(
+            '${customer['name'] ?? ''}',
+            style: Theme.of(context)
+                .textTheme
+                .headlineSmall,
+          ),
+
+          if (customer['companyName'] != null)
+            Text(
+              '${customer['companyName']}',
+            ),
+
+          const SizedBox(height: 12),
+
+          Card(
+            child: ListTile(
+              leading:
+                  const Icon(Icons.phone),
+              title: Text(
+                '${customer['phone'] ?? 'لا يوجد هاتف'}',
+              ),
+            ),
+          ),
+
+          Card(
+            child: ListTile(
+              leading:
+                  const Icon(Icons.email),
+              title: Text(
+                '${customer['email'] ?? 'لا يوجد بريد'}',
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ============================================================
+// OPPORTUNITIES
+// ============================================================
+
+class OpportunitiesPage
+    extends StatefulWidget {
+  const OpportunitiesPage({super.key});
+
+  @override
+  State<OpportunitiesPage> createState() =>
+      _OpportunitiesPageState();
+}
+
+class _OpportunitiesPageState
+    extends State<OpportunitiesPage> {
+  Map<String, dynamic>? data;
+  bool loading = true;
+
+  Future<void> load() async {
+    setState(() {
+      loading = true;
+    });
+
+    try {
+      final result =
+          await api.get('/opportunities/pipeline');
+
+      if (!mounted) return;
+
+      setState(() {
+        data =
+            Map<String, dynamic>.from(result);
+      });
+    } catch (_) {
+      // يمكن إضافة رسالة خطأ لاحقًا
+    } finally {
+      if (!mounted) return;
+
+      setState(() {
+        loading = false;
+      });
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    load();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final stages =
+        Map<String, dynamic>.from(
+      (data?['stages'] as Map?) ?? {},
+    );
+
+    const stageNames = [
+      'LEAD',
+      'QUALIFIED',
+      'MEETING',
+      'PROPOSAL',
+      'NEGOTIATION',
+      'WON',
+      'LOST',
+    ];
+
+    return Scaffold(
+      appBar: AppBar(
+        title:
+            const Text('Sales Pipeline'),
+        actions: [
+          IconButton(
+            onPressed: load,
+            icon:
+                const Icon(Icons.refresh),
+          ),
+        ],
+      ),
+      body: loading
+          ? const Center(
+              child:
+                  CircularProgressIndicator(),
+            )
+          : ListView(
+              padding:
+                  const EdgeInsets.all(16),
+              children: [
+                Card(
+                  child: ListTile(
+                    title: const Text(
+                      'Pipeline Value',
+                    ),
+                    trailing: Text(
+                      '${data?['pipelineValue'] ?? 0}',
+                    ),
+                  ),
+                ),
+
+                Card(
+                  child: ListTile(
+                    title: const Text(
+                      'Weighted Pipeline',
+                    ),
+                    trailing: Text(
+                      '${data?['weightedPipeline'] ?? 0}',
+                    ),
+                  ),
+                ),
+
+                ...stageNames.map((stage) {
+                  final stageData =
+                      Map<String, dynamic>.from(
+                    (stages[stage] as Map?) ?? {},
+                  );
+
+                  return Card(
+                    child: ListTile(
+                      leading: CircleAvatar(
+                        child: Text(
+                          '${stageData['count'] ?? 0}',
+                        ),
+                      ),
+                      title: Text(stage),
+                      subtitle: Text(
+                        'Value: ${stageData['value'] ?? 0}',
+                      ),
+                    ),
+                  );
+                }),
+              ],
+            ),
+    );
+  }
+}
+
+// ============================================================
+// TASKS
+// ============================================================
+
+class TasksPage extends StatefulWidget {
+  const TasksPage({super.key});
+
+  @override
+  State<TasksPage> createState() =>
+      _TasksPageState();
+}
+
+class _TasksPageState
+    extends State<TasksPage> {
+  List list = [];
+  bool loading = true;
+
+  Future<void> load() async {
+    setState(() {
+      loading = true;
+    });
+
+    try {
+      final result =
+          await api.get('/tasks');
+
+      if (!mounted) return;
+
+      setState(() {
+        list = List.from(result);
+      });
+    } catch (_) {
+      // يمكن إضافة رسالة خطأ لاحقًا
+    } finally {
+      if (!mounted) return;
+
+      setState(() {
+        loading = false;
+      });
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    load();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title:
+            const Text('مهام المتابعة'),
+        actions: [
+          IconButton(
+            onPressed: load,
+            icon:
+                const Icon(Icons.refresh),
+          ),
+        ],
+      ),
+      body: loading
+          ? const Center(
+              child:
+                  CircularProgressIndicator(),
+            )
+          : list.isEmpty
+              ? const Center(
+                  child: Text(
+                    'لا توجد مهام',
+                  ),
+                )
+              : ListView.separated(
+                  itemCount: list.length,
+                  separatorBuilder:
+                      (_, __) =>
+                          const Divider(),
+                  itemBuilder:
+                      (context, index) {
+                    final task =
+                        Map<String, dynamic>.from(
+                      list[index],
+                    );
+
+                    return ListTile(
+                      leading: Icon(
+                        task['status'] ==
+                                'COMPLETED'
+                            ? Icons.check_circle
+                            : Icons
+                                .radio_button_unchecked,
+                      ),
+                      title: Text(
+                        '${task['title'] ?? ''}',
+                      ),
+                      subtitle: Text(
+                        '${task['priority'] ?? ''} • ${task['status'] ?? ''}',
+                      ),
+                    );
+                  },
+                ),
+    );
+  }
+}
+
+// ============================================================
+// ANALYTICS
+// ============================================================
+
+class AnalyticsPage
+    extends StatefulWidget {
+  const AnalyticsPage({super.key});
+
+  @override
+  State<AnalyticsPage> createState() =>
+      _AnalyticsPageState();
+}
+
+class _AnalyticsPageState
+    extends State<AnalyticsPage> {
+  Map<String, dynamic>? data;
+  bool loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    load();
+  }
+
+  Future<void> load() async {
+    try {
+      final result =
+          await api.get('/analytics/dashboard');
+
+      if (!mounted) return;
+
+      setState(() {
+        data =
+            Map<String, dynamic>.from(result);
+      });
+    } catch (_) {
+      // يمكن إضافة رسالة خطأ لاحقًا
+    } finally {
+      if (!mounted) return;
+
+      setState(() {
+        loading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text(
+          'التقارير والتحليلات',
+        ),
+      ),
+      body: loading
+          ? const Center(
+              child:
+                  CircularProgressIndicator(),
+            )
+          : ListView(
+              padding:
+                  const EdgeInsets.all(16),
+              children: [
+                Text(
+                  'ملخص الأداء',
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleLarge,
+                ),
+
+                const SizedBox(height: 12),
+
+                ...(data ?? {}).entries.map(
+                  (entry) {
+                    return Card(
+                      child: ListTile(
+                        title:
+                            Text(entry.key),
+                        trailing: Text(
+                          '${entry.value}',
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+    );
+  }
+}
+
+// ============================================================
+// SUBSCRIPTION
+// ============================================================
+
+class SubscriptionPage
+    extends StatefulWidget {
+  const SubscriptionPage({super.key});
+
+  @override
+  State<SubscriptionPage> createState() =>
+      _SubscriptionPageState();
+}
+
+class _SubscriptionPageState
+    extends State<SubscriptionPage> {
+  Map<String, dynamic>? data;
+  bool loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    load();
+  }
+
+  Future<void> load() async {
+    try {
+      final result =
+          await api.get('/subscriptions/current');
+
+      if (!mounted) return;
+
+      setState(() {
+        data =
+            Map<String, dynamic>.from(result);
+      });
+    } catch (_) {
+      // يمكن إضافة رسالة خطأ لاحقًا
+    } finally {
+      if (!mounted) return;
+
+      setState(() {
+        loading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final planName =
+        data?['plan']?['name'] ??
+        data?['planName'] ??
+        '—';
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('الاشتراك'),
+      ),
+      body: loading
+          ? const Center(
+              child:
+                  CircularProgressIndicator(),
+            )
+          : ListView(
+              padding:
+                  const EdgeInsets.all(16),
+              children: [
+                Card(
+                  child: ListTile(
+                    title: const Text(
+                      'الخطة الحالية',
+                    ),
+                    subtitle:
+                        Text('$planName'),
+                  ),
+                ),
+
+                Card(
+                  child: ListTile(
+                    title:
+                        const Text('الحالة'),
+                    subtitle: Text(
+                      '${data?['status'] ?? '—'}',
+                    ),
+                  ),
+                ),
+              ],
+            ),
+    );
+  }
+}
+
+// ============================================================
+// MORE
+// ============================================================
+
+class MorePage extends StatelessWidget {
+  const MorePage({super.key});
+
+  Future<void> logout(
+    BuildContext context,
+  ) async {
+    final storage =
+        await SharedPreferences.getInstance();
+
+    await storage.clear();
+
+    if (!context.mounted) return;
+
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const LoginPage(),
+      ),
+      (_) => false,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('المزيد'),
+      ),
+      body: ListView(
+        children: [
+          ListTile(
+            leading:
+                const Icon(Icons.insights),
+            title: const Text(
+              'التقارير والتحليلات',
+            ),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) =>
+                      const AnalyticsPage(),
+                ),
+              );
+            },
+          ),
+
+          ListTile(
+            leading: const Icon(
+              Icons.card_membership,
+            ),
+            title:
+                const Text('الاشتراك'),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) =>
+                      const SubscriptionPage(),
+                ),
+              );
+            },
+          ),
+
+          ListTile(
+            leading:
+                const Icon(Icons.logout),
+            title:
+                const Text('تسجيل الخروج'),
+            onTap: () => logout(context),
+          ),
+        ],
+      ),
+    );
+  }
+}
