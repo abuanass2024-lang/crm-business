@@ -1,0 +1,70 @@
+name: CRM Business CI
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: crm_business
+          POSTGRES_USER: crm
+          POSTGRES_PASSWORD: crm_password
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd="pg_isready -U crm -d crm_business"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm, cache-dependency-path: backend/package-lock.json }
+      - run: npm install
+      - run: npx prisma generate
+      - run: npx prisma migrate deploy
+        env:
+          DATABASE_URL: postgresql://crm:crm_password@localhost:5432/crm_business?schema=public
+      - run: npm run build
+        env:
+          JWT_SECRET: github-actions-test-secret-which-is-long-enough-1234567890
+      - name: Start API
+        env:
+          DATABASE_URL: postgresql://crm:crm_password@localhost:5432/crm_business?schema=public
+          JWT_SECRET: github-actions-test-secret-which-is-long-enough-1234567890
+          PORT: 3000
+        run: |
+          node dist/main.js > /tmp/crm-api.log 2>&1 &
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:3000/api/health/ready && break || sleep 2; done
+      - name: Integration journey
+        env:
+          API_BASE_URL: http://127.0.0.1:3000/api
+        run: npm run test:journey
+      - name: Security smoke
+        env:
+          DATABASE_URL: postgresql://crm:crm_password@localhost:5432/crm_business?schema=public
+          JWT_SECRET: github-actions-test-secret-which-is-long-enough-1234567890
+          API_BASE_URL: http://127.0.0.1:3000/api
+        run: npm run test:security
+  android:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with: { channel: stable, cache: true }
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
+      - run: flutter build apk --release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: crm-business-v1.5-apk
+          path: mobile/build/app/outputs/flutter-apk/app-release.apk

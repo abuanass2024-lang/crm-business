@@ -1,0 +1,4 @@
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { JwtGuard } from '../auth/jwt.guard'; import { CreateTaskDto, UpdateTaskDto } from './tasks.dto'; import { TasksService } from './tasks.service';
+@Controller('tasks') @UseGuards(JwtGuard)
+export class TasksController { constructor(private service:TasksService){} @Get() list(@Req() r:any,@Query('status') s?:string){return this.service.list(r.user.companyId,s)} @Get(':id') get(@Req()r:any,@Param('id')id:string){return this.service.get(r.user.companyId,id)} @Post() create(@Req()r:any,@Body()d:CreateTaskDto){return this.service.create(r.user.companyId,r.user.userId,d)} @Patch(':id') update(@Req()r:any,@Param('id')id:string,@Body()d:UpdateTaskDto){return this.service.update(r.user.companyId,id,d)} @Delete(':id') remove(@Req()r:any,@Param('id')id:string){return this.service.remove(r.user.companyId,id)} }

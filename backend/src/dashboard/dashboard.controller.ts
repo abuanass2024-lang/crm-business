@@ -1,0 +1,5 @@
+import { Controller, Get, Req, UseGuards } from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
+import { JwtGuard } from '../auth/jwt.guard';
+@Controller('dashboard') export class DashboardController { constructor(private prisma:PrismaService){}
+ @UseGuards(JwtGuard) @Get() async get(@Req() req:any){ const c=req.user.companyId; const [customers,opportunities,tasks,overdue,pipelineRows]=await Promise.all([this.prisma.customer.count({where:{companyId:c}}),this.prisma.opportunity.count({where:{companyId:c,stage:{notIn:['WON','LOST']}}}),this.prisma.task.count({where:{companyId:c,status:{in:['TODO','IN_PROGRESS']}}}),this.prisma.task.count({where:{companyId:c,status:{in:['TODO','IN_PROGRESS']},dueDate:{lt:new Date()}}}),this.prisma.opportunity.findMany({where:{companyId:c,stage:{notIn:['WON','LOST']}},select:{value:true,probability:true}})]); const pipelineValue=pipelineRows.reduce((s:any,x:any)=>s+Number(x.value),0); const weightedPipeline=pipelineRows.reduce((s:any,x:any)=>s+Number(x.value)*(x.probability/100),0); return {customers,openOpportunities:opportunities,tasks,tasksOverdue:overdue,pipelineValue,weightedPipeline}; } }

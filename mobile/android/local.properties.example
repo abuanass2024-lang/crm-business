@@ -1,0 +1,3 @@
+# Replace with the absolute path to your Flutter SDK.
+flutter.sdk=/absolute/path/to/flutter
+sdk.dir=/absolute/path/to/Android/Sdk

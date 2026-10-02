@@ -1,0 +1,2 @@
+import {Controller,Get,Req,UseGuards} from '@nestjs/common'; import {JwtGuard} from '../auth/jwt.guard'; import {SubscriptionsService} from './subscriptions.service';
+@Controller('subscriptions') @UseGuards(JwtGuard) export class SubscriptionsController{constructor(private service:SubscriptionsService){} @Get('plans') plans(){return this.service.listPlans()} @Get('current') current(@Req() r:any){return this.service.current(r.user.companyId)}}
