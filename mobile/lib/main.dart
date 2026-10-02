@@ -9,20 +9,15 @@ const apiBase = String.fromEnvironment(
   defaultValue: 'http://10.0.2.2:3000/api',
 );
 
-// ============================================================
-// API CLIENT
-// ============================================================
-
 class ApiClient {
-  Future<String?> _token() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('accessToken');
+  Future<String?> _getToken() async {
+    final storage = await SharedPreferences.getInstance();
+    return storage.getString('accessToken');
   }
 
-  Future<String?> _refresh() async {
-    final prefs = await SharedPreferences.getInstance();
-
-    final refreshToken = prefs.getString('refreshToken');
+  Future<String?> _refreshToken() async {
+    final storage = await SharedPreferences.getInstance();
+    final refreshToken = storage.getString('refreshToken');
 
     if (refreshToken == null || refreshToken.isEmpty) {
       return null;
@@ -30,7 +25,7 @@ class ApiClient {
 
     final response = await http.post(
       Uri.parse('$apiBase/auth/refresh'),
-      headers: {
+      headers: const {
         'Content-Type': 'application/json',
       },
       body: jsonEncode({
@@ -55,12 +50,12 @@ class ApiClient {
       return null;
     }
 
-    await prefs.setString(
+    await storage.setString(
       'accessToken',
       accessToken.toString(),
     );
 
-    await prefs.setString(
+    await storage.setString(
       'refreshToken',
       newRefreshToken.toString(),
     );
@@ -74,56 +69,47 @@ class ApiClient {
     Map<String, dynamic>? body,
     bool retry = true,
   }) async {
-    final token = await _token();
+    final token = await _getToken();
 
     final headers = <String, String>{
       'Content-Type': 'application/json',
-      if (token != null && token.isNotEmpty)
-        'Authorization': 'Bearer $token',
     };
 
-    final url = Uri.parse('$apiBase$path');
+    if (token != null && token.isNotEmpty) {
+      headers['Authorization'] = 'Bearer $token';
+    }
 
-    final encodedBody =
-        body == null ? null : jsonEncode(body);
+    final uri = Uri.parse('$apiBase$path');
+    final encodedBody = body == null ? null : jsonEncode(body);
 
     late http.Response response;
 
-    switch (method) {
-      case 'POST':
-        response = await http.post(
-          url,
-          headers: headers,
-          body: encodedBody,
-        );
-        break;
-
-      case 'PATCH':
-        response = await http.patch(
-          url,
-          headers: headers,
-          body: encodedBody,
-        );
-        break;
-
-      case 'DELETE':
-        response = await http.delete(
-          url,
-          headers: headers,
-        );
-        break;
-
-      default:
-        response = await http.get(
-          url,
-          headers: headers,
-        );
+    if (method == 'POST') {
+      response = await http.post(
+        uri,
+        headers: headers,
+        body: encodedBody,
+      );
+    } else if (method == 'PATCH') {
+      response = await http.patch(
+        uri,
+        headers: headers,
+        body: encodedBody,
+      );
+    } else if (method == 'DELETE') {
+      response = await http.delete(
+        uri,
+        headers: headers,
+      );
+    } else {
+      response = await http.get(
+        uri,
+        headers: headers,
+      );
     }
 
-    if (response.statusCode == 401 &&
-        retry &&
-        path != '/auth/refresh') {
-      final newToken = await _refresh();
+    if (response.statusCode == 401 && retry) {
+      final newToken = await _refreshToken();
 
       if (newToken != null) {
         return request(
@@ -138,10 +124,38 @@ class ApiClient {
     return response;
   }
 
+  Future<dynamic> _parse(Future<http.Response> future) async {
+    final response = await future;
+
+    dynamic data;
+
+    if (response.body.trim().isEmpty) {
+      data = <String, dynamic>{};
+    } else {
+      try {
+        data = jsonDecode(response.body);
+      } catch (_) {
+        data = <String, dynamic>{
+          'message': response.body,
+        };
+      }
+    }
+
+    if (response.statusCode >= 400) {
+      var message = 'حدث خطأ في الاتصال بالخادم';
+
+      if (data is Map && data['message'] != null) {
+        message = data['message'].toString();
+      }
+
+      throw Exception(message);
+    }
+
+    return data;
+  }
+
   Future<dynamic> get(String path) {
-    return _parse(
-      request('GET', path),
-    );
+    return _parse(request('GET', path));
   }
 
   Future<dynamic> post(
@@ -169,82 +183,30 @@ class ApiClient {
       ),
     );
   }
-
-  Future<dynamic> _parse(
-    Future<http.Response> future,
-  ) async {
-    final response = await future;
-
-    dynamic data;
-
-    if (response.body.trim().isEmpty) {
-      data = <String, dynamic>{};
-    } else {
-      try {
-        data = jsonDecode(response.body);
-      } catch (_) {
-        data = <String, dynamic>{
-          'message': response.body,
-        };
-      }
-    }
-
-    if (response.statusCode >= 400) {
-      String message = 'حدث خطأ';
-
-      if (data is Map && data['message'] != null) {
-        message = data['message'].toString();
-      }
-
-      throw Exception(message);
-    }
-
-    return data;
-  }
 }
 
 final api = ApiClient();
 
-// ============================================================
-// GUEST HELPERS
-// ============================================================
-
-Future<bool> isGuestMode() async {
+Future<bool> guestModeEnabled() async {
   final storage = await SharedPreferences.getInstance();
-
   return storage.getBool('guestMode') ?? false;
 }
 
 Future<void> enableGuestMode() async {
   final storage = await SharedPreferences.getInstance();
 
-  await storage.setBool(
-    'guestMode',
-    true,
-  );
-
-  await storage.setString(
-    'companyName',
-    'شركة تجريبية',
-  );
-
-  await storage.setString(
-    'guestOwner',
-    'المستخدم التجريبي',
-  );
+  await storage.setBool('guestMode', true);
+  await storage.setString('companyName', 'شركة تجريبية');
+  await storage.setString('guestOwner', 'المستخدم التجريبي');
 }
 
 Future<void> disableGuestMode() async {
   final storage = await SharedPreferences.getInstance();
 
   await storage.remove('guestMode');
-  await storage.remove('guestOwner');
   await storage.remove('companyName');
+  await storage.remove('guestOwner');
 }
-
-// ============================================================
-// MAIN
-// ============================================================
 
 void main() {
   runApp(const CrmApp());
@@ -267,37 +229,26 @@ class CrmApp extends StatelessWidget {
   }
 }
 
-// ============================================================
-// STARTUP
-// ============================================================
-
 class StartupPage extends StatefulWidget {
   const StartupPage({super.key});
 
   @override
-  State<StartupPage> createState() =>
-      _StartupPageState();
+  State<StartupPage> createState() => _StartupPageState();
 }
 
 class _StartupPageState extends State<StartupPage> {
   @override
   void initState() {
     super.initState();
-    _restore();
+    _restoreSession();
   }
 
-  Future<void> _restore() async {
-    final storage =
-        await SharedPreferences.getInstance();
+  Future<void> _restoreSession() async {
+    final storage = await SharedPreferences.getInstance();
 
-    final guest =
-        storage.getBool('guestMode') ?? false;
+    final isGuest = storage.getBool('guestMode') ?? false;
 
-    // --------------------------------------------------------
-    // GUEST MODE
-    // --------------------------------------------------------
-
-    if (guest) {
+    if (isGuest) {
       if (!mounted) return;
 
       Navigator.pushReplacement(
@@ -310,12 +261,7 @@ class _StartupPageState extends State<StartupPage> {
       return;
     }
 
-    // --------------------------------------------------------
-    // REAL USER
-    // --------------------------------------------------------
-
-    final token =
-        storage.getString('accessToken');
+    final token = storage.getString('accessToken');
 
     if (token == null || token.isEmpty) {
       if (!mounted) return;
@@ -365,41 +311,26 @@ class _StartupPageState extends State<StartupPage> {
   }
 }
 
-// ============================================================
-// LOGIN
-// ============================================================
-
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
 
   @override
-  State<LoginPage> createState() =>
-      _LoginPageState();
+  State<LoginPage> createState() => _LoginPageState();
 }
 
 class _LoginPageState extends State<LoginPage> {
-  final emailController =
-      TextEditingController();
-
-  final passwordController =
-      TextEditingController();
+  final emailController = TextEditingController();
+  final passwordController = TextEditingController();
 
   bool loading = false;
-
   String? error;
-
-  // ----------------------------------------------------------
-  // REAL LOGIN
-  // ----------------------------------------------------------
 
   Future<void> login() async {
     if (emailController.text.trim().isEmpty ||
         passwordController.text.isEmpty) {
       setState(() {
-        error =
-            'يرجى إدخال البريد الإلكتروني وكلمة المرور';
+        error = 'يرجى إدخال البريد الإلكتروني وكلمة المرور';
       });
-
       return;
     }
 
@@ -412,37 +343,23 @@ class _LoginPageState extends State<LoginPage> {
       final data = await api.post(
         '/auth/login',
         {
-          'email':
-              emailController.text.trim(),
-          'password':
-              passwordController.text,
+          'email': emailController.text.trim(),
+          'password': passwordController.text,
         },
       );
 
       if (data is! Map) {
-        throw Exception(
-          'استجابة غير صحيحة من الخادم',
-        );
+        throw Exception('استجابة غير صحيحة من الخادم');
       }
 
-      final accessToken =
-          data['accessToken'];
+      final accessToken = data['accessToken'];
+      final refreshToken = data['refreshToken'];
 
-      final refreshToken =
-          data['refreshToken'];
-
-      final company =
-          data['company'];
-
-      if (accessToken == null ||
-          refreshToken == null) {
-        throw Exception(
-          'بيانات تسجيل الدخول غير مكتملة',
-        );
+      if (accessToken == null || refreshToken == null) {
+        throw Exception('بيانات تسجيل الدخول غير مكتملة');
       }
 
-      final storage =
-          await SharedPreferences.getInstance();
+      final storage = await SharedPreferences.getInstance();
 
       await storage.remove('guestMode');
 
@@ -456,8 +373,9 @@ class _LoginPageState extends State<LoginPage> {
         refreshToken.toString(),
       );
 
-      if (company is Map &&
-          company['name'] != null) {
+      final company = data['company'];
+
+      if (company is Map && company['name'] != null) {
         await storage.setString(
           'companyName',
           company['name'].toString(),
@@ -466,20 +384,18 @@ class _LoginPageState extends State<LoginPage> {
 
       if (!mounted) return;
 
-      Navigator.pushReplacement(
+      Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(
           builder: (_) => const HomePage(),
         ),
+        (_) => false,
       );
     } catch (e) {
       if (!mounted) return;
 
       setState(() {
-        error = e.toString().replaceFirst(
-              'Exception: ',
-              '',
-            );
+        error = e.toString().replaceFirst('Exception: ', '');
       });
     } finally {
       if (mounted) {
@@ -489,10 +405,6 @@ class _LoginPageState extends State<LoginPage> {
       }
     }
   }
-
-  // ----------------------------------------------------------
-  // GUEST LOGIN
-  // ----------------------------------------------------------
 
   Future<void> loginAsGuest() async {
     setState(() {
@@ -505,18 +417,18 @@ class _LoginPageState extends State<LoginPage> {
 
       if (!mounted) return;
 
-      Navigator.pushReplacement(
+      Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(
           builder: (_) => const HomePage(),
         ),
+        (_) => false,
       );
-    } catch (e) {
+    } catch (_) {
       if (!mounted) return;
 
       setState(() {
-        error =
-            'تعذر تشغيل وضع الضيف';
+        error = 'تعذر تشغيل وضع الضيف';
       });
     } finally {
       if (mounted) {
@@ -540,105 +452,67 @@ class _LoginPageState extends State<LoginPage> {
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
-            padding:
-                const EdgeInsets.all(24),
+            padding: const EdgeInsets.all(24),
             child: ConstrainedBox(
-              constraints:
-                  const BoxConstraints(
+              constraints: const BoxConstraints(
                 maxWidth: 430,
               ),
               child: Column(
-                crossAxisAlignment:
-                    CrossAxisAlignment.stretch,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   const Icon(
                     Icons.business_center,
                     size: 70,
                   ),
-
-                  const SizedBox(height: 8),
-
+                  const SizedBox(height: 10),
                   const Text(
                     'CRM Business',
-                    textAlign:
-                        TextAlign.center,
+                    textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 30,
-                      fontWeight:
-                          FontWeight.bold,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
-
                   const SizedBox(height: 8),
-
                   const Text(
                     'نظام إدارة علاقات العملاء',
-                    textAlign:
-                        TextAlign.center,
+                    textAlign: TextAlign.center,
                   ),
-
                   const SizedBox(height: 30),
-
                   TextField(
-                    controller:
-                        emailController,
-                    keyboardType:
-                        TextInputType.emailAddress,
-                    decoration:
-                        const InputDecoration(
-                      labelText:
-                          'البريد الإلكتروني',
-                      border:
-                          OutlineInputBorder(),
+                    controller: emailController,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: const InputDecoration(
+                      labelText: 'البريد الإلكتروني',
+                      border: OutlineInputBorder(),
                     ),
                   ),
-
                   const SizedBox(height: 12),
-
                   TextField(
-                    controller:
-                        passwordController,
+                    controller: passwordController,
                     obscureText: true,
-                    decoration:
-                        const InputDecoration(
-                      labelText:
-                          'كلمة المرور',
-                      border:
-                          OutlineInputBorder(),
+                    decoration: const InputDecoration(
+                      labelText: 'كلمة المرور',
+                      border: OutlineInputBorder(),
                     ),
                   ),
-
-                  if (error != null)
-                    Padding(
-                      padding:
-                          const EdgeInsets.only(
-                        top: 10,
-                      ),
-                      child: Text(
-                        error!,
-                        style:
-                            const TextStyle(
-                          color: Colors.red,
-                        ),
+                  if (error != null) ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      error!,
+                      style: const TextStyle(
+                        color: Colors.red,
                       ),
                     ),
-
+                  ],
                   const SizedBox(height: 18),
-
                   FilledButton(
-                    onPressed:
-                        loading
-                            ? null
-                            : login,
+                    onPressed: loading ? null : login,
                     child: Text(
-                      loading
-                          ? 'جاري الدخول...'
-                          : 'تسجيل الدخول',
+                      loading ? 'جاري الدخول...' : 'تسجيل الدخول',
                     ),
                   ),
-
                   const SizedBox(height: 8),
-
                   OutlinedButton(
                     onPressed: loading
                         ? null
@@ -646,28 +520,15 @@ class _LoginPageState extends State<LoginPage> {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (_) =>
-                                    const RegisterPage(),
+                                builder: (_) => const RegisterPage(),
                               ),
                             );
                           },
-                    child:
-                        const Text(
-                      'إنشاء شركة جديدة',
-                    ),
+                    child: const Text('إنشاء شركة جديدة'),
                   ),
-
                   const SizedBox(height: 8),
-
-                  // ==================================================
-                  // GUEST BUTTON
-                  // ==================================================
-
                   TextButton.icon(
-                    onPressed:
-                        loading
-                            ? null
-                            : loginAsGuest,
+                    onPressed: loading ? null : loginAsGuest,
                     icon: const Icon(
                       Icons.visibility_outlined,
                     ),
@@ -675,13 +536,10 @@ class _LoginPageState extends State<LoginPage> {
                       'الدخول كضيف وتجربة التطبيق',
                     ),
                   ),
-
                   const SizedBox(height: 8),
-
                   const Text(
-                    'وضع الضيف لا يحتاج إلى خادم أو حساب حقيقي',
-                    textAlign:
-                        TextAlign.center,
+                    'وضع الضيف يعمل بدون خادم وبدون إنشاء حساب حقيقي.',
+                    textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 12,
                     ),
@@ -696,34 +554,20 @@ class _LoginPageState extends State<LoginPage> {
   }
 }
 
-// ============================================================
-// REGISTER COMPANY
-// ============================================================
-
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
 
   @override
-  State<RegisterPage> createState() =>
-      _RegisterPageState();
+  State<RegisterPage> createState() => _RegisterPageState();
 }
 
-class _RegisterPageState
-    extends State<RegisterPage> {
-  final companyController =
-      TextEditingController();
-
-  final ownerController =
-      TextEditingController();
-
-  final emailController =
-      TextEditingController();
-
-  final passwordController =
-      TextEditingController();
+class _RegisterPageState extends State<RegisterPage> {
+  final companyController = TextEditingController();
+  final ownerController = TextEditingController();
+  final emailController = TextEditingController();
+  final passwordController = TextEditingController();
 
   bool loading = false;
-
   String? error;
 
   Future<void> register() async {
@@ -732,10 +576,8 @@ class _RegisterPageState
         emailController.text.trim().isEmpty ||
         passwordController.text.isEmpty) {
       setState(() {
-        error =
-            'يرجى تعبئة جميع الحقول';
+        error = 'يرجى تعبئة جميع الحقول';
       });
-
       return;
     }
 
@@ -748,45 +590,27 @@ class _RegisterPageState
       final data = await api.post(
         '/auth/register-company',
         {
-          'companyName':
-              companyController.text.trim(),
-          'ownerName':
-              ownerController.text.trim(),
-          'email':
-              emailController.text.trim(),
-          'password':
-              passwordController.text,
+          'companyName': companyController.text.trim(),
+          'ownerName': ownerController.text.trim(),
+          'email': emailController.text.trim(),
+          'password': passwordController.text,
         },
       );
 
       if (data is! Map) {
-        throw Exception(
-          'استجابة غير صحيحة من الخادم',
-        );
+        throw Exception('استجابة غير صحيحة من الخادم');
       }
 
-      final accessToken =
-          data['accessToken'];
+      final accessToken = data['accessToken'];
+      final refreshToken = data['refreshToken'];
 
-      final refreshToken =
-          data['refreshToken'];
-
-      final company =
-          data['company'];
-
-      if (accessToken == null ||
-          refreshToken == null) {
-        throw Exception(
-          'بيانات التسجيل غير مكتملة',
-        );
+      if (accessToken == null || refreshToken == null) {
+        throw Exception('بيانات التسجيل غير مكتملة');
       }
 
-      final storage =
-          await SharedPreferences.getInstance();
+      final storage = await SharedPreferences.getInstance();
 
-      await storage.remove(
-        'guestMode',
-      );
+      await storage.remove('guestMode');
 
       await storage.setString(
         'accessToken',
@@ -798,11 +622,17 @@ class _RegisterPageState
         refreshToken.toString(),
       );
 
-      if (company is Map &&
-          company['name'] != null) {
+      final company = data['company'];
+
+      if (company is Map && company['name'] != null) {
         await storage.setString(
           'companyName',
           company['name'].toString(),
+        );
+      } else {
+        await storage.setString(
+          'companyName',
+          companyController.text.trim(),
         );
       }
 
@@ -819,10 +649,7 @@ class _RegisterPageState
       if (!mounted) return;
 
       setState(() {
-        error = e.toString().replaceFirst(
-              'Exception: ',
-              '',
-            );
+        error = e.toString().replaceFirst('Exception: ', '');
       });
     } finally {
       if (mounted) {
@@ -839,7 +666,6 @@ class _RegisterPageState
     ownerController.dispose();
     emailController.dispose();
     passwordController.dispose();
-
     super.dispose();
   }
 
@@ -847,93 +673,58 @@ class _RegisterPageState
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title:
-            const Text('إنشاء شركة'),
+        title: const Text('إنشاء شركة'),
       ),
       body: ListView(
-        padding:
-            const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(20),
         children: [
           TextField(
-            controller:
-                companyController,
-            decoration:
-                const InputDecoration(
-              labelText:
-                  'اسم الشركة',
-              border:
-                  OutlineInputBorder(),
+            controller: companyController,
+            decoration: const InputDecoration(
+              labelText: 'اسم الشركة',
+              border: OutlineInputBorder(),
             ),
           ),
-
           const SizedBox(height: 12),
-
           TextField(
-            controller:
-                ownerController,
-            decoration:
-                const InputDecoration(
-              labelText:
-                  'اسم المسؤول',
-              border:
-                  OutlineInputBorder(),
+            controller: ownerController,
+            decoration: const InputDecoration(
+              labelText: 'اسم المسؤول',
+              border: OutlineInputBorder(),
             ),
           ),
-
           const SizedBox(height: 12),
-
           TextField(
-            controller:
-                emailController,
-            keyboardType:
-                TextInputType.emailAddress,
-            decoration:
-                const InputDecoration(
-              labelText:
-                  'البريد الإلكتروني',
-              border:
-                  OutlineInputBorder(),
+            controller: emailController,
+            keyboardType: TextInputType.emailAddress,
+            decoration: const InputDecoration(
+              labelText: 'البريد الإلكتروني',
+              border: OutlineInputBorder(),
             ),
           ),
-
           const SizedBox(height: 12),
-
           TextField(
-            controller:
-                passwordController,
+            controller: passwordController,
             obscureText: true,
-            decoration:
-                const InputDecoration(
-              labelText:
-                  'كلمة المرور',
-              border:
-                  OutlineInputBorder(),
+            decoration: const InputDecoration(
+              labelText: 'كلمة المرور',
+              border: OutlineInputBorder(),
             ),
           ),
-
           if (error != null) ...[
             const SizedBox(height: 10),
-
             Text(
               error!,
-              style:
-                  const TextStyle(
+              style: const TextStyle(
                 color: Colors.red,
               ),
             ),
           ],
-
           const SizedBox(height: 18),
-
           FilledButton(
-            onPressed:
-                loading
-                    ? null
-                    : register,
+            onPressed: loading ? null : register,
             child: Text(
-              loading
-                  ? 'جاري الإنشاء...'
-                  : 'إنشاء الشركة',
+              loading ? 'جاري الإنشاء...' : 'إنشاء الشركة',
             ),
           ),
         ],
@@ -942,21 +733,15 @@ class _RegisterPageState
   }
 }
 
-// ============================================================
-// HOME
-// ============================================================
-
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
   @override
-  State<HomePage> createState() =>
-      _HomePageState();
+  State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState
-    extends State<HomePage> {
-  int tab = 0;
+class _HomePageState extends State<HomePage> {
+  int selectedIndex = 0;
 
   final pages = const [
     DashboardPage(),
@@ -970,69 +755,38 @@ class _HomePageState
   Widget build(BuildContext context) {
     return Scaffold(
       body: IndexedStack(
-        index: tab,
+        index: selectedIndex,
         children: pages,
       ),
-
-      bottomNavigationBar:
-          NavigationBar(
-        selectedIndex: tab,
-
-        onDestinationSelected:
-            (index) {
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: selectedIndex,
+        onDestinationSelected: (index) {
           setState(() {
-            tab = index;
+            selectedIndex = index;
           });
         },
-
         destinations: const [
           NavigationDestination(
-            icon: Icon(
-              Icons.dashboard_outlined,
-            ),
-            selectedIcon: Icon(
-              Icons.dashboard,
-            ),
+            icon: Icon(Icons.dashboard_outlined),
+            selectedIcon: Icon(Icons.dashboard),
             label: 'الرئيسية',
           ),
-
           NavigationDestination(
-            icon: Icon(
-              Icons.people_outline,
-            ),
-            selectedIcon: Icon(
-              Icons.people,
-            ),
+            icon: Icon(Icons.people_outline),
+            selectedIcon: Icon(Icons.people),
             label: 'العملاء',
           ),
-
           NavigationDestination(
-            icon: Icon(
-              Icons.trending_up,
-            ),
-            selectedIcon: Icon(
-              Icons.trending_up,
-            ),
+            icon: Icon(Icons.trending_up),
             label: 'الفرص',
           ),
-
           NavigationDestination(
-            icon: Icon(
-              Icons.task_alt_outlined,
-            ),
-            selectedIcon: Icon(
-              Icons.task_alt,
-            ),
+            icon: Icon(Icons.task_alt_outlined),
+            selectedIcon: Icon(Icons.task_alt),
             label: 'المهام',
           ),
-
           NavigationDestination(
-            icon: Icon(
-              Icons.more_horiz,
-            ),
-            selectedIcon: Icon(
-              Icons.more_horiz,
-            ),
+            icon: Icon(Icons.more_horiz),
             label: 'المزيد',
           ),
         ],
@@ -1041,28 +795,22 @@ class _HomePageState
   }
 }
 
-// ============================================================
-// DASHBOARD
-// ============================================================
-
-class DashboardPage
-    extends StatefulWidget {
+class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
 
   @override
-  State<DashboardPage> createState() =>
-      _DashboardPageState();
+  State<DashboardPage> createState() => _DashboardPageState();
 }
 
-class _DashboardPageState
-    extends State<DashboardPage> {
-  Map<String, dynamic>? data;
-
+class _DashboardPageState extends State<DashboardPage> {
   bool loading = true;
-
   bool guest = false;
+  String companyName = '';
 
-  String company = '';
+  int customers = 0;
+  int opportunities = 0;
+  int tasks = 0;
+  int overdue = 0;
 
   @override
   void initState() {
@@ -1071,244 +819,209 @@ class _DashboardPageState
   }
 
   Future<void> load() async {
-    final storage =
-        await SharedPreferences.getInstance();
+    final storage = await SharedPreferences.getInstance();
 
-    guest =
-        storage.getBool(
-              'guestMode',
-            ) ??
-            false;
+    final isGuest = storage.getBool('guestMode') ?? false;
 
-    company =
-        storage.getString(
-              'companyName',
-            ) ??
-            '';
+    final name = storage.getString('companyName') ?? '';
 
-    if (guest) {
+    if (isGuest) {
+      if (!mounted) return;
+
       setState(() {
-        data = {
-          'customers': 12,
-          'openOpportunities': 7,
-          'tasks': 18,
-          'tasksOverdue': 2,
-        };
-
+        guest = true;
+        companyName = name;
+        customers = 12;
+        opportunities = 7;
+        tasks = 18;
+        overdue = 2;
         loading = false;
       });
 
       return;
     }
 
-    if (mounted) {
-      setState(() {
-        loading = true;
-      });
-    }
-
     try {
-      final result =
-          await api.get(
-        '/dashboard',
-      );
+      final data = await api.get('/dashboard');
 
       if (!mounted) return;
 
-      if (result is Map) {
+      if (data is Map) {
         setState(() {
-          data =
-              Map<String, dynamic>.from(
-            result,
-          );
+          companyName = name;
+          customers = _toInt(data['customers']);
+          opportunities = _toInt(data['openOpportunities']);
+          tasks = _toInt(data['tasks']);
+          overdue = _toInt(data['tasksOverdue']);
+          loading = false;
         });
       }
     } catch (e) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context)
-          .showSnackBar(
+      setState(() {
+        loading = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             'تعذر تحميل لوحة التحكم: $e',
           ),
         ),
       );
-    } finally {
-      if (mounted) {
-        setState(() {
-          loading = false;
-        });
-      }
     }
+  }
+
+  int _toInt(dynamic value) {
+    if (value is int) return value;
+    return int.tryParse(value?.toString() ?? '') ?? 0;
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title:
-            const Text('CRM Business'),
+        title: const Text('CRM Business'),
         actions: [
           IconButton(
             onPressed: load,
-            icon:
-                const Icon(Icons.refresh),
+            icon: const Icon(Icons.refresh),
           ),
         ],
       ),
+      body: loading
+          ? const Center(
+              child: CircularProgressIndicator(),
+            )
+          : RefreshIndicator(
+              onRefresh: load,
+              child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.all(16),
+                children: [
+                  if (guest)
+                    const Card(
+                      child: ListTile(
+                        leading: Icon(Icons.visibility),
+                        title: Text('وضع الضيف'),
+                        subtitle: Text(
+                          'هذه بيانات تجريبية محلية وليست بيانات حقيقية.',
+                        ),
+                      ),
+                    ),
+                  Text(
+                    'مرحباً 👋',
+                    style: Theme.of(context)
+                        .textTheme
+                        .headlineSmall,
+                  ),
+                  Text(
+                    companyName.isEmpty
+                        ? 'شركة جديدة'
+                        : companyName,
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleMedium,
+                  ),
+                  const SizedBox(height: 18),
+                  GridView.count(
+                    crossAxisCount: 2,
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    crossAxisSpacing: 10,
+                    mainAxisSpacing: 10,
+                    childAspectRatio: 1.4,
+                    children: [
+                      MetricCard(
+                        title: 'العملاء',
+                        value: customers,
+                        icon: Icons.people,
+                      ),
+                      MetricCard(
+                        title: 'الفرص المفتوحة',
+                        value: opportunities,
+                        icon: Icons.trending_up,
+                      ),
+                      MetricCard(
+                        title: 'المهام',
+                        value: tasks,
+                        icon: Icons.task_alt,
+                      ),
+                      MetricCard(
+                        title: 'المتأخرة',
+                        value: overdue,
+                        icon: Icons.warning_amber,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Card(
+                    child: ListTile(
+                      leading: const Icon(Icons.insights),
+                      title: const Text('التقارير والتحليلات'),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const AnalyticsPage(),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  Card(
+                    child: ListTile(
+                      leading: const Icon(Icons.card_membership),
+                      title: const Text('الاشتراك'),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const SubscriptionPage(),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+    );
+  }
+}
 
-      body: RefreshIndicator(
-        onRefresh: load,
+class MetricCard extends StatelessWidget {
+  final String title;
+  final int value;
+  final IconData icon;
 
-        child: ListView(
-          physics:
-              const AlwaysScrollableScrollPhysics(),
+  const MetricCard({
+    super.key,
+    required this.title,
+    required this.value,
+    required this.icon,
+  });
 
-          padding:
-              const EdgeInsets.all(16),
-
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            if (guest)
-              Card(
-                child: ListTile(
-                  leading: const Icon(
-                    Icons.visibility,
-                  ),
-                  title:
-                      const Text(
-                    'وضع الضيف',
-                  ),
-                  subtitle:
-                      const Text(
-                    'البيانات المعروضة تجريبية ومحلية',
-                  ),
-                ),
-              ),
-
+            Icon(icon),
+            const SizedBox(height: 6),
+            Text(title),
             Text(
-              'مرحباً 👋',
-              style:
-                  Theme.of(context)
-                      .textTheme
-                      .headlineSmall,
-            ),
-
-            Text(
-              company.isEmpty
-                  ? 'شركة جديدة'
-                  : company,
-              style:
-                  Theme.of(context)
-                      .textTheme
-                      .titleMedium,
-            ),
-
-            const SizedBox(height: 18),
-
-            if (loading)
-              const LinearProgressIndicator(),
-
-            const SizedBox(height: 12),
-
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-
-              children: [
-                Metric(
-                  'العملاء',
-                  data?['customers'] ??
-                      '—',
-                  Icons.people,
-                ),
-
-                Metric(
-                  'الفرص المفتوحة',
-                  data?[
-                        'openOpportunities',
-                      ] ??
-                      '—',
-                  Icons.trending_up,
-                ),
-
-                Metric(
-                  'المهام',
-                  data?['tasks'] ??
-                      '—',
-                  Icons.task_alt,
-                ),
-
-                Metric(
-                  'المتأخرة',
-                  data?[
-                        'tasksOverdue',
-                      ] ??
-                      '—',
-                  Icons.warning_amber,
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 18),
-
-            Card(
-              child: ListTile(
-                leading:
-                    const Icon(
-                  Icons.insights,
-                ),
-                title:
-                    const Text(
-                  'التقارير والتحليلات',
-                ),
-                subtitle:
-                    const Text(
-                  'المبيعات، العملاء، المهام والأنشطة',
-                ),
-                trailing:
-                    const Icon(
-                  Icons.chevron_right,
-                ),
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) =>
-                          const AnalyticsPage(),
-                    ),
-                  );
-                },
-              ),
-            ),
-
-            Card(
-              child: ListTile(
-                leading:
-                    const Icon(
-                  Icons.card_membership,
-                ),
-                title:
-                    const Text(
-                  'الاشتراك',
-                ),
-                subtitle:
-                    const Text(
-                  'الخطة الحالية والاستخدام',
-                ),
-                trailing:
-                    const Icon(
-                  Icons.chevron_right,
-                ),
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) =>
-                          const SubscriptionPage(),
-                    ),
-                  );
-                },
+              '$value',
+              style: const TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
               ),
             ),
           ],
@@ -1318,93 +1031,18 @@ class _DashboardPageState
   }
 }
 
-// ============================================================
-// METRIC
-// ============================================================
-
-class Metric
-    extends StatelessWidget {
-  final String title;
-
-  final dynamic value;
-
-  final IconData icon;
-
-  const Metric(
-    this.title,
-    this.value,
-    this.icon, {
-    super.key,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width:
-          MediaQuery.sizeOf(
-                context,
-              ).width /
-              2 -
-          22,
-
-      child: Card(
-        child: Padding(
-          padding:
-              const EdgeInsets.all(14),
-
-          child: Column(
-            crossAxisAlignment:
-                CrossAxisAlignment.start,
-
-            children: [
-              Icon(icon),
-
-              const SizedBox(
-                height: 8,
-              ),
-
-              Text(title),
-
-              Text(
-                '$value',
-                style:
-                    const TextStyle(
-                  fontSize: 24,
-                  fontWeight:
-                      FontWeight.bold,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ============================================================
-// CUSTOMERS
-// ============================================================
-
-class CustomersPage
-    extends StatefulWidget {
+class CustomersPage extends StatefulWidget {
   const CustomersPage({super.key});
 
   @override
-  State<CustomersPage> createState() =>
-      _CustomersPageState();
+  State<CustomersPage> createState() => _CustomersPageState();
 }
 
-class _CustomersPageState
-    extends State<CustomersPage> {
-  List<dynamic> list = [];
+class _CustomersPageState extends State<CustomersPage> {
+  final searchController = TextEditingController();
 
   bool loading = true;
-
-  bool guest = false;
-
-  final searchController =
-      TextEditingController();
+  List<Map<String, String>> customers = [];
 
   @override
   void initState() {
@@ -1413,89 +1051,78 @@ class _CustomersPageState
   }
 
   Future<void> load() async {
-    guest =
-        await isGuestMode();
+    final guest = await guestModeEnabled();
 
     if (guest) {
+      if (!mounted) return;
+
       setState(() {
-        list = [
+        customers = [
           {
-            'name':
-                'شركة النور التجارية',
-            'phone':
-                '777000001',
-            'email':
-                'info@alnoor.demo',
-            'companyName':
-                'شركة النور',
+            'name': 'شركة النور التجارية',
+            'phone': '777000001',
+            'email': 'info@alnoor.demo',
           },
           {
-            'name':
-                'مؤسسة المستقبل',
-            'phone':
-                '777000002',
-            'email':
-                'future@demo.local',
-            'companyName':
-                'مؤسسة المستقبل',
+            'name': 'مؤسسة المستقبل',
+            'phone': '777000002',
+            'email': 'future@demo.local',
           },
           {
-            'name':
-                'عميل تجريبي',
-            'phone':
-                '777000003',
-            'email':
-                'customer@demo.local',
+            'name': 'عميل تجريبي',
+            'phone': '777000003',
+            'email': 'customer@demo.local',
           },
         ];
-
         loading = false;
       });
 
       return;
     }
 
-    setState(() {
-      loading = true;
-    });
-
     try {
-      final query =
-          searchController.text.trim();
+      final query = searchController.text.trim();
 
       final path = query.isEmpty
           ? '/customers'
           : '/customers?q=${Uri.encodeQueryComponent(query)}';
 
-      final result =
-          await api.get(path);
+      final data = await api.get(path);
 
       if (!mounted) return;
 
-      if (result is List) {
-        setState(() {
-          list = result;
-        });
-      } else {
-        setState(() {
-          list = [];
-        });
+      final result = <Map<String, String>>[];
+
+      if (data is List) {
+        for (final item in data) {
+          if (item is Map) {
+            result.add({
+              'name': item['name']?.toString() ?? '',
+              'phone': item['phone']?.toString() ?? '',
+              'email': item['email']?.toString() ?? '',
+            });
+          }
+        }
       }
+
+      setState(() {
+        customers = result;
+        loading = false;
+      });
     } catch (e) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context)
-          .showSnackBar(
+      setState(() {
+        loading = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('$e'),
+          content: Text(
+            'تعذر تحميل العملاء: $e',
+          ),
         ),
       );
-    } finally {
-      if (mounted) {
-        setState(() {
-          loading = false;
-        });
-      }
     }
   }
 
@@ -1509,113 +1136,66 @@ class _CustomersPageState
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title:
-            const Text('العملاء'),
+        title: const Text('العملاء'),
         actions: [
           IconButton(
             onPressed: load,
-            icon:
-                const Icon(Icons.refresh),
+            icon: const Icon(Icons.refresh),
           ),
         ],
       ),
-
       body: Column(
         children: [
           Padding(
-            padding:
-                const EdgeInsets.all(12),
-
+            padding: const EdgeInsets.all(12),
             child: TextField(
-              controller:
-                  searchController,
-
-              onSubmitted:
-                  (_) => load(),
-
-              decoration:
-                  InputDecoration(
-                prefixIcon:
-                    const Icon(
-                  Icons.search,
-                ),
-                hintText:
-                    'بحث عن عميل',
-                border:
-                    const OutlineInputBorder(),
-                suffixIcon:
-                    IconButton(
+              controller: searchController,
+              onSubmitted: (_) => load(),
+              decoration: InputDecoration(
+                prefixIcon: const Icon(Icons.search),
+                hintText: 'بحث عن عميل',
+                border: const OutlineInputBorder(),
+                suffixIcon: IconButton(
                   onPressed: load,
-                  icon:
-                      const Icon(
-                    Icons.search,
-                  ),
+                  icon: const Icon(Icons.search),
                 ),
               ),
             ),
           ),
-
           Expanded(
             child: loading
                 ? const Center(
-                    child:
-                        CircularProgressIndicator(),
+                    child: CircularProgressIndicator(),
                   )
-                : list.isEmpty
+                : customers.isEmpty
                     ? const Center(
-                        child: Text(
-                          'لا يوجد عملاء',
-                        ),
+                        child: Text('لا يوجد عملاء'),
                       )
                     : ListView.separated(
-                        itemCount:
-                            list.length,
-
-                        separatorBuilder:
-                            (_, __) =>
-                                const Divider(
-                          height: 1,
-                        ),
-
-                        itemBuilder:
-                            (context, index) {
-                          final item =
-                              list[index];
-
-                          final customer =
-                              item is Map
-                                  ? Map<String, dynamic>.from(
-                                      item,
-                                    )
-                                  : <String, dynamic>{};
+                        itemCount: customers.length,
+                        separatorBuilder: (_, __) =>
+                            const Divider(height: 1),
+                        itemBuilder: (context, index) {
+                          final customer = customers[index];
 
                           return ListTile(
-                            leading:
-                                const CircleAvatar(
-                              child:
-                                  Icon(
-                                Icons.person,
-                              ),
+                            leading: const CircleAvatar(
+                              child: Icon(Icons.person),
                             ),
-
                             title: Text(
-                              '${customer['name'] ?? ''}',
+                              customer['name'] ?? '',
                             ),
-
-                            subtitle:
-                                Text(
-                              '${customer['phone'] ?? customer['email'] ?? '—'}',
+                            subtitle: Text(
+                              customer['phone']?.isNotEmpty == true
+                                  ? customer['phone']!
+                                  : customer['email'] ?? '',
                             ),
-
                             onTap: () {
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                  builder:
-                                      (_) =>
-                                          Customer360Page(
-                                    customer:
-                                        customer,
+                                  builder: (_) => Customer360Page(
+                                    customer: customer,
                                   ),
                                 ),
                               );
@@ -1630,14 +1210,8 @@ class _CustomersPageState
   }
 }
 
-// ============================================================
-// CUSTOMER 360
-// ============================================================
-
-class Customer360Page
-    extends StatelessWidget {
-  final Map<String, dynamic>
-      customer;
+class Customer360Page extends StatelessWidget {
+  final Map<String, String> customer;
 
   const Customer360Page({
     super.key,
@@ -1648,52 +1222,33 @@ class Customer360Page
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title:
-            const Text('Customer 360'),
+        title: const Text('Customer 360'),
       ),
-
       body: ListView(
-        padding:
-            const EdgeInsets.all(16),
-
+        padding: const EdgeInsets.all(16),
         children: [
           Text(
-            '${customer['name'] ?? ''}',
-            style:
-                Theme.of(context)
-                    .textTheme
-                    .headlineSmall,
+            customer['name'] ?? '',
+            style: Theme.of(context).textTheme.headlineSmall,
           ),
-
-          if (customer[
-                  'companyName'] !=
-              null)
-            Text(
-              '${customer['companyName']}',
-            ),
-
-          const SizedBox(height: 12),
-
+          const SizedBox(height: 16),
           Card(
             child: ListTile(
-              leading:
-                  const Icon(
-                Icons.phone,
-              ),
+              leading: const Icon(Icons.phone),
               title: Text(
-                '${customer['phone'] ?? 'لا يوجد هاتف'}',
+                customer['phone']?.isNotEmpty == true
+                    ? customer['phone']!
+                    : 'لا يوجد هاتف',
               ),
             ),
           ),
-
           Card(
             child: ListTile(
-              leading:
-                  const Icon(
-                Icons.email,
-              ),
+              leading: const Icon(Icons.email),
               title: Text(
-                '${customer['email'] ?? 'لا يوجد بريد'}',
+                customer['email']?.isNotEmpty == true
+                    ? customer['email']!
+                    : 'لا يوجد بريد',
               ),
             ),
           ),
@@ -1703,30 +1258,17 @@ class Customer360Page
   }
 }
 
-// ============================================================
-// OPPORTUNITIES
-// ============================================================
-
-class OpportunitiesPage
-    extends StatefulWidget {
-  const OpportunitiesPage({
-    super.key,
-  });
+class OpportunitiesPage extends StatefulWidget {
+  const OpportunitiesPage({super.key});
 
   @override
-  State<OpportunitiesPage>
-      createState() =>
-          _OpportunitiesPageState();
+  State<OpportunitiesPage> createState() =>
+      _OpportunitiesPageState();
 }
 
-class _OpportunitiesPageState
-    extends State<
-        OpportunitiesPage> {
-  Map<String, dynamic>? data;
-
+class _OpportunitiesPageState extends State<OpportunitiesPage> {
   bool loading = true;
-
-  bool guest = false;
+  List<Map<String, String>> opportunities = [];
 
   @override
   void initState() {
@@ -1735,221 +1277,141 @@ class _OpportunitiesPageState
   }
 
   Future<void> load() async {
-    guest =
-        await isGuestMode();
+    final guest = await guestModeEnabled();
 
     if (guest) {
-      setState(() {
-        data = {
-          'pipelineValue':
-              185000,
-          'weightedPipeline':
-              126000,
-          'stages': {
-            'LEAD': {
-              'count': 4,
-              'value': 50000,
-            },
-            'QUALIFIED': {
-              'count': 3,
-              'value': 65000,
-            },
-            'MEETING': {
-              'count': 2,
-              'value': 30000,
-            },
-            'PROPOSAL': {
-              'count': 2,
-              'value': 40000,
-            },
-            'NEGOTIATION': {
-              'count': 1,
-              'value': 25000,
-            },
-            'WON': {
-              'count': 2,
-              'value': 50000,
-            },
-            'LOST': {
-              'count': 1,
-              'value': 15000,
-            },
-          },
-        };
+      if (!mounted) return;
 
+      setState(() {
+        opportunities = [
+          {
+            'name': 'توريد أجهزة مكتبية',
+            'stage': 'QUALIFIED',
+            'value': '50000',
+          },
+          {
+            'name': 'مشروع طاقة شمسية',
+            'stage': 'PROPOSAL',
+            'value': '75000',
+          },
+          {
+            'name': 'عقد خدمات سنوي',
+            'stage': 'NEGOTIATION',
+            'value': '60000',
+          },
+          {
+            'name': 'توريد معدات',
+            'stage': 'LEAD',
+            'value': '35000',
+          },
+        ];
         loading = false;
       });
 
       return;
     }
 
-    setState(() {
-      loading = true;
-    });
-
     try {
-      final result =
-          await api.get(
-        '/opportunities/pipeline',
-      );
+      final data = await api.get('/opportunities/pipeline');
 
       if (!mounted) return;
 
-      if (result is Map) {
-        setState(() {
-          data =
-              Map<String, dynamic>.from(
-            result,
-          );
-        });
+      final result = <Map<String, String>>[];
+
+      if (data is Map) {
+        final stages = data['stages'];
+
+        if (stages is Map) {
+          stages.forEach((key, value) {
+            if (value is Map) {
+              result.add({
+                'name': key.toString(),
+                'stage': key.toString(),
+                'value': value['value']?.toString() ?? '0',
+              });
+            }
+          });
+        }
       }
+
+      setState(() {
+        opportunities = result;
+        loading = false;
+      });
     } catch (e) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context)
-          .showSnackBar(
+      setState(() {
+        loading = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             'تعذر تحميل الفرص: $e',
           ),
         ),
       );
-    } finally {
-      if (mounted) {
-        setState(() {
-          loading = false;
-        });
-      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final rawStages =
-        data?['stages'];
-
-    final stages = rawStages is Map
-        ? Map<String, dynamic>.from(
-            rawStages,
-          )
-        : <String, dynamic>{};
-
-    const stageNames = [
-      'LEAD',
-      'QUALIFIED',
-      'MEETING',
-      'PROPOSAL',
-      'NEGOTIATION',
-      'WON',
-      'LOST',
-    ];
-
     return Scaffold(
       appBar: AppBar(
-        title:
-            const Text('Sales Pipeline'),
+        title: const Text('الفرص'),
         actions: [
           IconButton(
             onPressed: load,
-            icon:
-                const Icon(Icons.refresh),
+            icon: const Icon(Icons.refresh),
           ),
         ],
       ),
-
       body: loading
           ? const Center(
-              child:
-                  CircularProgressIndicator(),
+              child: CircularProgressIndicator(),
             )
-          : ListView(
-              padding:
-                  const EdgeInsets.all(16),
+          : opportunities.isEmpty
+              ? const Center(
+                  child: Text('لا توجد فرص'),
+                )
+              : ListView.separated(
+                  itemCount: opportunities.length,
+                  separatorBuilder: (_, __) =>
+                      const Divider(height: 1),
+                  itemBuilder: (context, index) {
+                    final opportunity = opportunities[index];
 
-              children: [
-                Card(
-                  child: ListTile(
-                    title:
-                        const Text(
-                      'Pipeline Value',
-                    ),
-                    trailing:
-                        Text(
-                      '${data?['pipelineValue'] ?? 0}',
-                    ),
-                  ),
-                ),
-
-                Card(
-                  child: ListTile(
-                    title:
-                        const Text(
-                      'Weighted Pipeline',
-                    ),
-                    trailing:
-                        Text(
-                      '${data?['weightedPipeline'] ?? 0}',
-                    ),
-                  ),
-                ),
-
-                ...stageNames.map(
-                  (stage) {
-                    final rawStage =
-                        stages[stage];
-
-                    final stageData =
-                        rawStage is Map
-                            ? Map<String, dynamic>.from(
-                                rawStage,
-                              )
-                            : <String, dynamic>{};
-
-                    return Card(
-                      child: ListTile(
-                        leading:
-                            CircleAvatar(
-                          child:
-                              Text(
-                            '${stageData['count'] ?? 0}',
-                          ),
-                        ),
-                        title:
-                            Text(stage),
-                        subtitle:
-                            Text(
-                          'Value: ${stageData['value'] ?? 0}',
-                        ),
+                    return ListTile(
+                      leading: const CircleAvatar(
+                        child: Icon(Icons.trending_up),
+                      ),
+                      title: Text(
+                        opportunity['name'] ?? '',
+                      ),
+                      subtitle: Text(
+                        opportunity['stage'] ?? '',
+                      ),
+                      trailing: Text(
+                        opportunity['value'] ?? '0',
                       ),
                     );
                   },
                 ),
-              ],
-            ),
     );
   }
 }
 
-// ============================================================
-// TASKS
-// ============================================================
-
-class TasksPage
-    extends StatefulWidget {
+class TasksPage extends StatefulWidget {
   const TasksPage({super.key});
 
   @override
-  State<TasksPage> createState() =>
-      _TasksPageState();
+  State<TasksPage> createState() => _TasksPageState();
 }
 
-class _TasksPageState
-    extends State<TasksPage> {
-  List<dynamic> list = [];
-
+class _TasksPageState extends State<TasksPage> {
   bool loading = true;
-
-  bool guest = false;
+  List<Map<String, String>> tasks = [];
 
   @override
   void initState() {
@@ -1958,88 +1420,77 @@ class _TasksPageState
   }
 
   Future<void> load() async {
-    guest =
-        await isGuestMode();
+    final guest = await guestModeEnabled();
 
     if (guest) {
+      if (!mounted) return;
+
       setState(() {
-        list = [
+        tasks = [
           {
-            'title':
-                'الاتصال بالعميل التجريبي',
-            'priority':
-                'HIGH',
-            'status':
-                'OPEN',
+            'title': 'الاتصال بالعميل',
+            'status': 'OPEN',
+            'priority': 'HIGH',
           },
           {
-            'title':
-                'إرسال عرض سعر',
-            'priority':
-                'MEDIUM',
-            'status':
-                'IN_PROGRESS',
+            'title': 'إرسال عرض سعر',
+            'status': 'IN_PROGRESS',
+            'priority': 'MEDIUM',
           },
           {
-            'title':
-                'متابعة فرصة المبيعات',
-            'priority':
-                'HIGH',
-            'status':
-                'OPEN',
+            'title': 'متابعة فرصة المبيعات',
+            'status': 'OPEN',
+            'priority': 'HIGH',
           },
           {
-            'title':
-                'تحديث بيانات العميل',
-            'priority':
-                'LOW',
-            'status':
-                'COMPLETED',
+            'title': 'تحديث بيانات العميل',
+            'status': 'COMPLETED',
+            'priority': 'LOW',
           },
         ];
-
         loading = false;
       });
 
       return;
     }
 
-    setState(() {
-      loading = true;
-    });
-
     try {
-      final result =
-          await api.get('/tasks');
+      final data = await api.get('/tasks');
 
       if (!mounted) return;
 
-      if (result is List) {
-        setState(() {
-          list = result;
-        });
-      } else {
-        setState(() {
-          list = [];
-        });
+      final result = <Map<String, String>>[];
+
+      if (data is List) {
+        for (final item in data) {
+          if (item is Map) {
+            result.add({
+              'title': item['title']?.toString() ?? '',
+              'status': item['status']?.toString() ?? '',
+              'priority': item['priority']?.toString() ?? '',
+            });
+          }
+        }
       }
+
+      setState(() {
+        tasks = result;
+        loading = false;
+      });
     } catch (e) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context)
-          .showSnackBar(
+      setState(() {
+        loading = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             'تعذر تحميل المهام: $e',
           ),
         ),
       );
-    } finally {
-      if (mounted) {
-        setState(() {
-          loading = false;
-        });
-      }
     }
   }
 
@@ -2047,69 +1498,41 @@ class _TasksPageState
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title:
-            const Text('مهام المتابعة'),
+        title: const Text('المهام'),
         actions: [
           IconButton(
             onPressed: load,
-            icon:
-                const Icon(Icons.refresh),
+            icon: const Icon(Icons.refresh),
           ),
         ],
       ),
-
       body: loading
           ? const Center(
-              child:
-                  CircularProgressIndicator(),
+              child: CircularProgressIndicator(),
             )
-          : list.isEmpty
+          : tasks.isEmpty
               ? const Center(
-                  child:
-                      Text(
-                    'لا توجد مهام',
-                  ),
+                  child: Text('لا توجد مهام'),
                 )
               : ListView.separated(
-                  itemCount:
-                      list.length,
-
-                  separatorBuilder:
-                      (_, __) =>
-                          const Divider(),
-
-                  itemBuilder:
-                      (context, index) {
-                    final item =
-                        list[index];
-
-                    final task =
-                        item is Map
-                            ? Map<String, dynamic>.from(
-                                item,
-                              )
-                            : <String, dynamic>{};
-
+                  itemCount: tasks.length,
+                  separatorBuilder: (_, __) =>
+                      const Divider(height: 1),
+                  itemBuilder: (context, index) {
+                    final task = tasks[index];
                     final completed =
-                        task['status'] ==
-                            'COMPLETED';
+                        task['status'] == 'COMPLETED';
 
                     return ListTile(
-                      leading:
-                          Icon(
+                      leading: Icon(
                         completed
-                            ? Icons
-                                .check_circle
-                            : Icons
-                                .radio_button_unchecked,
+                            ? Icons.check_circle
+                            : Icons.radio_button_unchecked,
                       ),
-
                       title: Text(
-                        '${task['title'] ?? ''}',
+                        task['title'] ?? '',
                       ),
-
-                      subtitle:
-                          Text(
+                      subtitle: Text(
                         '${task['priority'] ?? ''} • ${task['status'] ?? ''}',
                       ),
                     );
@@ -2119,26 +1542,16 @@ class _TasksPageState
   }
 }
 
-// ============================================================
-// ANALYTICS
-// ============================================================
-
-class AnalyticsPage
-    extends StatefulWidget {
+class AnalyticsPage extends StatefulWidget {
   const AnalyticsPage({super.key});
 
   @override
-  State<AnalyticsPage> createState() =>
-      _AnalyticsPageState();
+  State<AnalyticsPage> createState() => _AnalyticsPageState();
 }
 
-class _AnalyticsPageState
-    extends State<AnalyticsPage> {
-  Map<String, dynamic>? data;
-
+class _AnalyticsPageState extends State<AnalyticsPage> {
   bool loading = true;
-
-  bool guest = false;
+  Map<String, dynamic> data = {};
 
   @override
   void initState() {
@@ -2147,10 +1560,11 @@ class _AnalyticsPageState
   }
 
   Future<void> load() async {
-    guest =
-        await isGuestMode();
+    final guest = await guestModeEnabled();
 
     if (guest) {
+      if (!mounted) return;
+
       setState(() {
         data = {
           'إجمالي العملاء': 12,
@@ -2160,7 +1574,6 @@ class _AnalyticsPageState
           'المهام المكتملة': 24,
           'معدل التحويل': '28%',
         };
-
         loading = false;
       });
 
@@ -2168,101 +1581,69 @@ class _AnalyticsPageState
     }
 
     try {
-      final result =
-          await api.get(
-        '/analytics/dashboard',
-      );
+      final result = await api.get('/analytics/dashboard');
 
       if (!mounted) return;
 
       if (result is Map) {
         setState(() {
-          data =
-              Map<String, dynamic>.from(
-            result,
-          );
+          data = Map<String, dynamic>.from(result);
+          loading = false;
+        });
+      } else {
+        setState(() {
+          loading = false;
         });
       }
     } catch (e) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context)
-          .showSnackBar(
+      setState(() {
+        loading = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             'تعذر تحميل التحليلات: $e',
           ),
         ),
       );
-    } finally {
-      if (mounted) {
-        setState(() {
-          loading = false;
-        });
-      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final entries =
-        data?.entries.toList() ??
-            [];
+    final entries = data.entries.toList();
 
     return Scaffold(
       appBar: AppBar(
-        title:
-            const Text(
-          'التقارير والتحليلات',
-        ),
+        title: const Text('التحليلات'),
       ),
-
       body: loading
           ? const Center(
-              child:
-                  CircularProgressIndicator(),
+              child: CircularProgressIndicator(),
             )
           : ListView(
-              padding:
-                  const EdgeInsets.all(16),
-
+              padding: const EdgeInsets.all(16),
               children: [
-                Text(
+                const Text(
                   'ملخص الأداء',
-                  style:
-                      Theme.of(context)
-                          .textTheme
-                          .titleLarge,
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
-
-                const SizedBox(
-                  height: 12,
-                ),
-
-                if (entries.isEmpty)
-                  const Card(
+                const SizedBox(height: 12),
+                ...entries.map(
+                  (entry) => Card(
                     child: ListTile(
-                      title: Text(
-                        'لا توجد بيانات تحليلية حالياً',
+                      title: Text(entry.key),
+                      trailing: Text(
+                        entry.value.toString(),
                       ),
                     ),
                   ),
-
-                ...entries.map(
-                  (entry) {
-                    return Card(
-                      child: ListTile(
-                        title: Text(
-                          entry.key
-                              .toString(),
-                        ),
-                        trailing:
-                            Text(
-                          '${entry.value}',
-                        ),
-                      ),
-                    );
-                  },
                 ),
               ],
             ),
@@ -2270,30 +1651,17 @@ class _AnalyticsPageState
   }
 }
 
-// ============================================================
-// SUBSCRIPTION
-// ============================================================
-
-class SubscriptionPage
-    extends StatefulWidget {
-  const SubscriptionPage({
-    super.key,
-  });
+class SubscriptionPage extends StatefulWidget {
+  const SubscriptionPage({super.key});
 
   @override
-  State<SubscriptionPage>
-      createState() =>
-          _SubscriptionPageState();
+  State<SubscriptionPage> createState() =>
+      _SubscriptionPageState();
 }
 
-class _SubscriptionPageState
-    extends State<
-        SubscriptionPage> {
-  Map<String, dynamic>? data;
-
+class _SubscriptionPageState extends State<SubscriptionPage> {
   bool loading = true;
-
-  bool guest = false;
+  Map<String, dynamic> data = {};
 
   @override
   void initState() {
@@ -2302,22 +1670,18 @@ class _SubscriptionPageState
   }
 
   Future<void> load() async {
-    guest =
-        await isGuestMode();
+    final guest = await guestModeEnabled();
 
     if (guest) {
+      if (!mounted) return;
+
       setState(() {
         data = {
-          'planName':
-              'Demo / تجربة',
-          'status':
-              'تجريبية',
-          'users':
-              1,
-          'customers':
-              12,
+          'الخطة': 'تجريبية',
+          'الحالة': 'Demo',
+          'المستخدمون': 1,
+          'العملاء': 12,
         };
-
         loading = false;
       });
 
@@ -2325,114 +1689,67 @@ class _SubscriptionPageState
     }
 
     try {
-      final result =
-          await api.get(
-        '/subscriptions/current',
-      );
+      final result = await api.get('/subscriptions/current');
 
       if (!mounted) return;
 
       if (result is Map) {
         setState(() {
-          data =
-              Map<String, dynamic>.from(
-            result,
-          );
+          data = Map<String, dynamic>.from(result);
+          loading = false;
+        });
+      } else {
+        setState(() {
+          loading = false;
         });
       }
     } catch (e) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context)
-          .showSnackBar(
+      setState(() {
+        loading = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             'تعذر تحميل الاشتراك: $e',
           ),
         ),
       );
-    } finally {
-      if (mounted) {
-        setState(() {
-          loading = false;
-        });
-      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final rawPlan =
-        data?['plan'];
-
-    String planName = '—';
-
-    if (rawPlan is Map &&
-        rawPlan['name'] != null) {
-      planName =
-          rawPlan['name'].toString();
-    } else if (data?[
-            'planName'] !=
-        null) {
-      planName =
-          data!['planName']
-              .toString();
-    }
-
     return Scaffold(
       appBar: AppBar(
-        title:
-            const Text('الاشتراك'),
+        title: const Text('الاشتراك'),
       ),
-
       body: loading
           ? const Center(
-              child:
-                  CircularProgressIndicator(),
+              child: CircularProgressIndicator(),
             )
           : ListView(
-              padding:
-                  const EdgeInsets.all(16),
-
+              padding: const EdgeInsets.all(16),
               children: [
-                Card(
-                  child: ListTile(
-                    title:
-                        const Text(
-                      'الخطة الحالية',
-                    ),
-                    subtitle:
-                        Text(planName),
-                  ),
-                ),
-
-                Card(
-                  child: ListTile(
-                    title:
-                        const Text(
-                      'الحالة',
-                    ),
-                    subtitle:
-                        Text(
-                      '${data?['status'] ?? '—'}',
+                ...data.entries.map(
+                  (entry) => Card(
+                    child: ListTile(
+                      title: Text(entry.key),
+                      trailing: Text(
+                        entry.value.toString(),
+                      ),
                     ),
                   ),
                 ),
-
-                if (guest)
+                if (data.isNotEmpty)
                   const Card(
                     child: ListTile(
-                      leading:
-                          Icon(
-                        Icons.info_outline,
-                      ),
-                      title:
-                          Text(
-                        'وضع تجريبي',
-                      ),
-                      subtitle:
-                          Text(
-                        'هذه البيانات للتجربة فقط ولا تمثل اشتراكاً حقيقياً.',
+                      leading: Icon(Icons.info_outline),
+                      title: Text('معلومات تجريبية'),
+                      subtitle: Text(
+                        'لا يوجد اشتراك حقيقي أثناء وضع الضيف.',
                       ),
                     ),
                   ),
@@ -2442,21 +1759,14 @@ class _SubscriptionPageState
   }
 }
 
-// ============================================================
-// MORE
-// ============================================================
-
-class MorePage
-    extends StatefulWidget {
+class MorePage extends StatefulWidget {
   const MorePage({super.key});
 
   @override
-  State<MorePage> createState() =>
-      _MorePageState();
+  State<MorePage> createState() => _MorePageState();
 }
 
-class _MorePageState
-    extends State<MorePage> {
+class _MorePageState extends State<MorePage> {
   bool guest = false;
 
   @override
@@ -2466,8 +1776,7 @@ class _MorePageState
   }
 
   Future<void> loadMode() async {
-    final value =
-        await isGuestMode();
+    final value = await guestModeEnabled();
 
     if (!mounted) return;
 
@@ -2476,36 +1785,31 @@ class _MorePageState
     });
   }
 
-  Future<void> logout(
-      BuildContext context) async {
-    final storage =
-        await SharedPreferences.getInstance();
+  Future<void> logout() async {
+    final storage = await SharedPreferences.getInstance();
 
     await storage.clear();
 
-    if (!context.mounted) return;
+    if (!mounted) return;
 
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(
-        builder: (_) =>
-            const LoginPage(),
+        builder: (_) => const LoginPage(),
       ),
       (_) => false,
     );
   }
 
-  Future<void> exitGuest(
-      BuildContext context) async {
+  Future<void> exitGuest() async {
     await disableGuestMode();
 
-    if (!context.mounted) return;
+    if (!mounted) return;
 
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(
-        builder: (_) =>
-            const LoginPage(),
+        builder: (_) => const LoginPage(),
       ),
       (_) => false,
     );
@@ -2515,103 +1819,59 @@ class _MorePageState
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title:
-            const Text('المزيد'),
+        title: const Text('المزيد'),
       ),
-
       body: ListView(
         children: [
           if (guest)
             const Card(
-              margin:
-                  EdgeInsets.all(12),
+              margin: EdgeInsets.all(12),
               child: ListTile(
-                leading: Icon(
-                  Icons.visibility,
-                ),
-                title:
-                    Text(
-                  'أنت تستخدم وضع الضيف',
-                ),
-                subtitle:
-                    Text(
-                  'البيانات تجريبية ومحلية',
+                leading: Icon(Icons.visibility),
+                title: Text('وضع الضيف'),
+                subtitle: Text(
+                  'أنت تستخدم النسخة التجريبية المحلية.',
                 ),
               ),
             ),
-
           ListTile(
-            leading:
-                const Icon(
-              Icons.insights,
-            ),
-            title:
-                const Text(
-              'التقارير والتحليلات',
-            ),
+            leading: const Icon(Icons.insights),
+            title: const Text('التحليلات'),
+            trailing: const Icon(Icons.chevron_right),
             onTap: () {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) =>
-                      const AnalyticsPage(),
+                  builder: (_) => const AnalyticsPage(),
                 ),
               );
             },
           ),
-
           ListTile(
-            leading:
-                const Icon(
-              Icons.card_membership,
-            ),
-            title:
-                const Text(
-              'الاشتراك',
-            ),
+            leading: const Icon(Icons.card_membership),
+            title: const Text('الاشتراك'),
+            trailing: const Icon(Icons.chevron_right),
             onTap: () {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) =>
-                      const SubscriptionPage(),
+                  builder: (_) => const SubscriptionPage(),
                 ),
               );
             },
           ),
-
           const Divider(),
-
-          if (guest)
-            ListTile(
-              leading:
-                  const Icon(
-                Icons.login,
-              ),
-              title:
-                  const Text(
-                'الخروج من وضع الضيف',
-              ),
-              subtitle:
-                  const Text(
-                'العودة إلى شاشة تسجيل الدخول',
-              ),
-              onTap: () =>
-                  exitGuest(context),
-            )
-          else
-            ListTile(
-              leading:
-                  const Icon(
-                Icons.logout,
-              ),
-              title:
-                  const Text(
-                'تسجيل الخروج',
-              ),
-              onTap: () =>
-                  logout(context),
+          ListTile(
+            leading: Icon(
+              guest ? Icons.login : Icons.logout,
             ),
+            title: Text(
+              guest
+                  ? 'الخروج من وضع الضيف'
+                  : 'تسجيل الخروج',
+            ),
+            onTap: guest ? exitGuest : logout,
+          ),
         ],
       ),
     );
