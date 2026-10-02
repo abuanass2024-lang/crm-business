@@ -27,7 +27,13 @@ android {
             val storePasswordEnv = System.getenv("ANDROID_KEYSTORE_PASSWORD")
             val keyAliasEnv = System.getenv("ANDROID_KEY_ALIAS")
             val keyPasswordEnv = System.getenv("ANDROID_KEY_PASSWORD")
-            if (!storeFilePath.isNullOrBlank() && !storePasswordEnv.isNullOrBlank() && !keyAliasEnv.isNullOrBlank() && !keyPasswordEnv.isNullOrBlank()) {
+
+            if (
+                !storeFilePath.isNullOrBlank() &&
+                !storePasswordEnv.isNullOrBlank() &&
+                !keyAliasEnv.isNullOrBlank() &&
+                !keyPasswordEnv.isNullOrBlank()
+            ) {
                 storeFile = file(storeFilePath)
                 storePassword = storePasswordEnv
                 keyAlias = keyAliasEnv
@@ -38,7 +44,7 @@ android {
 
     buildTypes {
         release {
-            signingConfig = signingConfigs.getByName("release")
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
 }
