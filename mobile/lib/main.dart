@@ -683,6 +683,11 @@ class _CrmHomeState extends State<CrmHome> {
                   tooltip: 'ملف الشركة',
                 ),
                 IconButton(
+                  onPressed: _openSettings,
+                  icon: const Icon(Icons.settings_outlined),
+                  tooltip: 'الإعدادات',
+                ),
+                IconButton(
                   onPressed: () => showAboutDialog(
                     context: context,
                     applicationName: 'CRM Business',
@@ -795,6 +800,14 @@ class _CrmHomeState extends State<CrmHome> {
     );
   }
 
+  void _openSettings() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => SettingsPage(data: data),
+      ),
+    );
+  }
+
   void _showCompany() {
     final company = data.company;
 
@@ -802,27 +815,30 @@ class _CrmHomeState extends State<CrmHome> {
 
     showDialog<void>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('ملف الشركة'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('الشركة: ${company.companyName}'),
-            const SizedBox(height: 8),
-            Text('المستخدم: ${company.managerName}'),
-            const SizedBox(height: 8),
-            Text('البريد: ${company.email}'),
-            const SizedBox(height: 8),
-            Text('الهاتف: ${company.phone}'),
+      builder: (context) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          title: const Text('ملف الشركة'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('الشركة: ${company.companyName}'),
+              const SizedBox(height: 8),
+              Text('المستخدم: ${company.managerName}'),
+              const SizedBox(height: 8),
+              Text('البريد: ${company.email}'),
+              const SizedBox(height: 8),
+              Text('الهاتف: ${company.phone}'),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('إغلاق'),
+            ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('إغلاق'),
-          ),
-        ],
       ),
     );
   }
@@ -1226,6 +1242,405 @@ class _CrmHomeState extends State<CrmHome> {
     }
 
     return result;
+  }
+}
+
+class SettingsPage extends StatefulWidget {
+  const SettingsPage({
+    super.key,
+    required this.data,
+  });
+
+  final CrmData data;
+
+  @override
+  State<SettingsPage> createState() => _SettingsPageState();
+}
+
+class _SettingsPageState extends State<SettingsPage> {
+  bool notifications = true;
+  bool taskReminders = true;
+  bool compactMode = false;
+
+  CrmData get data => widget.data;
+
+  @override
+  Widget build(BuildContext context) {
+    final company = data.company;
+
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text(
+            'الإعدادات',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+        body: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            _sectionTitle('الحساب والشركة'),
+
+            Card(
+              child: ListTile(
+                leading: const CircleAvatar(
+                  child: Icon(Icons.business),
+                ),
+                title: Text(
+                  company?.companyName ?? 'الشركة',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                subtitle: Text(
+                  company?.managerName ?? 'المستخدم',
+                ),
+                trailing: const Icon(
+                  Icons.chevron_left,
+                ),
+                onTap: _showCompanyDetails,
+              ),
+            ),
+
+            const SizedBox(height: 18),
+
+            _sectionTitle('التنبيهات'),
+
+            Card(
+              child: Column(
+                children: [
+                  SwitchListTile(
+                    value: notifications,
+                    onChanged: (value) {
+                      setState(() {
+                        notifications = value;
+                      });
+                    },
+                    title: const Text(
+                      'التنبيهات',
+                    ),
+                    subtitle: const Text(
+                      'تفعيل إشعارات CRM',
+                    ),
+                    secondary: const Icon(
+                      Icons.notifications_outlined,
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  SwitchListTile(
+                    value: taskReminders,
+                    onChanged: notifications
+                        ? (value) {
+                            setState(() {
+                              taskReminders = value;
+                            });
+                          }
+                        : null,
+                    title: const Text(
+                      'تذكير المهام',
+                    ),
+                    subtitle: const Text(
+                      'التنبيه بالمهام القادمة',
+                    ),
+                    secondary: const Icon(
+                      Icons.alarm_outlined,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 18),
+
+            _sectionTitle('المظهر'),
+
+            Card(
+              child: SwitchListTile(
+                value: compactMode,
+                onChanged: (value) {
+                  setState(() {
+                    compactMode = value;
+                  });
+                },
+                title: const Text(
+                  'الوضع المختصر',
+                ),
+                subtitle: const Text(
+                  'تقليل المسافات في القوائم',
+                ),
+                secondary: const Icon(
+                  Icons.view_compact_outlined,
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 18),
+
+            _sectionTitle('إدارة البيانات'),
+
+            Card(
+              child: Column(
+                children: [
+                  ListTile(
+                    leading: const Icon(
+                      Icons.people_outline,
+                    ),
+                    title: const Text(
+                      'إجمالي العملاء',
+                    ),
+                    trailing: Text(
+                      '${data.customers.length}',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: const Icon(
+                      Icons.trending_up,
+                    ),
+                    title: const Text(
+                      'إجمالي الفرص',
+                    ),
+                    trailing: Text(
+                      '${data.opportunities.length}',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: const Icon(
+                      Icons.task_alt,
+                    ),
+                    title: const Text(
+                      'إجمالي المهام',
+                    ),
+                    trailing: Text(
+                      '${data.tasks.length}',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 18),
+
+            _sectionTitle('حول التطبيق'),
+
+            Card(
+              child: Column(
+                children: [
+                  const ListTile(
+                    leading: Icon(
+                      Icons.apps_outlined,
+                    ),
+                    title: Text(
+                      'CRM Business',
+                    ),
+                    subtitle: Text(
+                      'نظام إدارة علاقات العملاء',
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  const ListTile(
+                    leading: Icon(
+                      Icons.info_outline,
+                    ),
+                    title: Text(
+                      'الإصدار',
+                    ),
+                    trailing: Text(
+                      '3.0.0',
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: const Icon(
+                      Icons.privacy_tip_outlined,
+                    ),
+                    title: const Text(
+                      'الخصوصية والأمان',
+                    ),
+                    trailing: const Icon(
+                      Icons.chevron_left,
+                    ),
+                    onTap: _showPrivacy,
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 24),
+
+            FilledButton.icon(
+              onPressed: _logout,
+              icon: const Icon(
+                Icons.logout,
+              ),
+              label: const Text(
+                'تسجيل الخروج',
+              ),
+            ),
+
+            const SizedBox(height: 30),
+
+            const Text(
+              'CRM Business\nإدارة العملاء والفرص والمهام من مكان واحد.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.black45,
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _sectionTitle(String title) {
+    return Padding(
+      padding: const EdgeInsets.only(
+        bottom: 8,
+      ),
+      child: Text(
+        title,
+        style: const TextStyle(
+          fontSize: 17,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
+  }
+
+  void _showCompanyDetails() {
+    final company = data.company;
+
+    if (company == null) return;
+
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text(
+          'بيانات الشركة',
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'اسم الشركة: ${company.companyName}',
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'المستخدم: ${company.managerName}',
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'البريد الإلكتروني: ${company.email}',
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'الهاتف: ${company.phone}',
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text(
+              'إغلاق',
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showPrivacy() {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text(
+          'الخصوصية والأمان',
+        ),
+        content: const Text(
+          'هذه النسخة التجريبية تحفظ بياناتها محلياً على الجهاز. '
+          'سيتم تطبيق المصادقة الحقيقية وربط البيانات بالخادم '
+          'وقاعدة البيانات في المرحلة التالية.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text(
+              'إغلاق',
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _logout() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text(
+          'تسجيل الخروج',
+        ),
+        content: const Text(
+          'هل تريد تسجيل الخروج من CRM Business؟',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(
+              ctx,
+              false,
+            ),
+            child: const Text(
+              'إلغاء',
+            ),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(
+              ctx,
+              true,
+            ),
+            child: const Text(
+              'تسجيل الخروج',
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    final prefs = await SharedPreferences.getInstance();
+
+    await prefs.remove(
+      'crm_company_profile',
+    );
+
+    if (!mounted) return;
+
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(
+        builder: (_) => CompanyRegistrationPage(
+          data: data,
+        ),
+      ),
+      (route) => false,
+    );
   }
 }
 
