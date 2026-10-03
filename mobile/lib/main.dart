@@ -1,9 +1,15 @@
 // ignore_for_file: prefer_const_constructors
 
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+const String apiBaseUrl = String.fromEnvironment(
+  'API_BASE_URL',
+  defaultValue: '',
+);
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -30,7 +36,7 @@ class CrmApp extends StatelessWidget {
           filled: true,
           fillColor: Colors.white,
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.all(Radius.circular(12)),
+            borderRadius: BorderRadius.all(Radius.circular(14)),
             borderSide: BorderSide.none,
           ),
         ),
@@ -40,117 +46,571 @@ class CrmApp extends StatelessWidget {
   }
 }
 
+/* =========================================================
+   API CLIENT
+   ========================================================= */
+
+class ApiClient {
+  String get base => apiBaseUrl.replaceFirst(RegExp(r'/$'), '');
+
+  Future<Map<String, dynamic>> post(
+    String path,
+    Map<String, dynamic> body, {
+    String? token,
+  }) async {
+    if (base.isEmpty) {
+      throw Exception('لم يتم ضبط عنوان الخادم API_BASE_URL.');
+    }
+
+    final client = HttpClient();
+
+    try {
+      final request = await client.postUrl(
+        Uri.parse('$base$path'),
+      );
+
+      request.headers.contentType = ContentType.json;
+
+      if (token != null && token.isNotEmpty) {
+        request.headers.set(
+          HttpHeaders.authorizationHeader,
+          'Bearer $token',
+        );
+      }
+
+      request.write(jsonEncode(body));
+
+      final response = await request.close();
+      final responseText =
+          await response.transform(utf8.decoder).join();
+
+      dynamic decoded;
+
+      try {
+        decoded = responseText.isEmpty
+            ? <String, dynamic>{}
+            : jsonDecode(responseText);
+      } catch (_) {
+        decoded = <String, dynamic>{
+          'message': responseText,
+        };
+      }
+
+      if (response.statusCode < 200 ||
+          response.statusCode >= 300) {
+        final message = decoded is Map
+            ? decoded['message']?.toString() ??
+                'فشل الطلب (${response.statusCode})'
+            : 'فشل الطلب (${response.statusCode})';
+
+        throw Exception(message);
+      }
+
+      return Map<String, dynamic>.from(decoded as Map);
+    } finally {
+      client.close(force: true);
+    }
+  }
+
+  Future<Map<String, dynamic>> get(
+    String path, {
+    String? token,
+  }) async {
+    if (base.isEmpty) {
+      throw Exception('لم يتم ضبط عنوان الخادم API_BASE_URL.');
+    }
+
+    final client = HttpClient();
+
+    try {
+      final request = await client.getUrl(
+        Uri.parse('$base$path'),
+      );
+
+      if (token != null && token.isNotEmpty) {
+        request.headers.set(
+          HttpHeaders.authorizationHeader,
+          'Bearer $token',
+        );
+      }
+
+      final response = await request.close();
+      final responseText =
+          await response.transform(utf8.decoder).join();
+
+      dynamic decoded;
+
+      try {
+        decoded = responseText.isEmpty
+            ? <String, dynamic>{}
+            : jsonDecode(responseText);
+      } catch (_) {
+        decoded = <String, dynamic>{
+          'message': responseText,
+        };
+      }
+
+      if (response.statusCode < 200 ||
+          response.statusCode >= 300) {
+        final message = decoded is Map
+            ? decoded['message']?.toString() ?? 'فشل الطلب'
+            : 'فشل الطلب';
+
+        throw Exception(message);
+      }
+
+      return Map<String, dynamic>.from(decoded as Map);
+    } finally {
+      client.close(force: true);
+    }
+  }
+}
+
+/* =========================================================
+   SESSION
+   ========================================================= */
+
+class Session {
+  static const accessKey = 'crm_access_token';
+  static const refreshKey = 'crm_refresh_token';
+  static const userKey = 'crm_session_user';
+  static const companyKey = 'crm_session_company';
+
+  final String accessToken;
+  final String refreshToken;
+  final Map<String, dynamic> user;
+  final Map<String, dynamic> company;
+
+  Session({
+    required this.accessToken,
+    required this.refreshToken,
+    required this.user,
+    required this.company,
+  });
+
+  static Future<Session?> load() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    final access = prefs.getString(accessKey);
+    final refresh = prefs.getString(refreshKey);
+
+    if (access == null ||
+        refresh == null ||
+        access.isEmpty ||
+        refresh.isEmpty) {
+      return null;
+    }
+
+    return Session(
+      accessToken: access,
+      refreshToken: refresh,
+      user: _decodeMap(
+        prefs.getString(userKey),
+      ),
+      company: _decodeMap(
+        prefs.getString(companyKey),
+      ),
+    );
+  }
+
+  static Map<String, dynamic> _decodeMap(String? raw) {
+    if (raw == null || raw.isEmpty) {
+      return <String, dynamic>{};
+    }
+
+    try {
+      return Map<String, dynamic>.from(
+        jsonDecode(raw) as Map,
+      );
+    } catch (_) {
+      return <String, dynamic>{};
+    }
+  }
+
+  Future<void> save() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    await prefs.setString(
+      accessKey,
+      accessToken,
+    );
+
+    await prefs.setString(
+      refreshKey,
+      refreshToken,
+    );
+
+    await prefs.setString(
+      userKey,
+      jsonEncode(user),
+    );
+
+    await prefs.setString(
+      companyKey,
+      jsonEncode(company),
+    );
+  }
+
+  static Future<void> clear() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    await prefs.remove(accessKey);
+    await prefs.remove(refreshKey);
+    await prefs.remove(userKey);
+    await prefs.remove(companyKey);
+  }
+}
+
+/* =========================================================
+   COMPANY
+   ========================================================= */
+
 class CompanyProfile {
   CompanyProfile({
+    required this.id,
     required this.companyName,
     required this.managerName,
     required this.email,
     required this.phone,
   });
 
+  final String id;
   final String companyName;
   final String managerName;
   final String email;
   final String phone;
 
-  Map<String, dynamic> toJson() => {
-        'companyName': companyName,
-        'managerName': managerName,
-        'email': email,
-        'phone': phone,
-      };
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'companyName': companyName,
+      'managerName': managerName,
+      'email': email,
+      'phone': phone,
+    };
+  }
 
-  factory CompanyProfile.fromJson(Map<String, dynamic> json) {
+  factory CompanyProfile.fromJson(
+    Map<String, dynamic> json,
+  ) {
     return CompanyProfile(
-      companyName: json['companyName'] as String? ?? '',
-      managerName: json['managerName'] as String? ?? '',
-      email: json['email'] as String? ?? '',
-      phone: json['phone'] as String? ?? '',
+      id: json['id']?.toString() ?? '',
+      companyName:
+          json['companyName']?.toString() ?? '',
+      managerName:
+          json['managerName']?.toString() ?? '',
+      email: json['email']?.toString() ?? '',
+      phone: json['phone']?.toString() ?? '',
     );
   }
 }
 
+/* =========================================================
+   CUSTOMER
+   ========================================================= */
+
 class Customer {
-  Customer(this.name, this.company, this.phone, this.status);
+  Customer({
+    this.id = '',
+    required this.name,
+    required this.company,
+    this.phone = '',
+    this.email = '',
+    this.status = 'نشط',
+    this.assignedTo = '',
+    this.notes = '',
+    DateTime? createdAt,
+  }) : createdAt = createdAt ?? DateTime.now();
 
-  final String name;
-  final String company;
-  final String phone;
-  final String status;
+  final String id;
 
-  Map<String, dynamic> toJson() => {
-        'name': name,
-        'company': company,
-        'phone': phone,
-        'status': status,
-      };
+  String name;
+  String company;
+  String phone;
+  String email;
+  String status;
+  String assignedTo;
+  String notes;
 
-  factory Customer.fromJson(Map<String, dynamic> j) => Customer(
-        j['name'] as String? ?? '',
-        j['company'] as String? ?? '',
-        j['phone'] as String? ?? '',
-        j['status'] as String? ?? 'نشط',
-      );
+  DateTime createdAt;
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'company': company,
+      'phone': phone,
+      'email': email,
+      'status': status,
+      'assignedTo': assignedTo,
+      'notes': notes,
+      'createdAt': createdAt.toIso8601String(),
+    };
+  }
+
+  factory Customer.fromJson(
+    Map<String, dynamic> json,
+  ) {
+    return Customer(
+      id: json['id']?.toString() ?? '',
+      name: json['name']?.toString() ?? '',
+      company: json['company']?.toString() ?? '',
+      phone: json['phone']?.toString() ?? '',
+      email: json['email']?.toString() ?? '',
+      status: json['status']?.toString() ?? 'نشط',
+      assignedTo:
+          json['assignedTo']?.toString() ?? '',
+      notes: json['notes']?.toString() ?? '',
+      createdAt: DateTime.tryParse(
+            json['createdAt']?.toString() ?? '',
+          ) ??
+          DateTime.now(),
+    );
+  }
 }
+
+/* =========================================================
+   OPPORTUNITY
+   ========================================================= */
 
 class Opportunity {
-  Opportunity(this.title, this.customer, this.value, this.stage);
+  Opportunity({
+    this.id = '',
+    required this.title,
+    required this.customer,
+    required this.value,
+    this.stage = 'جديدة',
+    this.probability = 20,
+    this.expectedCloseDate,
+    this.assignedTo = '',
+    DateTime? createdAt,
+  }) : createdAt = createdAt ?? DateTime.now();
 
-  final String title;
-  final String customer;
-  final double value;
-  final String stage;
+  final String id;
 
-  Map<String, dynamic> toJson() => {
-        'title': title,
-        'customer': customer,
-        'value': value,
-        'stage': stage,
-      };
+  String title;
+  String customer;
+  double value;
+  String stage;
+  int probability;
 
-  factory Opportunity.fromJson(Map<String, dynamic> j) => Opportunity(
-        j['title'] as String? ?? '',
-        j['customer'] as String? ?? '',
-        (j['value'] as num?)?.toDouble() ?? 0,
-        j['stage'] as String? ?? 'جديدة',
-      );
+  DateTime? expectedCloseDate;
+
+  String assignedTo;
+
+  DateTime createdAt;
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'title': title,
+      'customer': customer,
+      'value': value,
+      'stage': stage,
+      'probability': probability,
+      'expectedCloseDate':
+          expectedCloseDate?.toIso8601String(),
+      'assignedTo': assignedTo,
+      'createdAt': createdAt.toIso8601String(),
+    };
+  }
+
+  factory Opportunity.fromJson(
+    Map<String, dynamic> json,
+  ) {
+    return Opportunity(
+      id: json['id']?.toString() ?? '',
+      title: json['title']?.toString() ?? '',
+      customer:
+          json['customer']?.toString() ?? '',
+      value: (json['value'] as num?)?.toDouble() ?? 0,
+      stage: json['stage']?.toString() ?? 'جديدة',
+      probability:
+          (json['probability'] as num?)?.toInt() ?? 20,
+      expectedCloseDate: DateTime.tryParse(
+        json['expectedCloseDate']?.toString() ?? '',
+      ),
+      assignedTo:
+          json['assignedTo']?.toString() ?? '',
+      createdAt: DateTime.tryParse(
+            json['createdAt']?.toString() ?? '',
+          ) ??
+          DateTime.now(),
+    );
+  }
 }
+
+/* =========================================================
+   TASK
+   ========================================================= */
 
 class CrmTask {
-  CrmTask(this.title, this.customer, this.done);
+  CrmTask({
+    this.id = '',
+    required this.title,
+    this.customer = '',
+    this.assignee = '',
+    this.description = '',
+    this.priority = 'متوسطة',
+    this.done = false,
+    DateTime? dueAt,
+    this.reminderMinutes = 30,
+    DateTime? createdAt,
+  })  : dueAt =
+            dueAt ?? DateTime.now().add(Duration(hours: 1)),
+        createdAt = createdAt ?? DateTime.now();
 
-  final String title;
-  final String customer;
+  final String id;
+
+  String title;
+  String customer;
+  String assignee;
+  String description;
+  String priority;
+
   bool done;
 
-  Map<String, dynamic> toJson() => {
-        'title': title,
-        'customer': customer,
-        'done': done,
-      };
+  DateTime dueAt;
 
-  factory CrmTask.fromJson(Map<String, dynamic> j) => CrmTask(
-        j['title'] as String? ?? '',
-        j['customer'] as String? ?? '',
-        j['done'] as bool? ?? false,
-      );
+  int reminderMinutes;
+
+  DateTime createdAt;
+
+  bool get overdue {
+    return !done && dueAt.isBefore(DateTime.now());
+  }
+
+  bool get today {
+    final now = DateTime.now();
+
+    return dueAt.year == now.year &&
+        dueAt.month == now.month &&
+        dueAt.day == now.day;
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'title': title,
+      'customer': customer,
+      'assignee': assignee,
+      'description': description,
+      'priority': priority,
+      'done': done,
+      'dueAt': dueAt.toIso8601String(),
+      'reminderMinutes': reminderMinutes,
+      'createdAt': createdAt.toIso8601String(),
+    };
+  }
+
+  factory CrmTask.fromJson(
+    Map<String, dynamic> json,
+  ) {
+    return CrmTask(
+      id: json['id']?.toString() ?? '',
+      title: json['title']?.toString() ?? '',
+      customer:
+          json['customer']?.toString() ?? '',
+      assignee:
+          json['assignee']?.toString() ?? '',
+      description:
+          json['description']?.toString() ?? '',
+      priority:
+          json['priority']?.toString() ?? 'متوسطة',
+      done: json['done'] as bool? ?? false,
+      dueAt: DateTime.tryParse(
+            json['dueAt']?.toString() ?? '',
+          ) ??
+          DateTime.now(),
+      reminderMinutes:
+          (json['reminderMinutes'] as num?)?.toInt() ?? 30,
+      createdAt: DateTime.tryParse(
+            json['createdAt']?.toString() ?? '',
+          ) ??
+          DateTime.now(),
+    );
+  }
 }
 
-class CrmData extends ChangeNotifier {
-  static const _dataKey = 'crm_business_v3';
-  static const _companyKey = 'crm_company_profile';
+/* =========================================================
+   NOTIFICATION
+   ========================================================= */
 
-  final customers = <Customer>[];
-  final opportunities = <Opportunity>[];
-  final tasks = <CrmTask>[];
+class CrmNotification {
+  CrmNotification({
+    required this.id,
+    required this.title,
+    required this.body,
+    required this.type,
+    required this.createdAt,
+    this.read = false,
+  });
+
+  final String id;
+  final String title;
+  final String body;
+  final String type;
+  final DateTime createdAt;
+
+  bool read;
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'title': title,
+      'body': body,
+      'type': type,
+      'createdAt': createdAt.toIso8601String(),
+      'read': read,
+    };
+  }
+
+  factory CrmNotification.fromJson(
+    Map<String, dynamic> json,
+  ) {
+    return CrmNotification(
+      id: json['id']?.toString() ?? '',
+      title: json['title']?.toString() ?? '',
+      body: json['body']?.toString() ?? '',
+      type: json['type']?.toString() ?? 'system',
+      createdAt: DateTime.tryParse(
+            json['createdAt']?.toString() ?? '',
+          ) ??
+          DateTime.now(),
+      read: json['read'] as bool? ?? false,
+    );
+  }
+}
+
+/* =========================================================
+   CRM DATA
+   ========================================================= */
+
+class CrmData extends ChangeNotifier {
+  static const dataKey = 'crm_business_v5';
+  static const companyKey = 'crm_company_profile_v5';
+  static const notificationsKey =
+      'crm_notifications_v1';
+  static const settingsKey = 'crm_settings_v1';
+
+  final List<Customer> customers = [];
+  final List<Opportunity> opportunities = [];
+  final List<CrmTask> tasks = [];
+  final List<CrmNotification> notifications = [];
 
   CompanyProfile? company;
-  bool ready = false;
+  Session? session;
+
+  bool notificationsEnabled = true;
+  bool taskRemindersEnabled = true;
+  bool compactMode = false;
 
   Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
 
-    final companyRaw = prefs.getString(_companyKey);
+    session = await Session.load();
+
+    final companyRaw = prefs.getString(companyKey);
 
     if (companyRaw != null) {
       try {
@@ -159,189 +619,434 @@ class CrmData extends ChangeNotifier {
             jsonDecode(companyRaw) as Map,
           ),
         );
-      } catch (_) {
-        company = null;
-      }
+      } catch (_) {}
     }
 
-    final raw = prefs.getString(_dataKey);
+    _loadData(
+      prefs.getString(dataKey),
+    );
 
-    if (raw == null) {
-      customers.addAll([
-        Customer(
-          'أحمد محمد',
-          'شركة الريادة',
-          '777000111',
-          'نشط',
-        ),
-        Customer(
-          'سارة علي',
-          'مؤسسة الأفق',
-          '733000222',
-          'يحتاج متابعة',
-        ),
-      ]);
+    _loadNotifications(
+      prefs.getString(notificationsKey),
+    );
 
-      opportunities.addAll([
-        Opportunity(
-          'عقد خدمات سنوي',
-          'شركة الريادة',
-          12000,
-          'تفاوض',
-        ),
-        Opportunity(
-          'توريد أجهزة',
-          'مؤسسة الأفق',
-          7500,
-          'عرض سعر',
-        ),
-      ]);
+    _loadSettings(
+      prefs.getString(settingsKey),
+    );
 
-      tasks.addAll([
-        CrmTask(
-          'متابعة عرض السعر',
-          'مؤسسة الأفق',
-          false,
-        ),
-        CrmTask(
-          'الاتصال بالعميل',
-          'شركة الريادة',
-          false,
-        ),
-      ]);
+    refreshSystemNotifications();
 
-      await save();
-    } else {
-      try {
-        final j = jsonDecode(raw) as Map<String, dynamic>;
-
-        customers.addAll(
-          (j['customers'] as List<dynamic>? ?? []).map(
-            (x) => Customer.fromJson(
-              Map<String, dynamic>.from(x as Map),
-            ),
-          ),
-        );
-
-        opportunities.addAll(
-          (j['opportunities'] as List<dynamic>? ?? []).map(
-            (x) => Opportunity.fromJson(
-              Map<String, dynamic>.from(x as Map),
-            ),
-          ),
-        );
-
-        tasks.addAll(
-          (j['tasks'] as List<dynamic>? ?? []).map(
-            (x) => CrmTask.fromJson(
-              Map<String, dynamic>.from(x as Map),
-            ),
-          ),
-        );
-      } catch (_) {
-        customers.clear();
-        opportunities.clear();
-        tasks.clear();
-      }
-    }
-
-    ready = true;
     notifyListeners();
+  }
+
+  void _loadData(String? raw) {
+    customers.clear();
+    opportunities.clear();
+    tasks.clear();
+
+    if (raw == null || raw.isEmpty) {
+      return;
+    }
+
+    try {
+      final json =
+          Map<String, dynamic>.from(
+        jsonDecode(raw) as Map,
+      );
+
+      customers.addAll(
+        (json['customers'] as List? ?? []).map(
+          (item) => Customer.fromJson(
+            Map<String, dynamic>.from(
+              item as Map,
+            ),
+          ),
+        ),
+      );
+
+      opportunities.addAll(
+        (json['opportunities'] as List? ?? []).map(
+          (item) => Opportunity.fromJson(
+            Map<String, dynamic>.from(
+              item as Map,
+            ),
+          ),
+        ),
+      );
+
+      tasks.addAll(
+        (json['tasks'] as List? ?? []).map(
+          (item) => CrmTask.fromJson(
+            Map<String, dynamic>.from(
+              item as Map,
+            ),
+          ),
+        ),
+      );
+    } catch (_) {
+      customers.clear();
+      opportunities.clear();
+      tasks.clear();
+    }
+  }
+
+  void _loadNotifications(String? raw) {
+    notifications.clear();
+
+    if (raw == null || raw.isEmpty) {
+      return;
+    }
+
+    try {
+      notifications.addAll(
+        (jsonDecode(raw) as List).map(
+          (item) => CrmNotification.fromJson(
+            Map<String, dynamic>.from(
+              item as Map,
+            ),
+          ),
+        ),
+      );
+    } catch (_) {}
+  }
+
+  void _loadSettings(String? raw) {
+    if (raw == null || raw.isEmpty) {
+      return;
+    }
+
+    try {
+      final json =
+          Map<String, dynamic>.from(
+        jsonDecode(raw) as Map,
+      );
+
+      notificationsEnabled =
+          json['notifications'] as bool? ?? true;
+
+      taskRemindersEnabled =
+          json['taskReminders'] as bool? ?? true;
+
+      compactMode =
+          json['compactMode'] as bool? ?? false;
+    } catch (_) {}
+  }
+
+  void refreshSystemNotifications() {
+    final now = DateTime.now();
+
+    final ids =
+        notifications.map((x) => x.id).toSet();
+
+    for (final task
+        in tasks.where((x) => !x.done && x.overdue)) {
+      final id =
+          'overdue-${task.id}-${task.title}';
+
+      if (!ids.contains(id)) {
+        notifications.insert(
+          0,
+          CrmNotification(
+            id: id,
+            title: 'مهمة متأخرة',
+            body: task.title,
+            type: 'overdue',
+            createdAt: now,
+          ),
+        );
+      }
+    }
+
+    for (final task
+        in tasks.where((x) => !x.done && x.today)) {
+      final id =
+          'today-${task.id}-${task.title}';
+
+      if (!ids.contains(id)) {
+        notifications.insert(
+          0,
+          CrmNotification(
+            id: id,
+            title: 'مهمة اليوم',
+            body:
+                '${task.title} • ${formatDateTime(task.dueAt)}',
+            type: 'task',
+            createdAt: now,
+          ),
+        );
+      }
+    }
+
+    if (notifications.length > 50) {
+      notifications.removeRange(
+        50,
+        notifications.length,
+      );
+    }
   }
 
   Future<void> save() async {
     final prefs = await SharedPreferences.getInstance();
 
     await prefs.setString(
-      _dataKey,
+      dataKey,
       jsonEncode({
-        'customers': customers.map((x) => x.toJson()).toList(),
-        'opportunities': opportunities.map((x) => x.toJson()).toList(),
-        'tasks': tasks.map((x) => x.toJson()).toList(),
+        'customers':
+            customers.map((x) => x.toJson()).toList(),
+        'opportunities':
+            opportunities.map((x) => x.toJson()).toList(),
+        'tasks':
+            tasks.map((x) => x.toJson()).toList(),
+      }),
+    );
+
+    await prefs.setString(
+      notificationsKey,
+      jsonEncode(
+        notifications
+            .map((x) => x.toJson())
+            .toList(),
+      ),
+    );
+
+    await prefs.setString(
+      settingsKey,
+      jsonEncode({
+        'notifications': notificationsEnabled,
+        'taskReminders': taskRemindersEnabled,
+        'compactMode': compactMode,
       }),
     );
 
     notifyListeners();
   }
 
-  Future<void> saveCompany(CompanyProfile profile) async {
+  Future<void> saveCompany(
+    CompanyProfile value,
+  ) async {
     final prefs = await SharedPreferences.getInstance();
 
-    company = profile;
+    company = value;
 
     await prefs.setString(
-      _companyKey,
-      jsonEncode(profile.toJson()),
+      companyKey,
+      jsonEncode(value.toJson()),
     );
 
     notifyListeners();
   }
 
-  Future<void> addCustomer(Customer x) async {
-    customers.insert(0, x);
+  Future<void> setSettings({
+    bool? notifications,
+    bool? taskReminders,
+    bool? compact,
+  }) async {
+    if (notifications != null) {
+      notificationsEnabled = notifications;
+    }
+
+    if (taskReminders != null) {
+      taskRemindersEnabled = taskReminders;
+    }
+
+    if (compact != null) {
+      compactMode = compact;
+    }
+
     await save();
   }
 
-  Future<void> addOpportunity(Opportunity x) async {
-    opportunities.insert(0, x);
+  Future<void> addCustomer(Customer customer) async {
+    customers.insert(0, customer);
     await save();
   }
 
-  Future<void> addTask(CrmTask x) async {
-    tasks.insert(0, x);
+  Future<void> updateCustomer(Customer customer) async {
+    final index =
+        customers.indexWhere((x) => x.id == customer.id);
+
+    if (index >= 0) {
+      customers[index] = customer;
+      await save();
+    }
+  }
+
+  Future<void> deleteCustomer(
+    Customer customer,
+  ) async {
+    customers.remove(customer);
     await save();
   }
 
-  Future<void> toggle(CrmTask x) async {
-    x.done = !x.done;
+  Future<void> addOpportunity(
+    Opportunity opportunity,
+  ) async {
+    opportunities.insert(0, opportunity);
     await save();
   }
 
-  double get pipeline => opportunities
-      .where((x) => !x.stage.startsWith('مغلقة'))
-      .fold(0, (a, x) => a + x.value);
+  Future<void> updateOpportunity(
+    Opportunity opportunity,
+  ) async {
+    final index = opportunities.indexWhere(
+      (x) => x.id == opportunity.id,
+    );
+
+    if (index >= 0) {
+      opportunities[index] = opportunity;
+      await save();
+    }
+  }
+
+  Future<void> deleteOpportunity(
+    Opportunity opportunity,
+  ) async {
+    opportunities.remove(opportunity);
+    await save();
+  }
+
+  Future<void> addTask(CrmTask task) async {
+    tasks.insert(0, task);
+    refreshSystemNotifications();
+    await save();
+  }
+
+  Future<void> updateTask(CrmTask task) async {
+    final index =
+        tasks.indexWhere((x) => x.id == task.id);
+
+    if (index >= 0) {
+      tasks[index] = task;
+      refreshSystemNotifications();
+      await save();
+    }
+  }
+
+  Future<void> toggleTask(CrmTask task) async {
+    task.done = !task.done;
+    refreshSystemNotifications();
+    await save();
+  }
+
+  Future<void> deleteTask(CrmTask task) async {
+    tasks.remove(task);
+    await save();
+  }
+
+  Future<void> markNotificationRead(
+    CrmNotification notification,
+  ) async {
+    notification.read = true;
+    await save();
+  }
+
+  Future<void> markAllNotificationsRead() async {
+    for (final notification in notifications) {
+      notification.read = true;
+    }
+
+    await save();
+  }
+
+  int get unreadNotifications {
+    return notifications.where((x) => !x.read).length;
+  }
+
+  double get pipeline {
+    return opportunities
+        .where(
+          (x) => !x.stage.startsWith('مغلقة'),
+        )
+        .fold(
+          0,
+          (sum, x) => sum + x.value,
+        );
+  }
+
+  double get weightedPipeline {
+    return opportunities
+        .where(
+          (x) => !x.stage.startsWith('مغلقة'),
+        )
+        .fold(
+          0,
+          (sum, x) =>
+              sum + x.value * x.probability / 100,
+        );
+  }
+
+  int get overdueTasks {
+    return tasks.where((x) => x.overdue).length;
+  }
+
+  int get todayTasks {
+    return tasks
+        .where((x) => !x.done && x.today)
+        .length;
+  }
+
+  int get completedTasks {
+    return tasks.where((x) => x.done).length;
+  }
+
+  List<CrmTask> customerTasks(
+    String customer,
+  ) {
+    return tasks
+        .where((x) => x.customer == customer)
+        .toList();
+  }
+
+  List<Opportunity> customerOpportunities(
+    String customer,
+  ) {
+    return opportunities
+        .where((x) => x.customer == customer)
+        .toList();
+  }
 }
+
+/* =========================================================
+   STARTUP
+   ========================================================= */
 
 class StartupPage extends StatefulWidget {
   const StartupPage({super.key});
 
   @override
-  State<StartupPage> createState() => _StartupPageState();
+  State<StartupPage> createState() =>
+      _StartupPageState();
 }
 
 class _StartupPageState extends State<StartupPage> {
-  final data = CrmData();
+  final CrmData data = CrmData();
 
   @override
   void initState() {
     super.initState();
-    _start();
+    start();
   }
 
-  Future<void> _start() async {
+  Future<void> start() async {
     await data.load();
 
     if (!mounted) return;
 
-    if (data.company == null) {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
-          builder: (_) => CompanyRegistrationPage(data: data),
-        ),
-      );
-    } else {
-      Navigator.of(context).pushReplacement(
+    if (data.session != null) {
+      Navigator.pushReplacement(
+        context,
         MaterialPageRoute(
           builder: (_) => CrmHome(data: data),
         ),
       );
+    } else {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => AuthPage(data: data),
+        ),
+      );
     }
-  }
-
-  @override
-  void dispose() {
-    data.dispose();
-    super.dispose();
   }
 
   @override
@@ -352,10 +1057,20 @@ class _StartupPageState extends State<StartupPage> {
       ),
     );
   }
+
+  @override
+  void dispose() {
+    data.dispose();
+    super.dispose();
+  }
 }
 
-class CompanyRegistrationPage extends StatefulWidget {
-  const CompanyRegistrationPage({
+/* =========================================================
+   AUTH
+   ========================================================= */
+
+class AuthPage extends StatefulWidget {
+  const AuthPage({
     super.key,
     required this.data,
   });
@@ -363,98 +1078,175 @@ class CompanyRegistrationPage extends StatefulWidget {
   final CrmData data;
 
   @override
-  State<CompanyRegistrationPage> createState() =>
-      _CompanyRegistrationPageState();
+  State<AuthPage> createState() =>
+      _AuthPageState();
 }
 
-class _CompanyRegistrationPageState
-    extends State<CompanyRegistrationPage> {
-  final companyController = TextEditingController();
-  final managerController = TextEditingController();
-  final emailController = TextEditingController();
-  final phoneController = TextEditingController();
-  final passwordController = TextEditingController();
-  final confirmController = TextEditingController();
-
+class _AuthPageState extends State<AuthPage> {
+  bool loginMode = true;
   bool loading = false;
-  bool acceptTerms = false;
   bool obscurePassword = true;
-  bool obscureConfirm = true;
+
+  final emailController =
+      TextEditingController();
+
+  final passwordController =
+      TextEditingController();
+
+  final companyController =
+      TextEditingController();
+
+  final ownerController =
+      TextEditingController();
+
+  final phoneController =
+      TextEditingController();
 
   @override
   void dispose() {
-    companyController.dispose();
-    managerController.dispose();
     emailController.dispose();
-    phoneController.dispose();
     passwordController.dispose();
-    confirmController.dispose();
+    companyController.dispose();
+    ownerController.dispose();
+    phoneController.dispose();
+
     super.dispose();
   }
 
-  Future<void> register() async {
-    final companyName = companyController.text.trim();
-    final managerName = managerController.text.trim();
-    final email = emailController.text.trim();
-    final phone = phoneController.text.trim();
-    final password = passwordController.text;
-    final confirm = confirmController.text;
-
-    if (companyName.isEmpty ||
-        managerName.isEmpty ||
-        email.isEmpty ||
-        phone.isEmpty ||
-        password.isEmpty ||
-        confirm.isEmpty) {
-      _message('يرجى تعبئة جميع الحقول.');
+  Future<void> submit() async {
+    if (emailController.text.trim().isEmpty) {
+      showError('أدخل البريد الإلكتروني.');
       return;
     }
 
-    if (!email.contains('@')) {
-      _message('يرجى إدخال بريد إلكتروني صحيح.');
+    if (passwordController.text.isEmpty) {
+      showError('أدخل كلمة المرور.');
       return;
     }
 
-    if (password.length < 6) {
-      _message('كلمة المرور يجب أن تكون 6 أحرف على الأقل.');
-      return;
+    if (!loginMode) {
+      if (companyController.text.trim().isEmpty) {
+        showError('أدخل اسم الشركة.');
+        return;
+      }
+
+      if (ownerController.text.trim().isEmpty) {
+        showError('أدخل اسم المدير أو المستخدم.');
+        return;
+      }
+
+      if (passwordController.text.length < 8) {
+        showError(
+          'كلمة المرور يجب أن تكون 8 أحرف على الأقل.',
+        );
+        return;
+      }
     }
 
-    if (password != confirm) {
-      _message('كلمتا المرور غير متطابقتين.');
-      return;
+    setState(() {
+      loading = true;
+    });
+
+    try {
+      final api = ApiClient();
+
+      final result = loginMode
+          ? await api.post(
+              '/auth/login',
+              {
+                'email':
+                    emailController.text.trim(),
+                'password':
+                    passwordController.text,
+              },
+            )
+          : await api.post(
+              '/auth/register-company',
+              {
+                'companyName':
+                    companyController.text.trim(),
+                'ownerName':
+                    ownerController.text.trim(),
+                'email':
+                    emailController.text.trim(),
+                'phone':
+                    phoneController.text.trim(),
+                'password':
+                    passwordController.text,
+              },
+            );
+
+      final session = Session(
+        accessToken:
+            result['accessToken']?.toString() ?? '',
+        refreshToken:
+            result['refreshToken']?.toString() ?? '',
+        user: Map<String, dynamic>.from(
+          result['user'] as Map? ?? {},
+        ),
+        company: Map<String, dynamic>.from(
+          result['company'] as Map? ?? {},
+        ),
+      );
+
+      if (session.accessToken.isEmpty ||
+          session.refreshToken.isEmpty) {
+        throw Exception(
+          'استجابة الخادم لا تحتوي على رموز الجلسة.',
+        );
+      }
+
+      await session.save();
+
+      widget.data.session = session;
+
+      final companyData = session.company;
+
+      await widget.data.saveCompany(
+        CompanyProfile(
+          id: companyData['id']?.toString() ?? '',
+          companyName:
+              companyData['name']?.toString() ??
+                  companyController.text.trim(),
+          managerName:
+              session.user['name']?.toString() ??
+                  ownerController.text.trim(),
+          email:
+              session.user['email']?.toString() ??
+                  emailController.text.trim(),
+          phone:
+              phoneController.text.trim(),
+        ),
+      );
+
+      if (!mounted) return;
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => CrmHome(
+            data: widget.data,
+          ),
+        ),
+      );
+    } catch (error) {
+      showError(
+        cleanError(error),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          loading = false;
+        });
+      }
     }
-
-    if (!acceptTerms) {
-      _message('يرجى الموافقة على الشروط والأحكام.');
-      return;
-    }
-
-    setState(() => loading = true);
-
-    final profile = CompanyProfile(
-      companyName: companyName,
-      managerName: managerName,
-      email: email,
-      phone: phone,
-    );
-
-    await widget.data.saveCompany(profile);
-
-    if (!mounted) return;
-
-    setState(() => loading = false);
-
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(
-        builder: (_) => CrmHome(data: widget.data),
-      ),
-    );
   }
 
-  void _message(String message) {
+  void showError(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
+      SnackBar(
+        content: Text(message),
+      ),
     );
   }
 
@@ -463,155 +1255,188 @@ class _CompanyRegistrationPageState
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        appBar: AppBar(
-          title: const Text(
-            'إنشاء حساب شركة',
-            style: TextStyle(fontWeight: FontWeight.bold),
-          ),
-        ),
         body: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const SizedBox(height: 10),
-                const Icon(
-                  Icons.business,
-                  size: 70,
-                  color: Colors.indigo,
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(22),
+              child: ConstrainedBox(
+                constraints:
+                    const BoxConstraints(
+                  maxWidth: 520,
                 ),
-                const SizedBox(height: 12),
-                const Text(
-                  'مرحباً بك في CRM Business',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'أنشئ حساب شركتك للبدء في إدارة العملاء والفرص والمهام.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: Colors.black54,
-                  ),
-                ),
-                const SizedBox(height: 24),
-                _field(
-                  controller: companyController,
-                  label: 'اسم الشركة',
-                  icon: Icons.business_outlined,
-                ),
-                const SizedBox(height: 12),
-                _field(
-                  controller: managerController,
-                  label: 'اسم المدير / المستخدم',
-                  icon: Icons.person_outline,
-                ),
-                const SizedBox(height: 12),
-                _field(
-                  controller: emailController,
-                  label: 'البريد الإلكتروني',
-                  icon: Icons.email_outlined,
-                  keyboardType: TextInputType.emailAddress,
-                ),
-                const SizedBox(height: 12),
-                _field(
-                  controller: phoneController,
-                  label: 'رقم الهاتف',
-                  icon: Icons.phone_outlined,
-                  keyboardType: TextInputType.phone,
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: passwordController,
-                  obscureText: obscurePassword,
-                  decoration: InputDecoration(
-                    labelText: 'كلمة المرور',
-                    prefixIcon: const Icon(Icons.lock_outline),
-                    suffixIcon: IconButton(
-                      onPressed: () {
-                        setState(
-                          () => obscurePassword = !obscurePassword,
-                        );
-                      },
-                      icon: Icon(
-                        obscurePassword
-                            ? Icons.visibility_outlined
-                            : Icons.visibility_off_outlined,
+                child: Column(
+                  crossAxisAlignment:
+                      CrossAxisAlignment.stretch,
+                  children: [
+                    const Icon(
+                      Icons.hub_outlined,
+                      size: 72,
+                      color: Colors.indigo,
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    const Text(
+                      'CRM Business',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 30,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: confirmController,
-                  obscureText: obscureConfirm,
-                  decoration: InputDecoration(
-                    labelText: 'تأكيد كلمة المرور',
-                    prefixIcon: const Icon(Icons.lock_reset_outlined),
-                    suffixIcon: IconButton(
-                      onPressed: () {
-                        setState(
-                          () => obscureConfirm = !obscureConfirm,
-                        );
-                      },
-                      icon: Icon(
-                        obscureConfirm
-                            ? Icons.visibility_outlined
-                            : Icons.visibility_off_outlined,
+
+                    const SizedBox(height: 6),
+
+                    Text(
+                      loginMode
+                          ? 'تسجيل الدخول إلى حسابك'
+                          : 'إنشاء حساب شركة جديد',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Colors.black54,
                       ),
                     ),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                CheckboxListTile(
-                  value: acceptTerms,
-                  onChanged: (value) {
-                    setState(() {
-                      acceptTerms = value ?? false;
-                    });
-                  },
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text(
-                    'أوافق على الشروط والأحكام وسياسة الخصوصية',
-                  ),
-                  controlAffinity:
-                      ListTileControlAffinity.leading,
-                ),
-                const SizedBox(height: 12),
-                SizedBox(
-                  height: 52,
-                  child: FilledButton.icon(
-                    onPressed: loading ? null : register,
-                    icon: loading
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                            ),
-                          )
-                        : const Icon(Icons.business_center),
-                    label: Text(
-                      loading
-                          ? 'جاري إنشاء الحساب...'
-                          : 'إنشاء حساب الشركة',
+
+                    const SizedBox(height: 24),
+
+                    SegmentedButton<bool>(
+                      segments: const [
+                        ButtonSegment(
+                          value: true,
+                          label: Text('دخول'),
+                          icon: Icon(Icons.login),
+                        ),
+                        ButtonSegment(
+                          value: false,
+                          label: Text('حساب جديد'),
+                          icon: Icon(
+                            Icons.person_add,
+                          ),
+                        ),
+                      ],
+                      selected: {loginMode},
+                      onSelectionChanged:
+                          loading
+                              ? null
+                              : (value) {
+                                  setState(() {
+                                    loginMode =
+                                        value.first;
+                                  });
+                                },
                     ),
-                  ),
+
+                    const SizedBox(height: 18),
+
+                    if (!loginMode) ...[
+                      field(
+                        companyController,
+                        'اسم الشركة',
+                        Icons.business_outlined,
+                      ),
+                      const SizedBox(height: 12),
+
+                      field(
+                        ownerController,
+                        'اسم المدير / المستخدم',
+                        Icons.person_outline,
+                      ),
+                      const SizedBox(height: 12),
+
+                      field(
+                        phoneController,
+                        'رقم الهاتف',
+                        Icons.phone_outlined,
+                        keyboardType:
+                            TextInputType.phone,
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+
+                    field(
+                      emailController,
+                      'البريد الإلكتروني',
+                      Icons.email_outlined,
+                      keyboardType:
+                          TextInputType.emailAddress,
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    TextField(
+                      controller:
+                          passwordController,
+                      obscureText:
+                          obscurePassword,
+                      decoration: InputDecoration(
+                        labelText: 'كلمة المرور',
+                        prefixIcon:
+                            const Icon(
+                          Icons.lock_outline,
+                        ),
+                        suffixIcon:
+                            IconButton(
+                          onPressed: () {
+                            setState(() {
+                              obscurePassword =
+                                  !obscurePassword;
+                            });
+                          },
+                          icon: Icon(
+                            obscurePassword
+                                ? Icons.visibility
+                                : Icons
+                                    .visibility_off,
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 20),
+
+                    SizedBox(
+                      height: 54,
+                      child: FilledButton.icon(
+                        onPressed:
+                            loading ? null : submit,
+                        icon: loading
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child:
+                                    CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : Icon(
+                                loginMode
+                                    ? Icons.login
+                                    : Icons
+                                        .rocket_launch,
+                              ),
+                        label: Text(
+                          loading
+                              ? 'جاري الاتصال بالخادم...'
+                              : loginMode
+                                  ? 'تسجيل الدخول'
+                                  : 'إنشاء الحساب',
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 18),
+
+                    const Text(
+                      'لا يتم حفظ كلمة المرور على الجهاز. يتم حفظ رموز الجلسة فقط.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.black45,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 20),
-                const Text(
-                  'نسخة تجريبية: سيتم ربط التسجيل الحقيقي بالخادم وقاعدة البيانات في المرحلة التالية.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.black45,
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
         ),
@@ -619,10 +1444,10 @@ class _CompanyRegistrationPageState
     );
   }
 
-  Widget _field({
-    required TextEditingController controller,
-    required String label,
-    required IconData icon,
+  Widget field(
+    TextEditingController controller,
+    String label,
+    IconData icon, {
     TextInputType? keyboardType,
   }) {
     return TextField(
@@ -636,6 +1461,10 @@ class _CompanyRegistrationPageState
   }
 }
 
+/* =========================================================
+   HOME
+   ========================================================= */
+
 class CrmHome extends StatefulWidget {
   const CrmHome({
     super.key,
@@ -645,11 +1474,16 @@ class CrmHome extends StatefulWidget {
   final CrmData data;
 
   @override
-  State<CrmHome> createState() => _CrmHomeState();
+  State<CrmHome> createState() =>
+      _CrmHomeState();
 }
 
 class _CrmHomeState extends State<CrmHome> {
   int tab = 0;
+
+  String customerSearch = '';
+
+  String taskFilter = 'الكل';
 
   CrmData get data => widget.data;
 
@@ -658,99 +1492,136 @@ class _CrmHomeState extends State<CrmHome> {
     return AnimatedBuilder(
       animation: data,
       builder: (context, _) {
-        final pages = <Widget>[
-          _dashboard(),
-          _customers(),
-          _opportunities(),
-          _tasks(),
-          _analytics(),
+        final pages = [
+          dashboard(),
+          customersPage(),
+          opportunitiesPage(),
+          tasksPage(),
+          reportsPage(),
+        ];
+
+        final titles = [
+          'لوحة التحكم',
+          'العملاء',
+          'الفرص',
+          'المهام',
+          'التقارير',
         ];
 
         return Directionality(
           textDirection: TextDirection.rtl,
           child: Scaffold(
             appBar: AppBar(
-              title: const Text(
-                'CRM Business',
-                style: TextStyle(
+              title: Text(
+                titles[tab],
+                style: const TextStyle(
                   fontWeight: FontWeight.bold,
                 ),
               ),
               actions: [
-                IconButton(
-                  onPressed: _showCompany,
-                  icon: const Icon(Icons.business_outlined),
-                  tooltip: 'ملف الشركة',
+                Stack(
+                  alignment: Alignment.topLeft,
+                  children: [
+                    IconButton(
+                      onPressed:
+                          openNotifications,
+                      icon: const Icon(
+                        Icons
+                            .notifications_none,
+                      ),
+                    ),
+                    if (data.unreadNotifications >
+                        0)
+                      Positioned(
+                        left: 7,
+                        top: 7,
+                        child: Container(
+                          padding:
+                              const EdgeInsets.all(
+                            4,
+                          ),
+                          decoration:
+                              const BoxDecoration(
+                            color: Colors.red,
+                            shape:
+                                BoxShape.circle,
+                          ),
+                          child: Text(
+                            data.unreadNotifications >
+                                    9
+                                ? '9+'
+                                : '${data.unreadNotifications}',
+                            style:
+                                const TextStyle(
+                              color: Colors.white,
+                              fontSize: 9,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
                 IconButton(
-                  onPressed: _openSettings,
-                  icon: const Icon(Icons.settings_outlined),
-                  tooltip: 'الإعدادات',
-                ),
-                IconButton(
-                  onPressed: () => showAboutDialog(
-                    context: context,
-                    applicationName: 'CRM Business',
-                    applicationVersion: '3.0.0',
+                  onPressed: openSettings,
+                  icon: const Icon(
+                    Icons.settings_outlined,
                   ),
-                  icon: const Icon(Icons.info_outline),
-                  tooltip: 'حول التطبيق',
-                ),
-                IconButton(
-                  onPressed: _logout,
-                  icon: const Icon(Icons.logout),
-                  tooltip: 'تسجيل الخروج',
                 ),
               ],
             ),
-            body: IndexedStack(
-              index: tab,
-              children: pages,
-            ),
-            floatingActionButton: tab == 1
-                ? FloatingActionButton.extended(
-                    onPressed: _newCustomer,
-                    icon: const Icon(Icons.person_add),
-                    label: const Text('عميل جديد'),
-                  )
-                : tab == 2
-                    ? FloatingActionButton.extended(
-                        onPressed: _newOpportunity,
-                        icon: const Icon(Icons.add),
-                        label: const Text('فرصة جديدة'),
-                      )
-                    : tab == 3
-                        ? FloatingActionButton.extended(
-                            onPressed: _newTask,
-                            icon: const Icon(Icons.add_task),
-                            label: const Text('مهمة جديدة'),
-                          )
-                        : null,
-            bottomNavigationBar: NavigationBar(
+            body: pages[tab],
+            floatingActionButton:
+                floatingButton(),
+            bottomNavigationBar:
+                NavigationBar(
               selectedIndex: tab,
-              onDestinationSelected: (i) {
-                setState(() => tab = i);
+              onDestinationSelected:
+                  (index) {
+                setState(() {
+                  tab = index;
+                });
               },
               destinations: const [
                 NavigationDestination(
-                  icon: Icon(Icons.dashboard_outlined),
+                  icon: Icon(
+                    Icons
+                        .dashboard_outlined,
+                  ),
+                  selectedIcon:
+                      Icon(Icons.dashboard),
                   label: 'الرئيسية',
                 ),
                 NavigationDestination(
-                  icon: Icon(Icons.people_outline),
+                  icon: Icon(
+                    Icons.people_outline,
+                  ),
+                  selectedIcon:
+                      Icon(Icons.people),
                   label: 'العملاء',
                 ),
                 NavigationDestination(
-                  icon: Icon(Icons.trending_up),
+                  icon: Icon(
+                    Icons.trending_up,
+                  ),
+                  selectedIcon:
+                      Icon(Icons.trending_up),
                   label: 'الفرص',
                 ),
                 NavigationDestination(
-                  icon: Icon(Icons.task_alt),
+                  icon: Icon(
+                    Icons.task_outlined,
+                  ),
+                  selectedIcon:
+                      Icon(Icons.task_alt),
                   label: 'المهام',
                 ),
                 NavigationDestination(
-                  icon: Icon(Icons.analytics_outlined),
-                  label: 'التحليلات',
+                  icon: Icon(
+                    Icons.analytics_outlined,
+                  ),
+                  selectedIcon:
+                      Icon(Icons.analytics),
+                  label: 'التقارير',
                 ),
               ],
             ),
@@ -760,592 +1631,2280 @@ class _CrmHomeState extends State<CrmHome> {
     );
   }
 
-  Future<void> _logout() async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => Directionality(
-        textDirection: TextDirection.rtl,
-        child: AlertDialog(
-          title: const Text('تسجيل الخروج'),
-          content: const Text(
-            'هل تريد تسجيل الخروج من CRM Business؟',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('إلغاء'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('تسجيل الخروج'),
-            ),
-          ],
+  Widget? floatingButton() {
+    if (tab == 1) {
+      return FloatingActionButton.extended(
+        onPressed: () => customerForm(),
+        icon: const Icon(
+          Icons.person_add_alt_1,
         ),
-      ),
-    );
+        label: const Text('عميل'),
+      );
+    }
 
-    if (confirm != true) return;
-
-    final prefs = await SharedPreferences.getInstance();
-
-    await prefs.remove('crm_company_profile');
-
-    if (!mounted) return;
-
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(
-        builder: (_) => CompanyRegistrationPage(data: data),
-      ),
-      (route) => false,
-    );
-  }
-
-  void _openSettings() {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => SettingsPage(data: data),
-      ),
-    );
-  }
-
-  void _showCompany() {
-    final company = data.company;
-
-    if (company == null) return;
-
-    showDialog<void>(
-      context: context,
-      builder: (context) => Directionality(
-        textDirection: TextDirection.rtl,
-        child: AlertDialog(
-          title: const Text('ملف الشركة'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('الشركة: ${company.companyName}'),
-              const SizedBox(height: 8),
-              Text('المستخدم: ${company.managerName}'),
-              const SizedBox(height: 8),
-              Text('البريد: ${company.email}'),
-              const SizedBox(height: 8),
-              Text('الهاتف: ${company.phone}'),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('إغلاق'),
-            ),
-          ],
+    if (tab == 2) {
+      return FloatingActionButton.extended(
+        onPressed: () => opportunityForm(),
+        icon: const Icon(
+          Icons.add_chart,
         ),
-      ),
-    );
+        label: const Text('فرصة'),
+      );
+    }
+
+    if (tab == 3) {
+      return FloatingActionButton.extended(
+        onPressed: () => taskForm(),
+        icon: const Icon(
+          Icons.add_task,
+        ),
+        label: const Text('مهمة'),
+      );
+    }
+
+    return null;
   }
 
-  Widget _dashboard() => ListView(
-        padding: const EdgeInsets.all(16),
+  /* =======================================================
+     DASHBOARD
+     ======================================================= */
+
+  Widget dashboard() {
+    final company =
+        data.company?.companyName ?? 'شركتك';
+
+    final user =
+        data.session?.user['name']?.toString() ??
+            data.company?.managerName ??
+            '';
+
+    final priorityTasks = data.tasks
+        .where(
+          (x) => !x.done &&
+              (x.today || x.overdue),
+        )
+        .toList();
+
+    return RefreshIndicator(
+      onRefresh: () async {
+        data.refreshSystemNotifications();
+        await data.save();
+      },
+      child: ListView(
+        padding: const EdgeInsets.all(14),
         children: [
-          Container(
-            padding: const EdgeInsets.all(22),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(20),
-              gradient: const LinearGradient(
-                colors: [
-                  Color(0xFF303F9F),
-                  Color(0xFF6574CD),
+          Card(
+            child: Padding(
+              padding:
+                  const EdgeInsets.all(18),
+              child: Row(
+                children: [
+                  const CircleAvatar(
+                    radius: 28,
+                    child: Icon(
+                      Icons.business,
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment:
+                          CrossAxisAlignment
+                              .start,
+                      children: [
+                        Text(
+                          'مرحباً $user',
+                          style:
+                              const TextStyle(
+                            fontWeight:
+                                FontWeight.bold,
+                            fontSize: 18,
+                          ),
+                        ),
+                        const SizedBox(
+                          height: 4,
+                        ),
+                        Text(
+                          company,
+                          style:
+                              const TextStyle(
+                            color:
+                                Colors.black54,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'مرحباً بك 👋',
-                  style: TextStyle(
-                    color: Colors.white70,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  data.company?.companyName ?? 'شركتك',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 23,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'حوّل علاقاتك إلى نتائج',
-                  style: TextStyle(
-                    color: Colors.white,
-                  ),
-                ),
-              ],
-            ),
           ),
-          const SizedBox(height: 16),
+
+          const SizedBox(height: 12),
+
           GridView.count(
             crossAxisCount: 2,
             shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
+            physics:
+                const NeverScrollableScrollPhysics(),
             mainAxisSpacing: 10,
             crossAxisSpacing: 10,
-            childAspectRatio: 1.5,
+            childAspectRatio: 1.35,
             children: [
-              _metric(
+              metric(
                 'العملاء',
                 '${data.customers.length}',
                 Icons.people,
               ),
-              _metric(
-                'قيمة الفرص',
+              metric(
+                'الفرص المفتوحة',
+                '${data.opportunities.where((x) => !x.stage.startsWith('مغلقة')).length}',
+                Icons.trending_up,
+              ),
+              metric(
+                'Pipeline',
+                money(data.pipeline),
+                Icons.account_balance_wallet_outlined,
+              ),
+              metric(
+                'المهام المتأخرة',
+                '${data.overdueTasks}',
+                Icons.warning_amber_outlined,
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 16),
+
+          section(
+            'الأولوية اليوم',
+            () => setState(() {
+              tab = 3;
+            }),
+          ),
+
+          ...priorityTasks
+              .take(5)
+              .map(taskCard),
+
+          if (priorityTasks.isEmpty)
+            emptyState(
+              'لا توجد مهام عاجلة أو متأخرة اليوم.',
+            ),
+
+          const SizedBox(height: 12),
+
+          section(
+            'Pipeline',
+            () => setState(() {
+              tab = 2;
+            }),
+          ),
+
+          Card(
+            child: Padding(
+              padding:
+                  const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  pipelineRow('جديدة'),
+                  pipelineRow('مؤهلة'),
+                  pipelineRow('عرض سعر'),
+                  pipelineRow('تفاوض'),
+                  pipelineRow('مغلقة ناجحة'),
+                ],
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 12),
+
+          section(
+            'آخر العملاء',
+            () => setState(() {
+              tab = 1;
+            }),
+          ),
+
+          ...data.customers
+              .take(4)
+              .map(customerCard),
+        ],
+      ),
+    );
+  }
+
+  Widget pipelineRow(String stage) {
+    final list = data.opportunities
+        .where((x) => x.stage == stage)
+        .toList();
+
+    final value = list.fold<double>(
+      0,
+      (sum, x) => sum + x.value,
+    );
+
+    return Padding(
+      padding:
+          const EdgeInsets.symmetric(
+        vertical: 6,
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(stage),
+          ),
+          Text('${list.length}'),
+          const SizedBox(width: 12),
+          Text(
+            money(value),
+            style:
+                const TextStyle(
+              fontWeight:
+                  FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /* =======================================================
+     CUSTOMERS
+     ======================================================= */
+
+  Widget customersPage() {
+    final filtered =
+        data.customers.where((customer) {
+      final q =
+          customerSearch.trim().toLowerCase();
+
+      return q.isEmpty ||
+          customer.name
+              .toLowerCase()
+              .contains(q) ||
+          customer.company
+              .toLowerCase()
+              .contains(q) ||
+          customer.phone
+              .toLowerCase()
+              .contains(q);
+    }).toList();
+
+    return Column(
+      children: [
+        Padding(
+          padding:
+              const EdgeInsets.fromLTRB(
+            12,
+            12,
+            12,
+            6,
+          ),
+          child: TextField(
+            onChanged: (value) {
+              setState(() {
+                customerSearch = value;
+              });
+            },
+            decoration:
+                const InputDecoration(
+              hintText:
+                  'ابحث باسم العميل أو الشركة أو الهاتف',
+              prefixIcon:
+                  Icon(Icons.search),
+            ),
+          ),
+        ),
+        Expanded(
+          child: filtered.isEmpty
+              ? emptyState(
+                  'لا توجد نتائج للعملاء.',
+                )
+              : ListView(
+                  padding:
+                      const EdgeInsets.all(12),
+                  children: filtered
+                      .map(customerCard)
+                      .toList(),
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget customerCard(Customer customer) {
+    return Card(
+      margin:
+          const EdgeInsets.only(bottom: 8),
+      child: ListTile(
+        leading: const CircleAvatar(
+          child: Icon(Icons.person),
+        ),
+        title: Text(
+          customer.name,
+          style:
+              const TextStyle(
+            fontWeight:
+                FontWeight.bold,
+          ),
+        ),
+        subtitle: Text(
+          '${customer.company}\n'
+          '${customer.phone.isEmpty ? 'لا يوجد هاتف' : customer.phone}',
+        ),
+        isThreeLine: true,
+        trailing:
+            PopupMenuButton<String>(
+          onSelected: (value) {
+            if (value == 'view') {
+              customer360(customer);
+            }
+
+            if (value == 'edit') {
+              customerForm(
+                existing: customer,
+              );
+            }
+
+            if (value == 'delete') {
+              deleteCustomer(customer);
+            }
+          },
+          itemBuilder: (_) => const [
+            PopupMenuItem(
+              value: 'view',
+              child:
+                  Text('Customer 360'),
+            ),
+            PopupMenuItem(
+              value: 'edit',
+              child: Text('تعديل'),
+            ),
+            PopupMenuItem(
+              value: 'delete',
+              child: Text('حذف'),
+            ),
+          ],
+        ),
+        onTap: () =>
+            customer360(customer),
+      ),
+    );
+  }
+
+  /* =======================================================
+     OPPORTUNITIES
+     ======================================================= */
+
+  Widget opportunitiesPage() {
+    return ListView(
+      padding:
+          const EdgeInsets.all(12),
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: metric(
+                'Pipeline',
                 money(data.pipeline),
                 Icons.trending_up,
               ),
-              _metric(
-                'المهام المفتوحة',
-                '${data.tasks.where((x) => !x.done).length}',
-                Icons.task,
-              ),
-              _metric(
-                'الفرص البيعية',
-                '${data.opportunities.length}',
-                Icons.show_chart,
-              ),
-            ],
-          ),
-          _heading(
-            'الإجراءات القادمة',
-            () => setState(() => tab = 3),
-          ),
-          ...data.tasks
-              .where((x) => !x.done)
-              .take(4)
-              .map(
-                (x) => ListTile(
-                  leading: const Icon(
-                    Icons.notifications_active_outlined,
-                  ),
-                  title: Text(x.title),
-                  subtitle: Text(x.customer),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: metric(
+                'Weighted',
+                money(
+                  data.weightedPipeline,
                 ),
+                Icons.balance,
               ),
-          _heading(
-            'أحدث الفرص',
-            () => setState(() => tab = 2),
-          ),
-          ...data.opportunities.take(3).map(_opportunityTile),
-        ],
-      );
+            ),
+          ],
+        ),
 
-  Widget _metric(
-    String title,
-    String value,
-    IconData icon,
-  ) =>
-      Card(
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        const SizedBox(height: 12),
+
+        if (data.opportunities.isEmpty)
+          emptyState(
+            'لا توجد فرص حتى الآن.',
+          ),
+
+        ...data.opportunities
+            .map(opportunityCard),
+      ],
+    );
+  }
+
+  Widget opportunityCard(
+    Opportunity opportunity,
+  ) {
+    return Card(
+      margin:
+          const EdgeInsets.only(bottom: 8),
+      child: ListTile(
+        leading: const CircleAvatar(
+          child: Icon(
+            Icons.show_chart,
+          ),
+        ),
+        title: Text(
+          opportunity.title,
+          style:
+              const TextStyle(
+            fontWeight:
+                FontWeight.bold,
+          ),
+        ),
+        subtitle: Text(
+          '${opportunity.customer}\n'
+          '${opportunity.stage} • احتمال ${opportunity.probability}%',
+        ),
+        isThreeLine: true,
+        trailing:
+            PopupMenuButton<String>(
+          onSelected: (value) {
+            if (value == 'edit') {
+              opportunityForm(
+                existing: opportunity,
+              );
+            }
+
+            if (value == 'delete') {
+              deleteOpportunity(
+                opportunity,
+              );
+            }
+          },
+          itemBuilder: (_) => const [
+            PopupMenuItem(
+              value: 'edit',
+              child: Text('تعديل'),
+            ),
+            PopupMenuItem(
+              value: 'delete',
+              child: Text('حذف'),
+            ),
+          ],
+        ),
+        onTap: () =>
+            opportunityForm(
+          existing: opportunity,
+        ),
+      ),
+    );
+  }
+
+  /* =======================================================
+     TASKS
+     ======================================================= */
+
+  Widget tasksPage() {
+    List<CrmTask> list = [
+      ...data.tasks,
+    ];
+
+    if (taskFilter == 'اليوم') {
+      list = list
+          .where((x) => x.today)
+          .toList();
+    }
+
+    if (taskFilter == 'متأخرة') {
+      list = list
+          .where((x) => x.overdue)
+          .toList();
+    }
+
+    if (taskFilter == 'مفتوحة') {
+      list = list
+          .where((x) => !x.done)
+          .toList();
+    }
+
+    if (taskFilter == 'منجزة') {
+      list = list
+          .where((x) => x.done)
+          .toList();
+    }
+
+    return Column(
+      children: [
+        SingleChildScrollView(
+          scrollDirection:
+              Axis.horizontal,
+          padding:
+              const EdgeInsets.fromLTRB(
+            12,
+            12,
+            12,
+            4,
+          ),
+          child: Row(
             children: [
-              Icon(
-                icon,
-                color: Colors.indigo,
-              ),
-              Text(
-                value,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 20,
+              'الكل',
+              'اليوم',
+              'متأخرة',
+              'مفتوحة',
+              'منجزة',
+            ].map((filter) {
+              return Padding(
+                padding:
+                    const EdgeInsets.only(
+                  left: 6,
                 ),
-              ),
-              Text(
-                title,
-                style: const TextStyle(
-                  color: Colors.black54,
+                child: ChoiceChip(
+                  label: Text(filter),
+                  selected:
+                      taskFilter == filter,
+                  onSelected: (_) {
+                    setState(() {
+                      taskFilter =
+                          filter;
+                    });
+                  },
                 ),
-              ),
-            ],
+              );
+            }).toList(),
           ),
         ),
-      );
-
-  Widget _heading(
-    String title,
-    VoidCallback onTap,
-  ) =>
-      Row(
-        children: [
-          Expanded(
-            child: Text(
-              title,
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-          TextButton(
-            onPressed: onTap,
-            child: const Text('عرض الكل'),
-          ),
-        ],
-      );
-
-  Widget _customers() => data.customers.isEmpty
-      ? const Center(
-          child: Text('لا يوجد عملاء بعد.'),
-        )
-      : ListView(
-          padding: const EdgeInsets.all(12),
-          children: data.customers
-              .map(
-                (x) => Card(
-                  child: ListTile(
-                    leading: const CircleAvatar(
-                      child: Icon(Icons.person),
-                    ),
-                    title: Text(x.name),
-                    subtitle: Text(
-                      '${x.company}\n${x.phone}',
-                    ),
-                    isThreeLine: true,
-                    trailing: Chip(
-                      label: Text(x.status),
-                    ),
-                  ),
+        Expanded(
+          child: list.isEmpty
+              ? emptyState(
+                  'لا توجد مهام في هذا التصنيف.',
+                )
+              : ListView(
+                  padding:
+                      const EdgeInsets.all(12),
+                  children:
+                      list.map(taskCard).toList(),
                 ),
-              )
-              .toList(),
-        );
-
-  Widget _opportunities() => ListView(
-        padding: const EdgeInsets.all(12),
-        children: [
-          _metric(
-            'قيمة الفرص المفتوحة',
-            money(data.pipeline),
-            Icons.trending_up,
-          ),
-          const SizedBox(height: 10),
-          ...data.opportunities.map(_opportunityTile),
-        ],
-      );
-
-  Widget _opportunityTile(Opportunity x) => Card(
-        child: ListTile(
-          leading: const CircleAvatar(
-            child: Icon(Icons.show_chart),
-          ),
-          title: Text(x.title),
-          subtitle: Text(
-            '${x.customer} • ${x.stage}',
-          ),
-          trailing: Text(
-            money(x.value),
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-            ),
-          ),
         ),
-      );
-
-  Widget _tasks() => ListView(
-        padding: const EdgeInsets.all(12),
-        children: data.tasks
-            .map(
-              (x) => Card(
-                child: CheckboxListTile(
-                  value: x.done,
-                  onChanged: (_) => data.toggle(x),
-                  title: Text(x.title),
-                  subtitle: Text(x.customer),
-                  controlAffinity:
-                      ListTileControlAffinity.leading,
-                ),
-              ),
-            )
-            .toList(),
-      );
-
-  Widget _analytics() => ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Text(
-            'ملخص الأداء',
-            style: Theme.of(context).textTheme.headlineSmall,
-          ),
-          const SizedBox(height: 14),
-          _metric(
-            'إجمالي العملاء',
-            '${data.customers.length}',
-            Icons.people,
-          ),
-          const SizedBox(height: 10),
-          _metric(
-            'قيمة الفرص المفتوحة',
-            money(data.pipeline),
-            Icons.trending_up,
-          ),
-          const SizedBox(height: 10),
-          _metric(
-            'المهام المنجزة',
-            '${data.tasks.where((x) => x.done).length}',
-            Icons.task_alt,
-          ),
-          const SizedBox(height: 10),
-          _metric(
-            'المهام المفتوحة',
-            '${data.tasks.where((x) => !x.done).length}',
-            Icons.pending,
-          ),
-        ],
-      );
-
-  Future<void> _newCustomer() async {
-    final form = await _showForm(
-      'عميل جديد',
-      [
-        'اسم العميل',
-        'الشركة',
-        'الهاتف',
       ],
     );
-
-    if (form != null &&
-        form[0].isNotEmpty &&
-        form[1].isNotEmpty) {
-      await data.addCustomer(
-        Customer(
-          form[0],
-          form[1],
-          form[2],
-          'نشط',
-        ),
-      );
-    }
   }
 
-  Future<void> _newOpportunity() async {
-    final form = await _showForm(
-      'فرصة جديدة',
-      [
-        'اسم الفرصة',
-        'العميل',
-        'القيمة',
-      ],
-    );
-
-    if (form != null &&
-        form[0].isNotEmpty &&
-        form[1].isNotEmpty) {
-      final value = double.tryParse(form[2]) ?? 0;
-
-      await data.addOpportunity(
-        Opportunity(
-          form[0],
-          form[1],
-          value,
-          'جديدة',
+  Widget taskCard(CrmTask task) {
+    return Card(
+      margin:
+          const EdgeInsets.only(bottom: 8),
+      child: ListTile(
+        leading: Checkbox(
+          value: task.done,
+          onChanged: (_) =>
+              data.toggleTask(task),
         ),
-      );
-    }
-  }
-
-  Future<void> _newTask() async {
-    final form = await _showForm(
-      'مهمة جديدة',
-      [
-        'عنوان المهمة',
-        'العميل',
-      ],
-    );
-
-    if (form != null && form[0].isNotEmpty) {
-      await data.addTask(
-        CrmTask(
-          form[0],
-          form.length > 1 && form[1].isNotEmpty
-              ? form[1]
-              : 'غير محدد',
-          false,
-        ),
-      );
-    }
-  }
-
-  Future<List<String>?> _showForm(
-    String title,
-    List<String> labels,
-  ) async {
-    final controllers = labels
-        .map(
-          (_) => TextEditingController(),
-        )
-        .toList();
-
-    final result = await showDialog<List<String>>(
-      context: context,
-      builder: (ctx) => Directionality(
-        textDirection: TextDirection.rtl,
-        child: AlertDialog(
-          title: Text(title),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: List.generate(
-                labels.length,
-                (i) => Padding(
-                  padding: const EdgeInsets.only(
-                    bottom: 10,
-                  ),
-                  child: TextField(
-                    controller: controllers[i],
-                    keyboardType: labels[i] == 'القيمة'
-                        ? TextInputType.number
-                        : TextInputType.text,
-                    decoration: InputDecoration(
-                      labelText: labels[i],
-                    ),
-                  ),
-                ),
-              ),
-            ),
+        title: Text(
+          task.title,
+          style: TextStyle(
+            fontWeight:
+                FontWeight.bold,
+            decoration: task.done
+                ? TextDecoration
+                    .lineThrough
+                : null,
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('إلغاء'),
+        ),
+        subtitle: Text(
+          '${task.customer.isEmpty ? 'بدون عميل' : task.customer}\n'
+          '${formatDateTime(task.dueAt)} • ${task.priority}',
+        ),
+        isThreeLine: true,
+        trailing:
+            PopupMenuButton<String>(
+          onSelected: (value) {
+            if (value == 'edit') {
+              taskForm(existing: task);
+            }
+
+            if (value == 'delete') {
+              deleteTask(task);
+            }
+          },
+          itemBuilder: (_) => const [
+            PopupMenuItem(
+              value: 'edit',
+              child: Text('تعديل'),
             ),
-            FilledButton(
-              onPressed: () => Navigator.pop(
-                ctx,
-                controllers
-                    .map((c) => c.text.trim())
-                    .toList(),
-              ),
-              child: const Text('حفظ'),
+            PopupMenuItem(
+              value: 'delete',
+              child: Text('حذف'),
             ),
           ],
         ),
       ),
     );
+  }
 
-    for (final c in controllers) {
-      c.dispose();
+  /* =======================================================
+     REPORTS
+     ======================================================= */
+
+  Widget reportsPage() {
+    final totalTasks =
+        data.tasks.length;
+
+    final completionRate =
+        totalTasks == 0
+            ? 0
+            : ((data.completedTasks /
+                        totalTasks) *
+                    100)
+                .round();
+
+    return ListView(
+      padding:
+          const EdgeInsets.all(14),
+      children: [
+        const Text(
+          'تقارير الأداء',
+          style: TextStyle(
+            fontSize: 22,
+            fontWeight:
+                FontWeight.bold,
+          ),
+        ),
+
+        const SizedBox(height: 14),
+
+        metric(
+          'إجمالي العملاء',
+          '${data.customers.length}',
+          Icons.people,
+        ),
+
+        const SizedBox(height: 10),
+
+        metric(
+          'قيمة Pipeline',
+          money(data.pipeline),
+          Icons.account_balance_wallet,
+        ),
+
+        const SizedBox(height: 10),
+
+        metric(
+          'Weighted Pipeline',
+          money(
+            data.weightedPipeline,
+          ),
+          Icons.balance,
+        ),
+
+        const SizedBox(height: 10),
+
+        metric(
+          'نسبة إنجاز المهام',
+          '$completionRate%',
+          Icons.task_alt,
+        ),
+
+        const SizedBox(height: 10),
+
+        metric(
+          'المهام المتأخرة',
+          '${data.overdueTasks}',
+          Icons.warning_amber,
+        ),
+
+        const SizedBox(height: 16),
+
+        Card(
+          child: Padding(
+            padding:
+                const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment:
+                  CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'مراحل الفرص',
+                  style: TextStyle(
+                    fontWeight:
+                        FontWeight.bold,
+                    fontSize: 18,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                ...[
+                  'جديدة',
+                  'مؤهلة',
+                  'عرض سعر',
+                  'تفاوض',
+                  'مغلقة ناجحة',
+                  'مغلقة خاسرة',
+                ].map((stage) {
+                  final count =
+                      data.opportunities
+                          .where(
+                            (x) =>
+                                x.stage ==
+                                stage,
+                          )
+                          .length;
+
+                  return ListTile(
+                    dense: true,
+                    title:
+                        Text(stage),
+                    trailing:
+                        Text('$count'),
+                  );
+                }),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /* =======================================================
+     CUSTOMER 360
+     ======================================================= */
+
+  Future<void> customer360(
+    Customer customer,
+  ) async {
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) {
+        return Directionality(
+          textDirection:
+              TextDirection.rtl,
+          child: DraggableScrollableSheet(
+            expand: false,
+            initialChildSize: .75,
+            minChildSize: .45,
+            maxChildSize: .95,
+            builder: (_, controller) {
+              final opportunities =
+                  data.customerOpportunities(
+                customer.company,
+              );
+
+              final tasks =
+                  data.customerTasks(
+                customer.company,
+              );
+
+              return ListView(
+                controller: controller,
+                padding:
+                    const EdgeInsets.all(18),
+                children: [
+                  Row(
+                    children: [
+                      const CircleAvatar(
+                        radius: 30,
+                        child: Icon(
+                          Icons.person,
+                        ),
+                      ),
+                      const SizedBox(
+                        width: 12,
+                      ),
+                      Expanded(
+                        child: Text(
+                          customer.name,
+                          style:
+                              const TextStyle(
+                            fontSize: 22,
+                            fontWeight:
+                                FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(
+                    height: 8,
+                  ),
+
+                  Text(
+                    customer.company,
+                  ),
+
+                  if (customer.phone
+                      .isNotEmpty)
+                    Text(
+                      customer.phone,
+                    ),
+
+                  if (customer.email
+                      .isNotEmpty)
+                    Text(
+                      customer.email,
+                    ),
+
+                  const SizedBox(
+                    height: 12,
+                  ),
+
+                  Chip(
+                    label: Text(
+                      customer.status,
+                    ),
+                  ),
+
+                  const Divider(
+                    height: 30,
+                  ),
+
+                  const Text(
+                    'الفرص',
+                    style:
+                        TextStyle(
+                      fontSize: 18,
+                      fontWeight:
+                          FontWeight.bold,
+                    ),
+                  ),
+
+                  if (opportunities.isEmpty)
+                    const Padding(
+                      padding:
+                          EdgeInsets.all(12),
+                      child: Text(
+                        'لا توجد فرص مرتبطة.',
+                      ),
+                    ),
+
+                  ...opportunities.map(
+                    (opportunity) =>
+                        ListTile(
+                      leading:
+                          const Icon(
+                        Icons.trending_up,
+                      ),
+                      title: Text(
+                        opportunity.title,
+                      ),
+                      subtitle: Text(
+                        opportunity.stage,
+                      ),
+                      trailing: Text(
+                        money(
+                          opportunity.value,
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(
+                    height: 10,
+                  ),
+
+                  const Text(
+                    'المهام',
+                    style:
+                        TextStyle(
+                      fontSize: 18,
+                      fontWeight:
+                          FontWeight.bold,
+                    ),
+                  ),
+
+                  if (tasks.isEmpty)
+                    const Padding(
+                      padding:
+                          EdgeInsets.all(12),
+                      child: Text(
+                        'لا توجد مهام مرتبطة.',
+                      ),
+                    ),
+
+                  ...tasks.map(taskCard),
+
+                  if (customer.notes
+                      .isNotEmpty) ...[
+                    const SizedBox(
+                      height: 10,
+                    ),
+                    const Text(
+                      'ملاحظات',
+                      style:
+                          TextStyle(
+                        fontSize: 18,
+                        fontWeight:
+                            FontWeight.bold,
+                      ),
+                    ),
+                    Card(
+                      child:
+                          Padding(
+                        padding:
+                            const EdgeInsets.all(
+                          14,
+                        ),
+                        child: Text(
+                          customer.notes,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+
+  /* =======================================================
+     CUSTOMER FORM
+     ======================================================= */
+
+  Future<void> customerForm({
+    Customer? existing,
+  }) async {
+    final name =
+        TextEditingController(
+      text: existing?.name ?? '',
+    );
+
+    final company =
+        TextEditingController(
+      text: existing?.company ?? '',
+    );
+
+    final phone =
+        TextEditingController(
+      text: existing?.phone ?? '',
+    );
+
+    final email =
+        TextEditingController(
+      text: existing?.email ?? '',
+    );
+
+    final assigned =
+        TextEditingController(
+      text: existing?.assignedTo ?? '',
+    );
+
+    final notes =
+        TextEditingController(
+      text: existing?.notes ?? '',
+    );
+
+    String status =
+        existing?.status ?? 'نشط';
+
+    final saved =
+        await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder:
+              (context, setDialog) {
+            return Directionality(
+              textDirection:
+                  TextDirection.rtl,
+              child: AlertDialog(
+                title: Text(
+                  existing == null
+                      ? 'إضافة عميل'
+                      : 'تعديل العميل',
+                ),
+                content:
+                    SingleChildScrollView(
+                  child: Column(
+                    children: [
+                      dialogField(
+                        name,
+                        'اسم العميل',
+                      ),
+                      dialogField(
+                        company,
+                        'الشركة',
+                      ),
+                      dialogField(
+                        phone,
+                        'الهاتف',
+                        keyboardType:
+                            TextInputType.phone,
+                      ),
+                      dialogField(
+                        email,
+                        'البريد الإلكتروني',
+                        keyboardType:
+                            TextInputType
+                                .emailAddress,
+                      ),
+                      dialogField(
+                        assigned,
+                        'المسؤول',
+                      ),
+                      DropdownButtonFormField<
+                          String>(
+                        value: status,
+                        decoration:
+                            const InputDecoration(
+                          labelText:
+                              'الحالة',
+                        ),
+                        items: const [
+                          'نشط',
+                          'يحتاج متابعة',
+                          'غير نشط',
+                        ]
+                            .map(
+                              (value) =>
+                                  DropdownMenuItem(
+                                value:
+                                    value,
+                                child:
+                                    Text(
+                                  value,
+                                ),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (value) {
+                          setDialog(() {
+                            status =
+                                value ??
+                                    status;
+                          });
+                        },
+                      ),
+                      const SizedBox(
+                        height: 10,
+                      ),
+                      TextField(
+                        controller: notes,
+                        maxLines: 3,
+                        decoration:
+                            const InputDecoration(
+                          labelText:
+                              'ملاحظات',
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () =>
+                        Navigator.pop(
+                      dialogContext,
+                      false,
+                    ),
+                    child:
+                        const Text('إلغاء'),
+                  ),
+                  FilledButton(
+                    onPressed: () =>
+                        Navigator.pop(
+                      dialogContext,
+                      true,
+                    ),
+                    child:
+                        const Text('حفظ'),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    if (saved == true &&
+        name.text.trim().isNotEmpty) {
+      final customer = Customer(
+        id: existing?.id.isNotEmpty ==
+                true
+            ? existing!.id
+            : newId(),
+        name: name.text.trim(),
+        company: company.text.trim(),
+        phone: phone.text.trim(),
+        email: email.text.trim(),
+        status: status,
+        assignedTo:
+            assigned.text.trim(),
+        notes: notes.text.trim(),
+        createdAt: existing?.createdAt,
+      );
+
+      if (existing == null) {
+        await data.addCustomer(
+          customer,
+        );
+      } else {
+        await data.updateCustomer(
+          customer,
+        );
+      }
     }
 
-    return result;
+    name.dispose();
+    company.dispose();
+    phone.dispose();
+    email.dispose();
+    assigned.dispose();
+    notes.dispose();
+  }
+
+  /* =======================================================
+     OPPORTUNITY FORM
+     ======================================================= */
+
+  Future<void> opportunityForm({
+    Opportunity? existing,
+  }) async {
+    final title =
+        TextEditingController(
+      text: existing?.title ?? '',
+    );
+
+    final customer =
+        TextEditingController(
+      text: existing?.customer ?? '',
+    );
+
+    final value =
+        TextEditingController(
+      text: existing == null
+          ? ''
+          : '${existing.value}',
+    );
+
+    final assigned =
+        TextEditingController(
+      text: existing?.assignedTo ?? '',
+    );
+
+    String stage =
+        existing?.stage ?? 'جديدة';
+
+    int probability =
+        existing?.probability ?? 20;
+
+    DateTime? closeDate =
+        existing?.expectedCloseDate;
+
+    final saved =
+        await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder:
+              (context, setDialog) {
+            return Directionality(
+              textDirection:
+                  TextDirection.rtl,
+              child: AlertDialog(
+                title: Text(
+                  existing == null
+                      ? 'إضافة فرصة'
+                      : 'تعديل الفرصة',
+                ),
+                content:
+                    SingleChildScrollView(
+                  child: Column(
+                    children: [
+                      dialogField(
+                        title,
+                        'اسم الفرصة',
+                      ),
+                      dialogField(
+                        customer,
+                        'العميل',
+                      ),
+                      dialogField(
+                        value,
+                        'القيمة',
+                        keyboardType:
+                            TextInputType.number,
+                      ),
+                      dialogField(
+                        assigned,
+                        'المسؤول',
+                      ),
+                      DropdownButtonFormField<
+                          String>(
+                        value: stage,
+                        decoration:
+                            const InputDecoration(
+                          labelText:
+                              'المرحلة',
+                        ),
+                        items: const [
+                          'جديدة',
+                          'مؤهلة',
+                          'عرض سعر',
+                          'تفاوض',
+                          'مغلقة ناجحة',
+                          'مغلقة خاسرة',
+                        ]
+                            .map(
+                              (value) =>
+                                  DropdownMenuItem(
+                                value:
+                                    value,
+                                child:
+                                    Text(
+                                  value,
+                                ),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (value) {
+                          setDialog(() {
+                            stage =
+                                value ??
+                                    stage;
+                          });
+                        },
+                      ),
+                      const SizedBox(
+                        height: 8,
+                      ),
+                      Align(
+                        alignment:
+                            Alignment
+                                .centerRight,
+                        child: Text(
+                          'احتمال الإغلاق: $probability%',
+                        ),
+                      ),
+                      Slider(
+                        value:
+                            probability
+                                .toDouble(),
+                        min: 0,
+                        max: 100,
+                        divisions: 20,
+                        label:
+                            '$probability%',
+                        onChanged: (value) {
+                          setDialog(() {
+                            probability =
+                                value.round();
+                          });
+                        },
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: () async {
+                          final date =
+                              await showDatePicker(
+                            context:
+                                dialogContext,
+                            initialDate:
+                                closeDate ??
+                                    DateTime
+                                        .now(),
+                            firstDate:
+                                DateTime(
+                              2020,
+                            ),
+                            lastDate:
+                                DateTime(
+                              2100,
+                            ),
+                            textDirection:
+                                TextDirection
+                                    .rtl,
+                          );
+
+                          if (date !=
+                              null) {
+                            setDialog(() {
+                              closeDate =
+                                  date;
+                            });
+                          }
+                        },
+                        icon:
+                            const Icon(
+                          Icons
+                              .calendar_today_outlined,
+                        ),
+                        label: Text(
+                          closeDate ==
+                                  null
+                              ? 'تاريخ الإغلاق المتوقع'
+                              : formatDate(
+                                  closeDate!,
+                                ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () =>
+                        Navigator.pop(
+                      dialogContext,
+                      false,
+                    ),
+                    child:
+                        const Text('إلغاء'),
+                  ),
+                  FilledButton(
+                    onPressed: () =>
+                        Navigator.pop(
+                      dialogContext,
+                      true,
+                    ),
+                    child:
+                        const Text('حفظ'),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    if (saved == true &&
+        title.text.trim().isNotEmpty) {
+      final opportunity =
+          Opportunity(
+        id: existing?.id.isNotEmpty ==
+                true
+            ? existing!.id
+            : newId(),
+        title: title.text.trim(),
+        customer:
+            customer.text.trim(),
+        value:
+            double.tryParse(
+                  value.text.trim(),
+                ) ??
+                0,
+        stage: stage,
+        probability:
+            probability,
+        expectedCloseDate:
+            closeDate,
+        assignedTo:
+            assigned.text.trim(),
+        createdAt:
+            existing?.createdAt,
+      );
+
+      if (existing == null) {
+        await data.addOpportunity(
+          opportunity,
+        );
+      } else {
+        await data.updateOpportunity(
+          opportunity,
+        );
+      }
+    }
+
+    title.dispose();
+    customer.dispose();
+    value.dispose();
+    assigned.dispose();
+  }
+
+  /* =======================================================
+     TASK FORM
+     ======================================================= */
+
+  Future<void> taskForm({
+    CrmTask? existing,
+  }) async {
+    final title =
+        TextEditingController(
+      text: existing?.title ?? '',
+    );
+
+    final customer =
+        TextEditingController(
+      text: existing?.customer ?? '',
+    );
+
+    final assignee =
+        TextEditingController(
+      text: existing?.assignee ?? '',
+    );
+
+    final description =
+        TextEditingController(
+      text: existing?.description ?? '',
+    );
+
+    String priority =
+        existing?.priority ?? 'متوسطة';
+
+    DateTime dueAt =
+        existing?.dueAt ??
+            DateTime.now().add(
+              const Duration(
+                hours: 1,
+              ),
+            );
+
+    int reminder =
+        existing?.reminderMinutes ??
+            30;
+
+    final saved =
+        await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder:
+              (context, setDialog) {
+            return Directionality(
+              textDirection:
+                  TextDirection.rtl,
+              child: AlertDialog(
+                title: Text(
+                  existing == null
+                      ? 'إضافة مهمة'
+                      : 'تعديل المهمة',
+                ),
+                content:
+                    SingleChildScrollView(
+                  child: Column(
+                    children: [
+                      dialogField(
+                        title,
+                        'عنوان المهمة',
+                      ),
+                      dialogField(
+                        customer,
+                        'العميل',
+                      ),
+                      dialogField(
+                        assignee,
+                        'المسؤول',
+                      ),
+                      dialogField(
+                        description,
+                        'الوصف',
+                      ),
+                      DropdownButtonFormField<
+                          String>(
+                        value: priority,
+                        decoration:
+                            const InputDecoration(
+                          labelText:
+                              'الأولوية',
+                        ),
+                        items: const [
+                          'منخفضة',
+                          'متوسطة',
+                          'عالية',
+                          'عاجلة',
+                        ]
+                            .map(
+                              (value) =>
+                                  DropdownMenuItem(
+                                value:
+                                    value,
+                                child:
+                                    Text(
+                                  value,
+                                ),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (value) {
+                          setDialog(() {
+                            priority =
+                                value ??
+                                    priority;
+                          });
+                        },
+                      ),
+                      const SizedBox(
+                        height: 10,
+                      ),
+                      Row(
+                        children: [
+                          Expanded(
+                            child:
+                                OutlinedButton.icon(
+                              onPressed:
+                                  () async {
+                                final date =
+                                    await showDatePicker(
+                                  context:
+                                      dialogContext,
+                                  initialDate:
+                                      dueAt,
+                                  firstDate:
+                                      DateTime(
+                                    2020,
+                                  ),
+                                  lastDate:
+                                      DateTime(
+                                    2100,
+                                  ),
+                                  textDirection:
+                                      TextDirection
+                                          .rtl,
+                                );
+
+                                if (date !=
+                                    null) {
+                                  setDialog(
+                                    () {
+                                      dueAt =
+                                          DateTime(
+                                        date
+                                            .year,
+                                        date
+                                            .month,
+                                        date.day,
+                                        dueAt
+                                            .hour,
+                                        dueAt
+                                            .minute,
+                                      );
+                                    },
+                                  );
+                                }
+                              },
+                              icon:
+                                  const Icon(
+                                Icons
+                                    .calendar_today_outlined,
+                              ),
+                              label:
+                                  Text(
+                                formatDate(
+                                  dueAt,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(
+                            width: 8,
+                          ),
+                          Expanded(
+                            child:
+                                OutlinedButton.icon(
+                              onPressed:
+                                  () async {
+                                final time =
+                                    await showTimePicker(
+                                  context:
+                                      dialogContext,
+                                  initialTime:
+                                      TimeOfDay
+                                          .fromDateTime(
+                                    dueAt,
+                                  ),
+                                  builder:
+                                      (
+                                    context,
+                                    child,
+                                  ) {
+                                    return Directionality(
+                                      textDirection:
+                                          TextDirection
+                                              .rtl,
+                                      child:
+                                          child!,
+                                    );
+                                  },
+                                );
+
+                                if (time !=
+                                    null) {
+                                  setDialog(
+                                    () {
+                                      dueAt =
+                                          DateTime(
+                                        dueAt
+                                            .year,
+                                        dueAt
+                                            .month,
+                                        dueAt
+                                            .day,
+                                        time
+                                            .hour,
+                                        time
+                                            .minute,
+                                      );
+                                    },
+                                  );
+                                }
+                              },
+                              icon:
+                                  const Icon(
+                                Icons
+                                    .access_time,
+                              ),
+                              label:
+                                  Text(
+                                formatTime(
+                                  dueAt,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(
+                        height: 10,
+                      ),
+                      DropdownButtonFormField<
+                          int>(
+                        value: reminder,
+                        decoration:
+                            const InputDecoration(
+                          labelText:
+                              'التذكير قبل',
+                        ),
+                        items: const [
+                          DropdownMenuItem(
+                            value: 0,
+                            child: Text(
+                              'بدون تذكير',
+                            ),
+                          ),
+                          DropdownMenuItem(
+                            value: 15,
+                            child: Text(
+                              '15 دقيقة',
+                            ),
+                          ),
+                          DropdownMenuItem(
+                            value: 30,
+                            child: Text(
+                              '30 دقيقة',
+                            ),
+                          ),
+                          DropdownMenuItem(
+                            value: 60,
+                            child: Text(
+                              'ساعة',
+                            ),
+                          ),
+                          DropdownMenuItem(
+                            value: 1440,
+                            child: Text(
+                              'يوم',
+                            ),
+                          ),
+                        ],
+                        onChanged: (value) {
+                          setDialog(() {
+                            reminder =
+                                value ??
+                                    reminder;
+                          });
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () =>
+                        Navigator.pop(
+                      dialogContext,
+                      false,
+                    ),
+                    child:
+                        const Text('إلغاء'),
+                  ),
+                  FilledButton(
+                    onPressed: () =>
+                        Navigator.pop(
+                      dialogContext,
+                      true,
+                    ),
+                    child:
+                        const Text('حفظ'),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    if (saved == true &&
+        title.text.trim().isNotEmpty) {
+      final task = CrmTask(
+        id: existing?.id.isNotEmpty ==
+                true
+            ? existing!.id
+            : newId(),
+        title: title.text.trim(),
+        customer:
+            customer.text.trim(),
+        assignee:
+            assignee.text.trim(),
+        description:
+            description.text.trim(),
+        priority: priority,
+        done:
+            existing?.done ?? false,
+        dueAt: dueAt,
+        reminderMinutes:
+            reminder,
+        createdAt:
+            existing?.createdAt,
+      );
+
+      if (existing == null) {
+        await data.addTask(task);
+      } else {
+        await data.updateTask(task);
+      }
+    }
+
+    title.dispose();
+    customer.dispose();
+    assignee.dispose();
+    description.dispose();
+  }
+
+  Widget dialogField(
+    TextEditingController controller,
+    String label, {
+    TextInputType? keyboardType,
+  }) {
+    return Padding(
+      padding:
+          const EdgeInsets.only(
+        bottom: 10,
+      ),
+      child: TextField(
+        controller: controller,
+        keyboardType: keyboardType,
+        decoration:
+            InputDecoration(
+          labelText: label,
+        ),
+      ),
+    );
+  }
+
+  /* =======================================================
+     NOTIFICATIONS
+     ======================================================= */
+
+  Future<void> openNotifications() async {
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) {
+        return Directionality(
+          textDirection:
+              TextDirection.rtl,
+          child: SizedBox(
+            height:
+                MediaQuery.of(context)
+                        .size
+                        .height *
+                    .75,
+            child: Column(
+              children: [
+                Padding(
+                  padding:
+                      const EdgeInsets.all(
+                    16,
+                  ),
+                  child: Row(
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          'التنبيهات',
+                          style:
+                              TextStyle(
+                            fontSize: 20,
+                            fontWeight:
+                                FontWeight
+                                    .bold,
+                          ),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () =>
+                            data
+                                .markAllNotificationsRead(),
+                        child: const Text(
+                          'تعيين الكل كمقروء',
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(
+                  height: 1,
+                ),
+                Expanded(
+                  child: data
+                          .notifications
+                          .isEmpty
+                      ? emptyState(
+                          'لا توجد تنبيهات.',
+                        )
+                      : ListView(
+                          children: data
+                              .notifications
+                              .map(
+                                (
+                                  notification,
+                                ) {
+                                  return ListTile(
+                                    leading:
+                                        CircleAvatar(
+                                      child:
+                                          Icon(
+                                        notification.type ==
+                                                'overdue'
+                                            ? Icons
+                                                .warning_amber
+                                            : Icons
+                                                .notifications,
+                                      ),
+                                    ),
+                                    title:
+                                        Text(
+                                      notification
+                                          .title,
+                                      style:
+                                          TextStyle(
+                                        fontWeight: notification.read
+                                            ? FontWeight
+                                                .normal
+                                            : FontWeight
+                                                .bold,
+                                      ),
+                                    ),
+                                    subtitle:
+                                        Text(
+                                      '${notification.body}\n'
+                                      '${formatDateTime(notification.createdAt)}',
+                                    ),
+                                    isThreeLine:
+                                        true,
+                                    tileColor:
+                                        notification.read
+                                            ? null
+                                            : Theme.of(
+                                                context,
+                                              )
+                                                .colorScheme
+                                                .primaryContainer
+                                                .withOpacity(
+                                                  .25,
+                                                ),
+                                    onTap: () =>
+                                        data
+                                            .markNotificationRead(
+                                      notification,
+                                    ),
+                                  );
+                                },
+                              )
+                              .toList(),
+                        ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  /* =======================================================
+     SETTINGS
+     ======================================================= */
+
+  void openSettings() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) =>
+            SettingsPage(
+          data: data,
+          onLogout: logout,
+        ),
+      ),
+    );
+  }
+
+  Future<void> logout() async {
+    final confirmed =
+        await confirmDialog(
+      'تسجيل الخروج',
+      'هل تريد إنهاء الجلسة الحالية؟',
+      actionText: 'خروج',
+    );
+
+    if (!confirmed) return;
+
+    try {
+      if (data.session != null &&
+          apiBaseUrl.isNotEmpty) {
+        await ApiClient().post(
+          '/auth/logout',
+          {
+            'refreshToken':
+                data.session!.refreshToken,
+          },
+        );
+      }
+    } catch (_) {}
+
+    await Session.clear();
+
+    if (!mounted) return;
+
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(
+        builder: (_) =>
+            AuthPage(data: data),
+      ),
+      (_) => false,
+    );
+  }
+
+  /* =======================================================
+     DELETE
+     ======================================================= */
+
+  Future<void> deleteCustomer(
+    Customer customer,
+  ) async {
+    final confirmed =
+        await confirmDialog(
+      'حذف العميل',
+      'هل تريد حذف ${customer.name}؟',
+    );
+
+    if (confirmed) {
+      await data.deleteCustomer(
+        customer,
+      );
+    }
+  }
+
+  Future<void> deleteOpportunity(
+    Opportunity opportunity,
+  ) async {
+    final confirmed =
+        await confirmDialog(
+      'حذف الفرصة',
+      'هل تريد حذف ${opportunity.title}؟',
+    );
+
+    if (confirmed) {
+      await data.deleteOpportunity(
+        opportunity,
+      );
+    }
+  }
+
+  Future<void> deleteTask(
+    CrmTask task,
+  ) async {
+    final confirmed =
+        await confirmDialog(
+      'حذف المهمة',
+      'هل تريد حذف ${task.title}؟',
+    );
+
+    if (confirmed) {
+      await data.deleteTask(task);
+    }
+  }
+
+  Future<bool> confirmDialog(
+    String title,
+    String message, {
+    String actionText = 'حذف',
+  }) async {
+    return await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) =>
+              AlertDialog(
+            title: Text(title),
+            content: Text(message),
+            actions: [
+              TextButton(
+                onPressed: () =>
+                    Navigator.pop(
+                  dialogContext,
+                  false,
+                ),
+                child:
+                    const Text('إلغاء'),
+              ),
+              FilledButton(
+                onPressed: () =>
+                    Navigator.pop(
+                  dialogContext,
+                  true,
+                ),
+                child: Text(actionText),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+  }
+
+  /* =======================================================
+     UI HELPERS
+     ======================================================= */
+
+  Widget metric(
+    String title,
+    String value,
+    IconData icon,
+  ) {
+    return Card(
+      child: Padding(
+        padding:
+            const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment:
+              CrossAxisAlignment.start,
+          children: [
+            Icon(
+              icon,
+              color: Colors.indigo,
+            ),
+            const SizedBox(
+              height: 10,
+            ),
+            Text(
+              value,
+              maxLines: 1,
+              overflow:
+                  TextOverflow.ellipsis,
+              style:
+                  const TextStyle(
+                fontWeight:
+                    FontWeight.bold,
+                fontSize: 20,
+              ),
+            ),
+            const SizedBox(
+              height: 4,
+            ),
+            Text(
+              title,
+              style:
+                  const TextStyle(
+                color:
+                    Colors.black54,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget section(
+    String title,
+    VoidCallback action,
+  ) {
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            title,
+            style:
+                const TextStyle(
+              fontSize: 18,
+              fontWeight:
+                  FontWeight.bold,
+            ),
+          ),
+        ),
+        TextButton(
+          onPressed: action,
+          child:
+              const Text('عرض الكل'),
+        ),
+      ],
+    );
+  }
+
+  Widget emptyState(
+    String message,
+  ) {
+    return Center(
+      child: Padding(
+        padding:
+            const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment:
+              MainAxisAlignment.center,
+          children: [
+            const Icon(
+              Icons.inbox_outlined,
+              size: 54,
+              color: Colors.black26,
+            ),
+            const SizedBox(
+              height: 10,
+            ),
+            Text(
+              message,
+              textAlign:
+                  TextAlign.center,
+              style:
+                  const TextStyle(
+                color:
+                    Colors.black54,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
+
+/* =========================================================
+   SETTINGS PAGE
+   ========================================================= */
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({
     super.key,
     required this.data,
+    required this.onLogout,
   });
 
   final CrmData data;
+  final Future<void> Function() onLogout;
 
   @override
-  State<SettingsPage> createState() => _SettingsPageState();
+  State<SettingsPage> createState() =>
+      _SettingsPageState();
 }
 
-class _SettingsPageState extends State<SettingsPage> {
-  bool notifications = true;
-  bool taskReminders = true;
-  bool compactMode = false;
-
+class _SettingsPageState
+    extends State<SettingsPage> {
   CrmData get data => widget.data;
 
   @override
   Widget build(BuildContext context) {
-    final company = data.company;
-
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text(
-            'الإعدادات',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-            ),
-          ),
+          title:
+              const Text('الإعدادات'),
         ),
         body: ListView(
-          padding: const EdgeInsets.all(16),
+          padding:
+              const EdgeInsets.all(14),
           children: [
-            _sectionTitle('الحساب والشركة'),
-
-            Card(
-              child: ListTile(
-                leading: const CircleAvatar(
-                  child: Icon(Icons.business),
-                ),
-                title: Text(
-                  company?.companyName ?? 'الشركة',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                subtitle: Text(
-                  company?.managerName ?? 'المستخدم',
-                ),
-                trailing: const Icon(
-                  Icons.chevron_left,
-                ),
-                onTap: _showCompanyDetails,
+            const Text(
+              'الحساب',
+              style:
+                  TextStyle(
+                fontSize: 18,
+                fontWeight:
+                    FontWeight.bold,
               ),
             ),
 
-            const SizedBox(height: 18),
+            Card(
+              child: ListTile(
+                leading:
+                    const CircleAvatar(
+                  child:
+                      Icon(Icons.business),
+                ),
+                title: Text(
+                  data.company
+                          ?.companyName ??
+                      '',
+                ),
+                subtitle: Text(
+                  data.session?.user[
+                            'email']
+                          ?.toString() ??
+                      '',
+                ),
+              ),
+            ),
 
-            _sectionTitle('التنبيهات'),
+            const SizedBox(
+              height: 18,
+            ),
+
+            const Text(
+              'التنبيهات',
+              style:
+                  TextStyle(
+                fontSize: 18,
+                fontWeight:
+                    FontWeight.bold,
+              ),
+            ),
 
             Card(
               child: Column(
                 children: [
                   SwitchListTile(
-                    value: notifications,
-                    onChanged: (value) {
-                      setState(() {
-                        notifications = value;
-                      });
+                    value:
+                        data.notificationsEnabled,
+                    onChanged: (value) async {
+                      await data
+                          .setSettings(
+                        notifications:
+                            value,
+                      );
+
+                      setState(() {});
                     },
                     title: const Text(
-                      'التنبيهات',
+                      'التنبيهات داخل التطبيق',
                     ),
-                    subtitle: const Text(
-                      'تفعيل إشعارات CRM',
-                    ),
-                    secondary: const Icon(
-                      Icons.notifications_outlined,
+                    secondary:
+                        const Icon(
+                      Icons
+                          .notifications_outlined,
                     ),
                   ),
-                  const Divider(height: 1),
+
+                  const Divider(
+                    height: 1,
+                  ),
+
                   SwitchListTile(
-                    value: taskReminders,
-                    onChanged: notifications
-                        ? (value) {
-                            setState(() {
-                              taskReminders = value;
-                            });
+                    value:
+                        data.taskRemindersEnabled,
+                    onChanged: data
+                            .notificationsEnabled
+                        ? (value) async {
+                            await data
+                                .setSettings(
+                              taskReminders:
+                                  value,
+                            );
+
+                            setState(() {});
                           }
                         : null,
                     title: const Text(
-                      'تذكير المهام',
+                      'تذكيرات المهام',
                     ),
-                    subtitle: const Text(
-                      'التنبيه بالمهام القادمة',
-                    ),
-                    secondary: const Icon(
+                    secondary:
+                        const Icon(
                       Icons.alarm_outlined,
                     ),
                   ),
@@ -1353,309 +3912,279 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
             ),
 
-            const SizedBox(height: 18),
+            const SizedBox(
+              height: 18,
+            ),
 
-            _sectionTitle('المظهر'),
+            const Text(
+              'المظهر',
+              style:
+                  TextStyle(
+                fontSize: 18,
+                fontWeight:
+                    FontWeight.bold,
+              ),
+            ),
 
             Card(
-              child: SwitchListTile(
-                value: compactMode,
-                onChanged: (value) {
-                  setState(() {
-                    compactMode = value;
-                  });
+              child:
+                  SwitchListTile(
+                value:
+                    data.compactMode,
+                onChanged: (value) async {
+                  await data
+                      .setSettings(
+                    compact: value,
+                  );
+
+                  setState(() {});
                 },
                 title: const Text(
                   'الوضع المختصر',
                 ),
-                subtitle: const Text(
-                  'تقليل المسافات في القوائم',
+                secondary:
+                    const Icon(
+                  Icons
+                      .view_compact_outlined,
                 ),
-                secondary: const Icon(
-                  Icons.view_compact_outlined,
-                ),
               ),
             ),
 
-            const SizedBox(height: 18),
-
-            _sectionTitle('إدارة البيانات'),
-
-            Card(
-              child: Column(
-                children: [
-                  ListTile(
-                    leading: const Icon(
-                      Icons.people_outline,
-                    ),
-                    title: const Text(
-                      'إجمالي العملاء',
-                    ),
-                    trailing: Text(
-                      '${data.customers.length}',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                  const Divider(height: 1),
-                  ListTile(
-                    leading: const Icon(
-                      Icons.trending_up,
-                    ),
-                    title: const Text(
-                      'إجمالي الفرص',
-                    ),
-                    trailing: Text(
-                      '${data.opportunities.length}',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                  const Divider(height: 1),
-                  ListTile(
-                    leading: const Icon(
-                      Icons.task_alt,
-                    ),
-                    title: const Text(
-                      'إجمالي المهام',
-                    ),
-                    trailing: Text(
-                      '${data.tasks.length}',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+            const SizedBox(
+              height: 18,
             ),
-
-            const SizedBox(height: 18),
-
-            _sectionTitle('حول التطبيق'),
-
-            Card(
-              child: Column(
-                children: [
-                  const ListTile(
-                    leading: Icon(
-                      Icons.apps_outlined,
-                    ),
-                    title: Text(
-                      'CRM Business',
-                    ),
-                    subtitle: Text(
-                      'نظام إدارة علاقات العملاء',
-                    ),
-                  ),
-                  const Divider(height: 1),
-                  const ListTile(
-                    leading: Icon(
-                      Icons.info_outline,
-                    ),
-                    title: Text(
-                      'الإصدار',
-                    ),
-                    trailing: Text(
-                      '3.0.0',
-                    ),
-                  ),
-                  const Divider(height: 1),
-                  ListTile(
-                    leading: const Icon(
-                      Icons.privacy_tip_outlined,
-                    ),
-                    title: const Text(
-                      'الخصوصية والأمان',
-                    ),
-                    trailing: const Icon(
-                      Icons.chevron_left,
-                    ),
-                    onTap: _showPrivacy,
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 24),
-
-            FilledButton.icon(
-              onPressed: _logout,
-              icon: const Icon(
-                Icons.logout,
-              ),
-              label: const Text(
-                'تسجيل الخروج',
-              ),
-            ),
-
-            const SizedBox(height: 30),
 
             const Text(
-              'CRM Business\nإدارة العملاء والفرص والمهام من مكان واحد.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Colors.black45,
-                fontSize: 12,
+              'البيانات',
+              style:
+                  TextStyle(
+                fontSize: 18,
+                fontWeight:
+                    FontWeight.bold,
               ),
             ),
+
+            Card(
+              child: Column(
+                children: [
+                  ListTile(
+                    title:
+                        const Text(
+                      'العملاء',
+                    ),
+                    trailing:
+                        Text(
+                      '${data.customers.length}',
+                    ),
+                  ),
+                  const Divider(
+                    height: 1,
+                  ),
+                  ListTile(
+                    title:
+                        const Text(
+                      'الفرص',
+                    ),
+                    trailing:
+                        Text(
+                      '${data.opportunities.length}',
+                    ),
+                  ),
+                  const Divider(
+                    height: 1,
+                  ),
+                  ListTile(
+                    title:
+                        const Text(
+                      'المهام',
+                    ),
+                    trailing:
+                        Text(
+                      '${data.tasks.length}',
+                    ),
+                  ),
+                  const Divider(
+                    height: 1,
+                  ),
+                  ListTile(
+                    title:
+                        const Text(
+                      'التنبيهات',
+                    ),
+                    trailing:
+                        Text(
+                      '${data.notifications.length}',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(
+              height: 18,
+            ),
+
+            const Text(
+              'الأمان',
+              style:
+                  TextStyle(
+                fontSize: 18,
+                fontWeight:
+                    FontWeight.bold,
+              ),
+            ),
+
+            Card(
+              child: const ListTile(
+                leading:
+                    Icon(Icons.security),
+                title:
+                    Text('جلسة JWT'),
+                subtitle: Text(
+                  'يتم حفظ رموز الجلسة فقط ولا يتم حفظ كلمة المرور.',
+                ),
+              ),
+            ),
+
+            const SizedBox(
+              height: 18,
+            ),
+
+            const Text(
+              'الإصدار',
+              style:
+                  TextStyle(
+                fontSize: 18,
+                fontWeight:
+                    FontWeight.bold,
+              ),
+            ),
+
+            const Card(
+              child: ListTile(
+                leading:
+                    Icon(Icons.apps),
+                title:
+                    Text('CRM Business'),
+                subtitle: Text(
+                  'واجهة CRM مطورة • الإصدار 4.0.0',
+                ),
+              ),
+            ),
+
+            const SizedBox(
+              height: 24,
+            ),
+
+            SizedBox(
+              height: 52,
+              child: FilledButton.tonalIcon(
+                onPressed:
+                    widget.onLogout,
+                icon: const Icon(
+                  Icons.logout,
+                ),
+                label: const Text(
+                  'تسجيل الخروج',
+                ),
+              ),
+            ),
+
+            const SizedBox(
+              height: 30,
+            ),
           ],
         ),
       ),
-    );
-  }
-
-  Widget _sectionTitle(String title) {
-    return Padding(
-      padding: const EdgeInsets.only(
-        bottom: 8,
-      ),
-      child: Text(
-        title,
-        style: const TextStyle(
-          fontSize: 17,
-          fontWeight: FontWeight.bold,
-        ),
-      ),
-    );
-  }
-
-  void _showCompanyDetails() {
-    final company = data.company;
-
-    if (company == null) return;
-
-    showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text(
-          'بيانات الشركة',
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'اسم الشركة: ${company.companyName}',
-            ),
-            const SizedBox(height: 10),
-            Text(
-              'المستخدم: ${company.managerName}',
-            ),
-            const SizedBox(height: 10),
-            Text(
-              'البريد الإلكتروني: ${company.email}',
-            ),
-            const SizedBox(height: 10),
-            Text(
-              'الهاتف: ${company.phone}',
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text(
-              'إغلاق',
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showPrivacy() {
-    showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text(
-          'الخصوصية والأمان',
-        ),
-        content: const Text(
-          'هذه النسخة التجريبية تحفظ بياناتها محلياً على الجهاز. '
-          'سيتم تطبيق المصادقة الحقيقية وربط البيانات بالخادم '
-          'وقاعدة البيانات في المرحلة التالية.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text(
-              'إغلاق',
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _logout() async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text(
-          'تسجيل الخروج',
-        ),
-        content: const Text(
-          'هل تريد تسجيل الخروج من CRM Business؟',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(
-              ctx,
-              false,
-            ),
-            child: const Text(
-              'إلغاء',
-            ),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(
-              ctx,
-              true,
-            ),
-            child: const Text(
-              'تسجيل الخروج',
-            ),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm != true) return;
-
-    final prefs = await SharedPreferences.getInstance();
-
-    await prefs.remove(
-      'crm_company_profile',
-    );
-
-    if (!mounted) return;
-
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(
-        builder: (_) => CompanyRegistrationPage(
-          data: data,
-        ),
-      ),
-      (route) => false,
     );
   }
 }
 
+/* =========================================================
+   HELPERS
+   ========================================================= */
+
+String newId() {
+  return DateTime.now()
+      .microsecondsSinceEpoch
+      .toString();
+}
+
 String money(double value) {
-  final n = value.round().toString();
-  final out = StringBuffer();
+  final number =
+      value.round().toString();
 
-  for (var i = 0; i < n.length; i++) {
-    out.write(n[i]);
+  final sign =
+      number.startsWith('-')
+          ? '-'
+          : '';
 
-    if ((n.length - i - 1) % 3 == 0 &&
-        i != n.length - 1) {
-      out.write(',');
+  final digits =
+      sign.isEmpty
+          ? number
+          : number.substring(1);
+
+  final result =
+      StringBuffer(sign);
+
+  for (var i = 0;
+      i < digits.length;
+      i++) {
+    result.write(digits[i]);
+
+    if ((digits.length - i - 1) % 3 ==
+            0 &&
+        i != digits.length - 1) {
+      result.write(',');
     }
   }
 
-  return out.toString();
+  return result.toString();
+}
+
+String formatDate(DateTime date) {
+  return '${date.day.toString().padLeft(2, '0')}/'
+      '${date.month.toString().padLeft(2, '0')}/'
+      '${date.year}';
+}
+
+String formatTime(DateTime date) {
+  return '${date.hour.toString().padLeft(2, '0')}:'
+      '${date.minute.toString().padLeft(2, '0')}';
+}
+
+String formatDateTime(DateTime date) {
+  return '${formatDate(date)} ${formatTime(date)}';
+}
+
+String cleanError(Object error) {
+  final message = error
+      .toString()
+      .replaceFirst(
+        'Exception: ',
+        '',
+      )
+      .trim();
+
+  if (message.contains(
+    'Failed host lookup',
+  )) {
+    return 'تعذر الوصول إلى الخادم. تحقق من الإنترنت وعنوان API.';
+  }
+
+  if (message.contains(
+    'Connection refused',
+  )) {
+    return 'الخادم غير متاح حالياً.';
+  }
+
+  if (message.contains(
+    'timed out',
+  )) {
+    return 'انتهت مهلة الاتصال بالخادم.';
+  }
+
+  return message.isEmpty
+      ? 'حدث خطأ غير متوقع.'
+      : message;
 }
