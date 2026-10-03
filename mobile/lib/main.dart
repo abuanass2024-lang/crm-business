@@ -14,28 +14,60 @@ class CrmApp extends StatelessWidget {
   const CrmApp({super.key});
 
   @override
-  Widget build(BuildContext context) => MaterialApp(
-        title: 'CRM Business',
-        debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          useMaterial3: true,
-          colorSchemeSeed: Colors.indigo,
-          scaffoldBackgroundColor: const Color(0xFFF6F7FB),
-          cardTheme: const CardThemeData(
-            elevation: 0,
-            margin: EdgeInsets.zero,
-          ),
-          inputDecorationTheme: const InputDecorationTheme(
-            filled: true,
-            fillColor: Colors.white,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.all(Radius.circular(12)),
-              borderSide: BorderSide.none,
-            ),
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'CRM Business',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        useMaterial3: true,
+        colorSchemeSeed: Colors.indigo,
+        scaffoldBackgroundColor: const Color(0xFFF6F7FB),
+        cardTheme: const CardThemeData(
+          elevation: 0,
+          margin: EdgeInsets.zero,
+        ),
+        inputDecorationTheme: const InputDecorationTheme(
+          filled: true,
+          fillColor: Colors.white,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.all(Radius.circular(12)),
+            borderSide: BorderSide.none,
           ),
         ),
-        home: const CrmHome(),
-      );
+      ),
+      home: const StartupPage(),
+    );
+  }
+}
+
+class CompanyProfile {
+  CompanyProfile({
+    required this.companyName,
+    required this.managerName,
+    required this.email,
+    required this.phone,
+  });
+
+  final String companyName;
+  final String managerName;
+  final String email;
+  final String phone;
+
+  Map<String, dynamic> toJson() => {
+        'companyName': companyName,
+        'managerName': managerName,
+        'email': email,
+        'phone': phone,
+      };
+
+  factory CompanyProfile.fromJson(Map<String, dynamic> json) {
+    return CompanyProfile(
+      companyName: json['companyName'] as String? ?? '',
+      managerName: json['managerName'] as String? ?? '',
+      email: json['email'] as String? ?? '',
+      phone: json['phone'] as String? ?? '',
+    );
+  }
 }
 
 class Customer {
@@ -105,17 +137,34 @@ class CrmTask {
 }
 
 class CrmData extends ChangeNotifier {
-  static const _key = 'crm_business_v2';
+  static const _dataKey = 'crm_business_v3';
+  static const _companyKey = 'crm_company_profile';
 
   final customers = <Customer>[];
   final opportunities = <Opportunity>[];
   final tasks = <CrmTask>[];
 
+  CompanyProfile? company;
   bool ready = false;
 
   Future<void> load() async {
-    final p = await SharedPreferences.getInstance();
-    final raw = p.getString(_key);
+    final prefs = await SharedPreferences.getInstance();
+
+    final companyRaw = prefs.getString(_companyKey);
+
+    if (companyRaw != null) {
+      try {
+        company = CompanyProfile.fromJson(
+          Map<String, dynamic>.from(
+            jsonDecode(companyRaw) as Map,
+          ),
+        );
+      } catch (_) {
+        company = null;
+      }
+    }
+
+    final raw = prefs.getString(_dataKey);
 
     if (raw == null) {
       customers.addAll([
@@ -201,15 +250,28 @@ class CrmData extends ChangeNotifier {
   }
 
   Future<void> save() async {
-    final p = await SharedPreferences.getInstance();
+    final prefs = await SharedPreferences.getInstance();
 
-    await p.setString(
-      _key,
+    await prefs.setString(
+      _dataKey,
       jsonEncode({
         'customers': customers.map((x) => x.toJson()).toList(),
         'opportunities': opportunities.map((x) => x.toJson()).toList(),
         'tasks': tasks.map((x) => x.toJson()).toList(),
       }),
+    );
+
+    notifyListeners();
+  }
+
+  Future<void> saveCompany(CompanyProfile profile) async {
+    final prefs = await SharedPreferences.getInstance();
+
+    company = profile;
+
+    await prefs.setString(
+      _companyKey,
+      jsonEncode(profile.toJson()),
     );
 
     notifyListeners();
@@ -240,22 +302,40 @@ class CrmData extends ChangeNotifier {
       .fold(0, (a, x) => a + x.value);
 }
 
-class CrmHome extends StatefulWidget {
-  const CrmHome({super.key});
+class StartupPage extends StatefulWidget {
+  const StartupPage({super.key});
 
   @override
-  State<CrmHome> createState() => _CrmHomeState();
+  State<StartupPage> createState() => _StartupPageState();
 }
 
-class _CrmHomeState extends State<CrmHome> {
+class _StartupPageState extends State<StartupPage> {
   final data = CrmData();
-
-  int tab = 0;
 
   @override
   void initState() {
     super.initState();
-    data.load();
+    _start();
+  }
+
+  Future<void> _start() async {
+    await data.load();
+
+    if (!mounted) return;
+
+    if (data.company == null) {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => CompanyRegistrationPage(data: data),
+        ),
+      );
+    } else {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => CrmHome(data: data),
+        ),
+      );
+    }
   }
 
   @override
@@ -265,26 +345,330 @@ class _CrmHomeState extends State<CrmHome> {
   }
 
   @override
-  Widget build(BuildContext context) => AnimatedBuilder(
-        animation: data,
-        builder: (context, _) {
-          if (!data.ready) {
-            return const Scaffold(
-              body: Center(
-                child: CircularProgressIndicator(),
-              ),
-            );
-          }
+  Widget build(BuildContext context) {
+    return const Scaffold(
+      body: Center(
+        child: CircularProgressIndicator(),
+      ),
+    );
+  }
+}
 
-          final pages = <Widget>[
-            _dashboard(),
-            _customers(),
-            _opportunities(),
-            _tasks(),
-            _analytics(),
-          ];
+class CompanyRegistrationPage extends StatefulWidget {
+  const CompanyRegistrationPage({
+    super.key,
+    required this.data,
+  });
 
-          return Scaffold(
+  final CrmData data;
+
+  @override
+  State<CompanyRegistrationPage> createState() =>
+      _CompanyRegistrationPageState();
+}
+
+class _CompanyRegistrationPageState
+    extends State<CompanyRegistrationPage> {
+  final companyController = TextEditingController();
+  final managerController = TextEditingController();
+  final emailController = TextEditingController();
+  final phoneController = TextEditingController();
+  final passwordController = TextEditingController();
+  final confirmController = TextEditingController();
+
+  bool loading = false;
+  bool acceptTerms = false;
+  bool obscurePassword = true;
+  bool obscureConfirm = true;
+
+  @override
+  void dispose() {
+    companyController.dispose();
+    managerController.dispose();
+    emailController.dispose();
+    phoneController.dispose();
+    passwordController.dispose();
+    confirmController.dispose();
+    super.dispose();
+  }
+
+  Future<void> register() async {
+    final companyName = companyController.text.trim();
+    final managerName = managerController.text.trim();
+    final email = emailController.text.trim();
+    final phone = phoneController.text.trim();
+    final password = passwordController.text;
+    final confirm = confirmController.text;
+
+    if (companyName.isEmpty ||
+        managerName.isEmpty ||
+        email.isEmpty ||
+        phone.isEmpty ||
+        password.isEmpty ||
+        confirm.isEmpty) {
+      _message('يرجى تعبئة جميع الحقول.');
+      return;
+    }
+
+    if (!email.contains('@')) {
+      _message('يرجى إدخال بريد إلكتروني صحيح.');
+      return;
+    }
+
+    if (password.length < 6) {
+      _message('كلمة المرور يجب أن تكون 6 أحرف على الأقل.');
+      return;
+    }
+
+    if (password != confirm) {
+      _message('كلمتا المرور غير متطابقتين.');
+      return;
+    }
+
+    if (!acceptTerms) {
+      _message('يرجى الموافقة على الشروط والأحكام.');
+      return;
+    }
+
+    setState(() => loading = true);
+
+    final profile = CompanyProfile(
+      companyName: companyName,
+      managerName: managerName,
+      email: email,
+      phone: phone,
+    );
+
+    await widget.data.saveCompany(profile);
+
+    if (!mounted) return;
+
+    setState(() => loading = false);
+
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (_) => CrmHome(data: widget.data),
+      ),
+    );
+  }
+
+  void _message(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text(
+            'إنشاء حساب شركة',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+        ),
+        body: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const SizedBox(height: 10),
+                const Icon(
+                  Icons.business,
+                  size: 70,
+                  color: Colors.indigo,
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'مرحباً بك في CRM Business',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'أنشئ حساب شركتك للبدء في إدارة العملاء والفرص والمهام.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.black54,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                _field(
+                  controller: companyController,
+                  label: 'اسم الشركة',
+                  icon: Icons.business_outlined,
+                ),
+                const SizedBox(height: 12),
+                _field(
+                  controller: managerController,
+                  label: 'اسم المدير / المستخدم',
+                  icon: Icons.person_outline,
+                ),
+                const SizedBox(height: 12),
+                _field(
+                  controller: emailController,
+                  label: 'البريد الإلكتروني',
+                  icon: Icons.email_outlined,
+                  keyboardType: TextInputType.emailAddress,
+                ),
+                const SizedBox(height: 12),
+                _field(
+                  controller: phoneController,
+                  label: 'رقم الهاتف',
+                  icon: Icons.phone_outlined,
+                  keyboardType: TextInputType.phone,
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: passwordController,
+                  obscureText: obscurePassword,
+                  decoration: InputDecoration(
+                    labelText: 'كلمة المرور',
+                    prefixIcon: const Icon(Icons.lock_outline),
+                    suffixIcon: IconButton(
+                      onPressed: () {
+                        setState(
+                          () => obscurePassword = !obscurePassword,
+                        );
+                      },
+                      icon: Icon(
+                        obscurePassword
+                            ? Icons.visibility_outlined
+                            : Icons.visibility_off_outlined,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: confirmController,
+                  obscureText: obscureConfirm,
+                  decoration: InputDecoration(
+                    labelText: 'تأكيد كلمة المرور',
+                    prefixIcon: const Icon(Icons.lock_reset_outlined),
+                    suffixIcon: IconButton(
+                      onPressed: () {
+                        setState(
+                          () => obscureConfirm = !obscureConfirm,
+                        );
+                      },
+                      icon: Icon(
+                        obscureConfirm
+                            ? Icons.visibility_outlined
+                            : Icons.visibility_off_outlined,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                CheckboxListTile(
+                  value: acceptTerms,
+                  onChanged: (value) {
+                    setState(() {
+                      acceptTerms = value ?? false;
+                    });
+                  },
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text(
+                    'أوافق على الشروط والأحكام وسياسة الخصوصية',
+                  ),
+                  controlAffinity:
+                      ListTileControlAffinity.leading,
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  height: 52,
+                  child: FilledButton.icon(
+                    onPressed: loading ? null : register,
+                    icon: loading
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : const Icon(Icons.business_center),
+                    label: Text(
+                      loading
+                          ? 'جاري إنشاء الحساب...'
+                          : 'إنشاء حساب الشركة',
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                const Text(
+                  'نسخة تجريبية: سيتم ربط التسجيل الحقيقي بالخادم وقاعدة البيانات في المرحلة التالية.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.black45,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _field({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    TextInputType? keyboardType,
+  }) {
+    return TextField(
+      controller: controller,
+      keyboardType: keyboardType,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon),
+      ),
+    );
+  }
+}
+
+class CrmHome extends StatefulWidget {
+  const CrmHome({
+    super.key,
+    required this.data,
+  });
+
+  final CrmData data;
+
+  @override
+  State<CrmHome> createState() => _CrmHomeState();
+}
+
+class _CrmHomeState extends State<CrmHome> {
+  int tab = 0;
+
+  CrmData get data => widget.data;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: data,
+      builder: (context, _) {
+        final pages = <Widget>[
+          _dashboard(),
+          _customers(),
+          _opportunities(),
+          _tasks(),
+          _analytics(),
+        ];
+
+        return Directionality(
+          textDirection: TextDirection.rtl,
+          child: Scaffold(
             appBar: AppBar(
               title: const Text(
                 'CRM Business',
@@ -294,10 +678,14 @@ class _CrmHomeState extends State<CrmHome> {
               ),
               actions: [
                 IconButton(
+                  onPressed: _showCompany,
+                  icon: const Icon(Icons.business_outlined),
+                ),
+                IconButton(
                   onPressed: () => showAboutDialog(
                     context: context,
                     applicationName: 'CRM Business',
-                    applicationVersion: '2.0.0',
+                    applicationVersion: '3.0.0',
                   ),
                   icon: const Icon(Icons.info_outline),
                 ),
@@ -354,9 +742,43 @@ class _CrmHomeState extends State<CrmHome> {
                 ),
               ],
             ),
-          );
-        },
-      );
+          ),
+        );
+      },
+    );
+  }
+
+  void _showCompany() {
+    final company = data.company;
+
+    if (company == null) return;
+
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('ملف الشركة'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('الشركة: ${company.companyName}'),
+            const SizedBox(height: 8),
+            Text('المستخدم: ${company.managerName}'),
+            const SizedBox(height: 8),
+            Text('البريد: ${company.email}'),
+            const SizedBox(height: 8),
+            Text('الهاتف: ${company.phone}'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('إغلاق'),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _dashboard() => ListView(
         padding: const EdgeInsets.all(16),
@@ -372,27 +794,27 @@ class _CrmHomeState extends State<CrmHome> {
                 ],
               ),
             ),
-            child: const Column(
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
+                const Text(
                   'مرحباً بك 👋',
                   style: TextStyle(
                     color: Colors.white70,
                   ),
                 ),
-                SizedBox(height: 8),
+                const SizedBox(height: 8),
                 Text(
-                  'حوّل علاقاتك إلى نتائج',
-                  style: TextStyle(
+                  data.company?.companyName ?? 'شركتك',
+                  style: const TextStyle(
                     color: Colors.white,
                     fontSize: 23,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-                SizedBox(height: 8),
-                Text(
-                  'العملاء والفرص والإجراءات في مكان واحد.',
+                const SizedBox(height: 8),
+                const Text(
+                  'حوّل علاقاتك إلى نتائج',
                   style: TextStyle(
                     color: Colors.white,
                   ),
@@ -707,45 +1129,48 @@ class _CrmHomeState extends State<CrmHome> {
 
     final result = await showDialog<List<String>>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(title),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: List.generate(
-              labels.length,
-              (i) => Padding(
-                padding: const EdgeInsets.only(
-                  bottom: 10,
-                ),
-                child: TextField(
-                  controller: controllers[i],
-                  keyboardType: labels[i] == 'القيمة'
-                      ? TextInputType.number
-                      : TextInputType.text,
-                  decoration: InputDecoration(
-                    labelText: labels[i],
+      builder: (ctx) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          title: Text(title),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: List.generate(
+                labels.length,
+                (i) => Padding(
+                  padding: const EdgeInsets.only(
+                    bottom: 10,
+                  ),
+                  child: TextField(
+                    controller: controllers[i],
+                    keyboardType: labels[i] == 'القيمة'
+                        ? TextInputType.number
+                        : TextInputType.text,
+                    decoration: InputDecoration(
+                      labelText: labels[i],
+                    ),
                   ),
                 ),
               ),
             ),
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('إلغاء'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(
-              ctx,
-              controllers
-                  .map((c) => c.text.trim())
-                  .toList(),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('إلغاء'),
             ),
-            child: const Text('حفظ'),
-          ),
-        ],
+            FilledButton(
+              onPressed: () => Navigator.pop(
+                ctx,
+                controllers
+                    .map((c) => c.text.trim())
+                    .toList(),
+              ),
+              child: const Text('حفظ'),
+            ),
+          ],
+        ),
       ),
     );
 
