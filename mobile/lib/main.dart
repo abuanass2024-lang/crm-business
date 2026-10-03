@@ -36,7 +36,9 @@ class CrmApp extends StatelessWidget {
           filled: true,
           fillColor: Colors.white,
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.all(Radius.circular(14)),
+            borderRadius: BorderRadius.all(
+              Radius.circular(14),
+            ),
             borderSide: BorderSide.none,
           ),
         ),
@@ -51,7 +53,10 @@ class CrmApp extends StatelessWidget {
    ========================================================= */
 
 class ApiClient {
-  String get base => apiBaseUrl.replaceFirst(RegExp(r'/$'), '');
+  String get base => apiBaseUrl.replaceFirst(
+        RegExp(r'/$'),
+        '',
+      );
 
   Future<Map<String, dynamic>> post(
     String path,
@@ -59,7 +64,9 @@ class ApiClient {
     String? token,
   }) async {
     if (base.isEmpty) {
-      throw Exception('لم يتم ضبط عنوان الخادم API_BASE_URL.');
+      throw Exception(
+        'لم يتم ضبط عنوان الخادم API_BASE_URL.',
+      );
     }
 
     final client = HttpClient();
@@ -69,7 +76,8 @@ class ApiClient {
         Uri.parse('$base$path'),
       );
 
-      request.headers.contentType = ContentType.json;
+      request.headers.contentType =
+          ContentType.json;
 
       if (token != null && token.isNotEmpty) {
         request.headers.set(
@@ -81,8 +89,11 @@ class ApiClient {
       request.write(jsonEncode(body));
 
       final response = await request.close();
+
       final responseText =
-          await response.transform(utf8.decoder).join();
+          await response.transform(
+        utf8.decoder,
+      ).join();
 
       dynamic decoded;
 
@@ -106,7 +117,9 @@ class ApiClient {
         throw Exception(message);
       }
 
-      return Map<String, dynamic>.from(decoded as Map);
+      return Map<String, dynamic>.from(
+        decoded as Map,
+      );
     } finally {
       client.close(force: true);
     }
@@ -117,7 +130,9 @@ class ApiClient {
     String? token,
   }) async {
     if (base.isEmpty) {
-      throw Exception('لم يتم ضبط عنوان الخادم API_BASE_URL.');
+      throw Exception(
+        'لم يتم ضبط عنوان الخادم API_BASE_URL.',
+      );
     }
 
     final client = HttpClient();
@@ -135,8 +150,11 @@ class ApiClient {
       }
 
       final response = await request.close();
+
       final responseText =
-          await response.transform(utf8.decoder).join();
+          await response.transform(
+        utf8.decoder,
+      ).join();
 
       dynamic decoded;
 
@@ -153,13 +171,16 @@ class ApiClient {
       if (response.statusCode < 200 ||
           response.statusCode >= 300) {
         final message = decoded is Map
-            ? decoded['message']?.toString() ?? 'فشل الطلب'
+            ? decoded['message']?.toString() ??
+                'فشل الطلب'
             : 'فشل الطلب';
 
         throw Exception(message);
       }
 
-      return Map<String, dynamic>.from(decoded as Map);
+      return Map<String, dynamic>.from(
+        decoded as Map,
+      );
     } finally {
       client.close(force: true);
     }
@@ -171,13 +192,21 @@ class ApiClient {
    ========================================================= */
 
 class Session {
-  static const accessKey = 'crm_access_token';
-  static const refreshKey = 'crm_refresh_token';
-  static const userKey = 'crm_session_user';
-  static const companyKey = 'crm_session_company';
+  static const accessKey =
+      'crm_access_token';
+
+  static const refreshKey =
+      'crm_refresh_token';
+
+  static const userKey =
+      'crm_session_user';
+
+  static const companyKey =
+      'crm_session_company';
 
   final String accessToken;
   final String refreshToken;
+
   final Map<String, dynamic> user;
   final Map<String, dynamic> company;
 
@@ -189,10 +218,14 @@ class Session {
   });
 
   static Future<Session?> load() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs =
+        await SharedPreferences.getInstance();
 
-    final access = prefs.getString(accessKey);
-    final refresh = prefs.getString(refreshKey);
+    final access =
+        prefs.getString(accessKey);
+
+    final refresh =
+        prefs.getString(refreshKey);
 
     if (access == null ||
         refresh == null ||
@@ -213,7 +246,9 @@ class Session {
     );
   }
 
-  static Map<String, dynamic> _decodeMap(String? raw) {
+  static Map<String, dynamic> _decodeMap(
+    String? raw,
+  ) {
     if (raw == null || raw.isEmpty) {
       return <String, dynamic>{};
     }
@@ -228,7 +263,8 @@ class Session {
   }
 
   Future<void> save() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs =
+        await SharedPreferences.getInstance();
 
     await prefs.setString(
       accessKey,
@@ -252,7 +288,8 @@ class Session {
   }
 
   static Future<void> clear() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs =
+        await SharedPreferences.getInstance();
 
     await prefs.remove(accessKey);
     await prefs.remove(refreshKey);
@@ -299,8 +336,10 @@ class CompanyProfile {
           json['companyName']?.toString() ?? '',
       managerName:
           json['managerName']?.toString() ?? '',
-      email: json['email']?.toString() ?? '',
-      phone: json['phone']?.toString() ?? '',
+      email:
+          json['email']?.toString() ?? '',
+      phone:
+          json['phone']?.toString() ?? '',
     );
   }
 }
@@ -320,7 +359,8 @@ class Customer {
     this.assignedTo = '',
     this.notes = '',
     DateTime? createdAt,
-  }) : createdAt = createdAt ?? DateTime.now();
+  }) : createdAt =
+            createdAt ?? DateTime.now();
 
   final String id;
 
@@ -344,7 +384,8 @@ class Customer {
       'status': status,
       'assignedTo': assignedTo,
       'notes': notes,
-      'createdAt': createdAt.toIso8601String(),
+      'createdAt':
+          createdAt.toIso8601String(),
     };
   }
 
@@ -354,15 +395,21 @@ class Customer {
     return Customer(
       id: json['id']?.toString() ?? '',
       name: json['name']?.toString() ?? '',
-      company: json['company']?.toString() ?? '',
-      phone: json['phone']?.toString() ?? '',
-      email: json['email']?.toString() ?? '',
-      status: json['status']?.toString() ?? 'نشط',
+      company:
+          json['company']?.toString() ?? '',
+      phone:
+          json['phone']?.toString() ?? '',
+      email:
+          json['email']?.toString() ?? '',
+      status:
+          json['status']?.toString() ?? 'نشط',
       assignedTo:
           json['assignedTo']?.toString() ?? '',
-      notes: json['notes']?.toString() ?? '',
+      notes:
+          json['notes']?.toString() ?? '',
       createdAt: DateTime.tryParse(
-            json['createdAt']?.toString() ?? '',
+            json['createdAt']?.toString() ??
+                '',
           ) ??
           DateTime.now(),
     );
@@ -384,7 +431,8 @@ class Opportunity {
     this.expectedCloseDate,
     this.assignedTo = '',
     DateTime? createdAt,
-  }) : createdAt = createdAt ?? DateTime.now();
+  }) : createdAt =
+            createdAt ?? DateTime.now();
 
   final String id;
 
@@ -411,7 +459,8 @@ class Opportunity {
       'expectedCloseDate':
           expectedCloseDate?.toIso8601String(),
       'assignedTo': assignedTo,
-      'createdAt': createdAt.toIso8601String(),
+      'createdAt':
+          createdAt.toIso8601String(),
     };
   }
 
@@ -420,20 +469,32 @@ class Opportunity {
   ) {
     return Opportunity(
       id: json['id']?.toString() ?? '',
-      title: json['title']?.toString() ?? '',
+      title:
+          json['title']?.toString() ?? '',
       customer:
           json['customer']?.toString() ?? '',
-      value: (json['value'] as num?)?.toDouble() ?? 0,
-      stage: json['stage']?.toString() ?? 'جديدة',
+      value:
+          (json['value'] as num?)
+                  ?.toDouble() ??
+              0,
+      stage:
+          json['stage']?.toString() ??
+              'جديدة',
       probability:
-          (json['probability'] as num?)?.toInt() ?? 20,
-      expectedCloseDate: DateTime.tryParse(
-        json['expectedCloseDate']?.toString() ?? '',
+          (json['probability'] as num?)
+                  ?.toInt() ??
+              20,
+      expectedCloseDate:
+          DateTime.tryParse(
+        json['expectedCloseDate']
+                ?.toString() ??
+            '',
       ),
       assignedTo:
           json['assignedTo']?.toString() ?? '',
       createdAt: DateTime.tryParse(
-            json['createdAt']?.toString() ?? '',
+            json['createdAt']?.toString() ??
+                '',
           ) ??
           DateTime.now(),
     );
@@ -457,8 +518,14 @@ class CrmTask {
     this.reminderMinutes = 30,
     DateTime? createdAt,
   })  : dueAt =
-            dueAt ?? DateTime.now().add(Duration(hours: 1)),
-        createdAt = createdAt ?? DateTime.now();
+            dueAt ??
+                DateTime.now().add(
+                  const Duration(
+                    hours: 1,
+                  ),
+                ),
+        createdAt =
+            createdAt ?? DateTime.now();
 
   final String id;
 
@@ -477,7 +544,10 @@ class CrmTask {
   DateTime createdAt;
 
   bool get overdue {
-    return !done && dueAt.isBefore(DateTime.now());
+    return !done &&
+        dueAt.isBefore(
+          DateTime.now(),
+        );
   }
 
   bool get today {
@@ -498,8 +568,10 @@ class CrmTask {
       'priority': priority,
       'done': done,
       'dueAt': dueAt.toIso8601String(),
-      'reminderMinutes': reminderMinutes,
-      'createdAt': createdAt.toIso8601String(),
+      'reminderMinutes':
+          reminderMinutes,
+      'createdAt':
+          createdAt.toIso8601String(),
     };
   }
 
@@ -508,24 +580,32 @@ class CrmTask {
   ) {
     return CrmTask(
       id: json['id']?.toString() ?? '',
-      title: json['title']?.toString() ?? '',
+      title:
+          json['title']?.toString() ?? '',
       customer:
           json['customer']?.toString() ?? '',
       assignee:
           json['assignee']?.toString() ?? '',
       description:
-          json['description']?.toString() ?? '',
+          json['description']?.toString() ??
+              '',
       priority:
-          json['priority']?.toString() ?? 'متوسطة',
-      done: json['done'] as bool? ?? false,
+          json['priority']?.toString() ??
+              'متوسطة',
+      done:
+          json['done'] as bool? ?? false,
       dueAt: DateTime.tryParse(
-            json['dueAt']?.toString() ?? '',
+            json['dueAt']?.toString() ??
+                '',
           ) ??
           DateTime.now(),
       reminderMinutes:
-          (json['reminderMinutes'] as num?)?.toInt() ?? 30,
+          (json['reminderMinutes'] as num?)
+                  ?.toInt() ??
+              30,
       createdAt: DateTime.tryParse(
-            json['createdAt']?.toString() ?? '',
+            json['createdAt']?.toString() ??
+                '',
           ) ??
           DateTime.now(),
     );
@@ -560,7 +640,8 @@ class CrmNotification {
       'title': title,
       'body': body,
       'type': type,
-      'createdAt': createdAt.toIso8601String(),
+      'createdAt':
+          createdAt.toIso8601String(),
       'read': read,
     };
   }
@@ -570,14 +651,20 @@ class CrmNotification {
   ) {
     return CrmNotification(
       id: json['id']?.toString() ?? '',
-      title: json['title']?.toString() ?? '',
-      body: json['body']?.toString() ?? '',
-      type: json['type']?.toString() ?? 'system',
+      title:
+          json['title']?.toString() ?? '',
+      body:
+          json['body']?.toString() ?? '',
+      type:
+          json['type']?.toString() ??
+              'system',
       createdAt: DateTime.tryParse(
-            json['createdAt']?.toString() ?? '',
+            json['createdAt']?.toString() ??
+                '',
           ) ??
           DateTime.now(),
-      read: json['read'] as bool? ?? false,
+      read:
+          json['read'] as bool? ?? false,
     );
   }
 }
@@ -587,16 +674,23 @@ class CrmNotification {
    ========================================================= */
 
 class CrmData extends ChangeNotifier {
-  static const dataKey = 'crm_business_v5';
-  static const companyKey = 'crm_company_profile_v5';
+  static const dataKey =
+      'crm_business_v5';
+
+  static const companyKey =
+      'crm_company_profile_v5';
+
   static const notificationsKey =
       'crm_notifications_v1';
-  static const settingsKey = 'crm_settings_v1';
+
+  static const settingsKey =
+      'crm_settings_v1';
 
   final List<Customer> customers = [];
   final List<Opportunity> opportunities = [];
   final List<CrmTask> tasks = [];
-  final List<CrmNotification> notifications = [];
+  final List<CrmNotification> notifications =
+      [];
 
   CompanyProfile? company;
   Session? session;
@@ -606,15 +700,18 @@ class CrmData extends ChangeNotifier {
   bool compactMode = false;
 
   Future<void> load() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs =
+        await SharedPreferences.getInstance();
 
     session = await Session.load();
 
-    final companyRaw = prefs.getString(companyKey);
+    final companyRaw =
+        prefs.getString(companyKey);
 
     if (companyRaw != null) {
       try {
-        company = CompanyProfile.fromJson(
+        company =
+            CompanyProfile.fromJson(
           Map<String, dynamic>.from(
             jsonDecode(companyRaw) as Map,
           ),
@@ -627,7 +724,9 @@ class CrmData extends ChangeNotifier {
     );
 
     _loadNotifications(
-      prefs.getString(notificationsKey),
+      prefs.getString(
+        notificationsKey,
+      ),
     );
 
     _loadSettings(
@@ -655,7 +754,8 @@ class CrmData extends ChangeNotifier {
       );
 
       customers.addAll(
-        (json['customers'] as List? ?? []).map(
+        (json['customers'] as List? ?? [])
+            .map(
           (item) => Customer.fromJson(
             Map<String, dynamic>.from(
               item as Map,
@@ -665,8 +765,12 @@ class CrmData extends ChangeNotifier {
       );
 
       opportunities.addAll(
-        (json['opportunities'] as List? ?? []).map(
-          (item) => Opportunity.fromJson(
+        (json['opportunities']
+                    as List? ??
+                [])
+            .map(
+          (item) =>
+              Opportunity.fromJson(
             Map<String, dynamic>.from(
               item as Map,
             ),
@@ -675,7 +779,8 @@ class CrmData extends ChangeNotifier {
       );
 
       tasks.addAll(
-        (json['tasks'] as List? ?? []).map(
+        (json['tasks'] as List? ?? [])
+            .map(
           (item) => CrmTask.fromJson(
             Map<String, dynamic>.from(
               item as Map,
@@ -690,7 +795,9 @@ class CrmData extends ChangeNotifier {
     }
   }
 
-  void _loadNotifications(String? raw) {
+  void _loadNotifications(
+    String? raw,
+  ) {
     notifications.clear();
 
     if (raw == null || raw.isEmpty) {
@@ -700,7 +807,8 @@ class CrmData extends ChangeNotifier {
     try {
       notifications.addAll(
         (jsonDecode(raw) as List).map(
-          (item) => CrmNotification.fromJson(
+          (item) =>
+              CrmNotification.fromJson(
             Map<String, dynamic>.from(
               item as Map,
             ),
@@ -722,13 +830,19 @@ class CrmData extends ChangeNotifier {
       );
 
       notificationsEnabled =
-          json['notifications'] as bool? ?? true;
+          json['notifications']
+                  as bool? ??
+              true;
 
       taskRemindersEnabled =
-          json['taskReminders'] as bool? ?? true;
+          json['taskReminders']
+                  as bool? ??
+              true;
 
       compactMode =
-          json['compactMode'] as bool? ?? false;
+          json['compactMode']
+                  as bool? ??
+              false;
     } catch (_) {}
   }
 
@@ -738,8 +852,9 @@ class CrmData extends ChangeNotifier {
     final ids =
         notifications.map((x) => x.id).toSet();
 
-    for (final task
-        in tasks.where((x) => !x.done && x.overdue)) {
+    for (final task in tasks.where(
+      (x) => !x.done && x.overdue,
+    )) {
       final id =
           'overdue-${task.id}-${task.title}';
 
@@ -757,8 +872,9 @@ class CrmData extends ChangeNotifier {
       }
     }
 
-    for (final task
-        in tasks.where((x) => !x.done && x.today)) {
+    for (final task in tasks.where(
+      (x) => !x.done && x.today,
+    )) {
       final id =
           'today-${task.id}-${task.title}';
 
@@ -786,17 +902,24 @@ class CrmData extends ChangeNotifier {
   }
 
   Future<void> save() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs =
+        await SharedPreferences.getInstance();
 
     await prefs.setString(
       dataKey,
       jsonEncode({
         'customers':
-            customers.map((x) => x.toJson()).toList(),
+            customers
+                .map((x) => x.toJson())
+                .toList(),
         'opportunities':
-            opportunities.map((x) => x.toJson()).toList(),
+            opportunities
+                .map((x) => x.toJson())
+                .toList(),
         'tasks':
-            tasks.map((x) => x.toJson()).toList(),
+            tasks
+                .map((x) => x.toJson())
+                .toList(),
       }),
     );
 
@@ -812,9 +935,12 @@ class CrmData extends ChangeNotifier {
     await prefs.setString(
       settingsKey,
       jsonEncode({
-        'notifications': notificationsEnabled,
-        'taskReminders': taskRemindersEnabled,
-        'compactMode': compactMode,
+        'notifications':
+            notificationsEnabled,
+        'taskReminders':
+            taskRemindersEnabled,
+        'compactMode':
+            compactMode,
       }),
     );
 
@@ -824,13 +950,16 @@ class CrmData extends ChangeNotifier {
   Future<void> saveCompany(
     CompanyProfile value,
   ) async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs =
+        await SharedPreferences.getInstance();
 
     company = value;
 
     await prefs.setString(
       companyKey,
-      jsonEncode(value.toJson()),
+      jsonEncode(
+        value.toJson(),
+      ),
     );
 
     notifyListeners();
@@ -842,11 +971,13 @@ class CrmData extends ChangeNotifier {
     bool? compact,
   }) async {
     if (notifications != null) {
-      notificationsEnabled = notifications;
+      notificationsEnabled =
+          notifications;
     }
 
     if (taskReminders != null) {
-      taskRemindersEnabled = taskReminders;
+      taskRemindersEnabled =
+          taskReminders;
     }
 
     if (compact != null) {
@@ -856,14 +987,20 @@ class CrmData extends ChangeNotifier {
     await save();
   }
 
-  Future<void> addCustomer(Customer customer) async {
+  Future<void> addCustomer(
+    Customer customer,
+  ) async {
     customers.insert(0, customer);
     await save();
   }
 
-  Future<void> updateCustomer(Customer customer) async {
+  Future<void> updateCustomer(
+    Customer customer,
+  ) async {
     final index =
-        customers.indexWhere((x) => x.id == customer.id);
+        customers.indexWhere(
+      (x) => x.id == customer.id,
+    );
 
     if (index >= 0) {
       customers[index] = customer;
@@ -881,19 +1018,24 @@ class CrmData extends ChangeNotifier {
   Future<void> addOpportunity(
     Opportunity opportunity,
   ) async {
-    opportunities.insert(0, opportunity);
+    opportunities.insert(
+      0,
+      opportunity,
+    );
     await save();
   }
 
   Future<void> updateOpportunity(
     Opportunity opportunity,
   ) async {
-    final index = opportunities.indexWhere(
+    final index =
+        opportunities.indexWhere(
       (x) => x.id == opportunity.id,
     );
 
     if (index >= 0) {
-      opportunities[index] = opportunity;
+      opportunities[index] =
+          opportunity;
       await save();
     }
   }
@@ -901,19 +1043,27 @@ class CrmData extends ChangeNotifier {
   Future<void> deleteOpportunity(
     Opportunity opportunity,
   ) async {
-    opportunities.remove(opportunity);
+    opportunities.remove(
+      opportunity,
+    );
     await save();
   }
 
-  Future<void> addTask(CrmTask task) async {
+  Future<void> addTask(
+    CrmTask task,
+  ) async {
     tasks.insert(0, task);
     refreshSystemNotifications();
     await save();
   }
 
-  Future<void> updateTask(CrmTask task) async {
+  Future<void> updateTask(
+    CrmTask task,
+  ) async {
     final index =
-        tasks.indexWhere((x) => x.id == task.id);
+        tasks.indexWhere(
+      (x) => x.id == task.id,
+    );
 
     if (index >= 0) {
       tasks[index] = task;
@@ -922,13 +1072,17 @@ class CrmData extends ChangeNotifier {
     }
   }
 
-  Future<void> toggleTask(CrmTask task) async {
+  Future<void> toggleTask(
+    CrmTask task,
+  ) async {
     task.done = !task.done;
     refreshSystemNotifications();
     await save();
   }
 
-  Future<void> deleteTask(CrmTask task) async {
+  Future<void> deleteTask(
+    CrmTask task,
+  ) async {
     tasks.remove(task);
     await save();
   }
@@ -940,8 +1094,10 @@ class CrmData extends ChangeNotifier {
     await save();
   }
 
-  Future<void> markAllNotificationsRead() async {
-    for (final notification in notifications) {
+  Future<void>
+      markAllNotificationsRead() async {
+    for (final notification
+        in notifications) {
       notification.read = true;
     }
 
@@ -949,13 +1105,18 @@ class CrmData extends ChangeNotifier {
   }
 
   int get unreadNotifications {
-    return notifications.where((x) => !x.read).length;
+    return notifications
+        .where((x) => !x.read)
+        .length;
   }
 
   double get pipeline {
     return opportunities
         .where(
-          (x) => !x.stage.startsWith('مغلقة'),
+          (x) =>
+              !x.stage.startsWith(
+            'مغلقة',
+          ),
         )
         .fold(
           0,
@@ -966,42 +1127,59 @@ class CrmData extends ChangeNotifier {
   double get weightedPipeline {
     return opportunities
         .where(
-          (x) => !x.stage.startsWith('مغلقة'),
+          (x) =>
+              !x.stage.startsWith(
+            'مغلقة',
+          ),
         )
         .fold(
           0,
           (sum, x) =>
-              sum + x.value * x.probability / 100,
+              sum +
+              x.value *
+                  x.probability /
+                  100,
         );
   }
 
   int get overdueTasks {
-    return tasks.where((x) => x.overdue).length;
+    return tasks
+        .where((x) => x.overdue)
+        .length;
   }
 
   int get todayTasks {
     return tasks
-        .where((x) => !x.done && x.today)
+        .where(
+          (x) => !x.done && x.today,
+        )
         .length;
   }
 
   int get completedTasks {
-    return tasks.where((x) => x.done).length;
+    return tasks
+        .where((x) => x.done)
+        .length;
   }
 
   List<CrmTask> customerTasks(
     String customer,
   ) {
     return tasks
-        .where((x) => x.customer == customer)
+        .where(
+          (x) => x.customer == customer,
+        )
         .toList();
   }
 
-  List<Opportunity> customerOpportunities(
+  List<Opportunity>
+      customerOpportunities(
     String customer,
   ) {
     return opportunities
-        .where((x) => x.customer == customer)
+        .where(
+          (x) => x.customer == customer,
+        )
         .toList();
   }
 }
@@ -1018,7 +1196,8 @@ class StartupPage extends StatefulWidget {
       _StartupPageState();
 }
 
-class _StartupPageState extends State<StartupPage> {
+class _StartupPageState
+    extends State<StartupPage> {
   final CrmData data = CrmData();
 
   @override
@@ -1036,14 +1215,16 @@ class _StartupPageState extends State<StartupPage> {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (_) => CrmHome(data: data),
+          builder: (_) =>
+              CrmHome(data: data),
         ),
       );
     } else {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (_) => AuthPage(data: data),
+          builder: (_) =>
+              AuthPage(data: data),
         ),
       );
     }
@@ -1053,7 +1234,8 @@ class _StartupPageState extends State<StartupPage> {
   Widget build(BuildContext context) {
     return const Scaffold(
       body: Center(
-        child: CircularProgressIndicator(),
+        child:
+            CircularProgressIndicator(),
       ),
     );
   }
@@ -1082,7 +1264,8 @@ class AuthPage extends StatefulWidget {
       _AuthPageState();
 }
 
-class _AuthPageState extends State<AuthPage> {
+class _AuthPageState
+    extends State<AuthPage> {
   bool loginMode = true;
   bool loading = false;
   bool obscurePassword = true;
@@ -1114,28 +1297,47 @@ class _AuthPageState extends State<AuthPage> {
   }
 
   Future<void> submit() async {
-    if (emailController.text.trim().isEmpty) {
-      showError('أدخل البريد الإلكتروني.');
+    if (emailController.text
+        .trim()
+        .isEmpty) {
+      showError(
+        'أدخل البريد الإلكتروني.',
+      );
       return;
     }
 
-    if (passwordController.text.isEmpty) {
-      showError('أدخل كلمة المرور.');
+    if (passwordController
+        .text
+        .isEmpty) {
+      showError(
+        'أدخل كلمة المرور.',
+      );
       return;
     }
 
     if (!loginMode) {
-      if (companyController.text.trim().isEmpty) {
-        showError('أدخل اسم الشركة.');
+      if (companyController.text
+          .trim()
+          .isEmpty) {
+        showError(
+          'أدخل اسم الشركة.',
+        );
         return;
       }
 
-      if (ownerController.text.trim().isEmpty) {
-        showError('أدخل اسم المدير أو المستخدم.');
+      if (ownerController.text
+          .trim()
+          .isEmpty) {
+        showError(
+          'أدخل اسم المدير أو المستخدم.',
+        );
         return;
       }
 
-      if (passwordController.text.length < 8) {
+      if (passwordController
+              .text
+              .length <
+          8) {
         showError(
           'كلمة المرور يجب أن تكون 8 أحرف على الأقل.',
         );
@@ -1155,7 +1357,8 @@ class _AuthPageState extends State<AuthPage> {
               '/auth/login',
               {
                 'email':
-                    emailController.text.trim(),
+                    emailController.text
+                        .trim(),
                 'password':
                     passwordController.text,
               },
@@ -1164,13 +1367,17 @@ class _AuthPageState extends State<AuthPage> {
               '/auth/register-company',
               {
                 'companyName':
-                    companyController.text.trim(),
+                    companyController.text
+                        .trim(),
                 'ownerName':
-                    ownerController.text.trim(),
+                    ownerController.text
+                        .trim(),
                 'email':
-                    emailController.text.trim(),
+                    emailController.text
+                        .trim(),
                 'phone':
-                    phoneController.text.trim(),
+                    phoneController.text
+                        .trim(),
                 'password':
                     passwordController.text,
               },
@@ -1178,19 +1385,29 @@ class _AuthPageState extends State<AuthPage> {
 
       final session = Session(
         accessToken:
-            result['accessToken']?.toString() ?? '',
+            result['accessToken']
+                    ?.toString() ??
+                '',
         refreshToken:
-            result['refreshToken']?.toString() ?? '',
-        user: Map<String, dynamic>.from(
-          result['user'] as Map? ?? {},
+            result['refreshToken']
+                    ?.toString() ??
+                '',
+        user:
+            Map<String, dynamic>.from(
+          result['user'] as Map? ??
+              {},
         ),
-        company: Map<String, dynamic>.from(
-          result['company'] as Map? ?? {},
+        company:
+            Map<String, dynamic>.from(
+          result['company'] as Map? ??
+              {},
         ),
       );
 
-      if (session.accessToken.isEmpty ||
-          session.refreshToken.isEmpty) {
+      if (session.accessToken
+              .isEmpty ||
+          session.refreshToken
+              .isEmpty) {
         throw Exception(
           'استجابة الخادم لا تحتوي على رموز الجلسة.',
         );
@@ -1198,24 +1415,36 @@ class _AuthPageState extends State<AuthPage> {
 
       await session.save();
 
-      widget.data.session = session;
+      widget.data.session =
+          session;
 
-      final companyData = session.company;
+      final companyData =
+          session.company;
 
-      await widget.data.saveCompany(
+      await widget.data
+          .saveCompany(
         CompanyProfile(
-          id: companyData['id']?.toString() ?? '',
+          id: companyData['id']
+                  ?.toString() ??
+              '',
           companyName:
-              companyData['name']?.toString() ??
-                  companyController.text.trim(),
+              companyData['name']
+                      ?.toString() ??
+                  companyController.text
+                      .trim(),
           managerName:
-              session.user['name']?.toString() ??
-                  ownerController.text.trim(),
+              session.user['name']
+                      ?.toString() ??
+                  ownerController.text
+                      .trim(),
           email:
-              session.user['email']?.toString() ??
-                  emailController.text.trim(),
+              session.user['email']
+                      ?.toString() ??
+                  emailController.text
+                      .trim(),
           phone:
-              phoneController.text.trim(),
+              phoneController.text
+                  .trim(),
         ),
       );
 
@@ -1224,7 +1453,8 @@ class _AuthPageState extends State<AuthPage> {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (_) => CrmHome(
+          builder: (_) =>
+              CrmHome(
             data: widget.data,
           ),
         ),
@@ -1242,8 +1472,12 @@ class _AuthPageState extends State<AuthPage> {
     }
   }
 
-  void showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
+  void showError(
+    String message,
+  ) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(
       SnackBar(
         content: Text(message),
       ),
@@ -1251,14 +1485,21 @@ class _AuthPageState extends State<AuthPage> {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(
+    BuildContext context,
+  ) {
     return Directionality(
-      textDirection: TextDirection.rtl,
+      textDirection:
+          TextDirection.rtl,
       child: Scaffold(
         body: SafeArea(
           child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(22),
+            child:
+                SingleChildScrollView(
+              padding:
+                  const EdgeInsets.all(
+                22,
+              ),
               child: ConstrainedBox(
                 constraints:
                     const BoxConstraints(
@@ -1266,113 +1507,143 @@ class _AuthPageState extends State<AuthPage> {
                 ),
                 child: Column(
                   crossAxisAlignment:
-                      CrossAxisAlignment.stretch,
+                      CrossAxisAlignment
+                          .stretch,
                   children: [
                     const Icon(
                       Icons.hub_outlined,
                       size: 72,
-                      color: Colors.indigo,
+                      color:
+                          Colors.indigo,
                     ),
-
-                    const SizedBox(height: 12),
-
+                    const SizedBox(
+                      height: 12,
+                    ),
                     const Text(
                       'CRM Business',
-                      textAlign: TextAlign.center,
+                      textAlign:
+                          TextAlign.center,
                       style: TextStyle(
                         fontSize: 30,
-                        fontWeight: FontWeight.bold,
+                        fontWeight:
+                            FontWeight.bold,
                       ),
                     ),
-
-                    const SizedBox(height: 6),
-
+                    const SizedBox(
+                      height: 6,
+                    ),
                     Text(
                       loginMode
                           ? 'تسجيل الدخول إلى حسابك'
                           : 'إنشاء حساب شركة جديد',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        color: Colors.black54,
+                      textAlign:
+                          TextAlign.center,
+                      style:
+                          const TextStyle(
+                        color:
+                            Colors.black54,
                       ),
                     ),
-
-                    const SizedBox(height: 24),
-
+                    const SizedBox(
+                      height: 24,
+                    ),
                     SegmentedButton<bool>(
                       segments: const [
                         ButtonSegment(
                           value: true,
-                          label: Text('دخول'),
-                          icon: Icon(Icons.login),
+                          label:
+                              Text('دخول'),
+                          icon: Icon(
+                            Icons.login,
+                          ),
                         ),
                         ButtonSegment(
                           value: false,
-                          label: Text('حساب جديد'),
+                          label: Text(
+                            'حساب جديد',
+                          ),
                           icon: Icon(
-                            Icons.person_add,
+                            Icons
+                                .person_add,
                           ),
                         ),
                       ],
-                      selected: {loginMode},
+                      selected: {
+                        loginMode,
+                      },
                       onSelectionChanged:
                           loading
                               ? null
                               : (value) {
-                                  setState(() {
-                                    loginMode =
-                                        value.first;
-                                  });
+                                  setState(
+                                    () {
+                                      loginMode =
+                                          value
+                                              .first;
+                                    },
+                                  );
                                 },
                     ),
-
-                    const SizedBox(height: 18),
-
+                    const SizedBox(
+                      height: 18,
+                    ),
                     if (!loginMode) ...[
                       field(
                         companyController,
                         'اسم الشركة',
-                        Icons.business_outlined,
+                        Icons
+                            .business_outlined,
                       ),
-                      const SizedBox(height: 12),
-
+                      const SizedBox(
+                        height: 12,
+                      ),
                       field(
                         ownerController,
                         'اسم المدير / المستخدم',
-                        Icons.person_outline,
+                        Icons
+                            .person_outline,
                       ),
-                      const SizedBox(height: 12),
-
+                      const SizedBox(
+                        height: 12,
+                      ),
                       field(
                         phoneController,
                         'رقم الهاتف',
-                        Icons.phone_outlined,
+                        Icons
+                            .phone_outlined,
                         keyboardType:
-                            TextInputType.phone,
+                            TextInputType
+                                .phone,
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(
+                        height: 12,
+                      ),
                     ],
-
                     field(
                       emailController,
                       'البريد الإلكتروني',
-                      Icons.email_outlined,
+                      Icons
+                          .email_outlined,
                       keyboardType:
-                          TextInputType.emailAddress,
+                          TextInputType
+                              .emailAddress,
                     ),
-
-                    const SizedBox(height: 12),
-
+                    const SizedBox(
+                      height: 12,
+                    ),
                     TextField(
                       controller:
                           passwordController,
                       obscureText:
                           obscurePassword,
-                      decoration: InputDecoration(
-                        labelText: 'كلمة المرور',
+                      decoration:
+                          InputDecoration(
+                        labelText:
+                            'كلمة المرور',
                         prefixIcon:
                             const Icon(
-                          Icons.lock_outline,
+                          Icons
+                              .lock_outline,
                         ),
                         suffixIcon:
                             IconButton(
@@ -1384,33 +1655,39 @@ class _AuthPageState extends State<AuthPage> {
                           },
                           icon: Icon(
                             obscurePassword
-                                ? Icons.visibility
+                                ? Icons
+                                    .visibility
                                 : Icons
                                     .visibility_off,
                           ),
                         ),
                       ),
                     ),
-
-                    const SizedBox(height: 20),
-
+                    const SizedBox(
+                      height: 20,
+                    ),
                     SizedBox(
                       height: 54,
-                      child: FilledButton.icon(
+                      child:
+                          FilledButton.icon(
                         onPressed:
-                            loading ? null : submit,
+                            loading
+                                ? null
+                                : submit,
                         icon: loading
                             ? const SizedBox(
                                 width: 20,
                                 height: 20,
                                 child:
                                     CircularProgressIndicator(
-                                  strokeWidth: 2,
+                                  strokeWidth:
+                                      2,
                                 ),
                               )
                             : Icon(
                                 loginMode
-                                    ? Icons.login
+                                    ? Icons
+                                        .login
                                     : Icons
                                         .rocket_launch,
                               ),
@@ -1423,15 +1700,17 @@ class _AuthPageState extends State<AuthPage> {
                         ),
                       ),
                     ),
-
-                    const SizedBox(height: 18),
-
+                    const SizedBox(
+                      height: 18,
+                    ),
                     const Text(
                       'لا يتم حفظ كلمة المرور على الجهاز. يتم حفظ رموز الجلسة فقط.',
-                      textAlign: TextAlign.center,
+                      textAlign:
+                          TextAlign.center,
                       style: TextStyle(
                         fontSize: 12,
-                        color: Colors.black45,
+                        color:
+                            Colors.black45,
                       ),
                     ),
                   ],
@@ -1478,7 +1757,8 @@ class CrmHome extends StatefulWidget {
       _CrmHomeState();
 }
 
-class _CrmHomeState extends State<CrmHome> {
+class _CrmHomeState
+    extends State<CrmHome> {
   int tab = 0;
 
   String customerSearch = '';
@@ -1488,7 +1768,9 @@ class _CrmHomeState extends State<CrmHome> {
   CrmData get data => widget.data;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(
+    BuildContext context,
+  ) {
     return AnimatedBuilder(
       animation: data,
       builder: (context, _) {
@@ -1509,42 +1791,51 @@ class _CrmHomeState extends State<CrmHome> {
         ];
 
         return Directionality(
-          textDirection: TextDirection.rtl,
+          textDirection:
+              TextDirection.rtl,
           child: Scaffold(
             appBar: AppBar(
               title: Text(
                 titles[tab],
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
+                style:
+                    const TextStyle(
+                  fontWeight:
+                      FontWeight.bold,
                 ),
               ),
               actions: [
                 Stack(
-                  alignment: Alignment.topLeft,
+                  alignment:
+                      Alignment.topLeft,
                   children: [
                     IconButton(
                       onPressed:
                           openNotifications,
-                      icon: const Icon(
+                      icon:
+                          const Icon(
                         Icons
                             .notifications_none,
                       ),
                     ),
-                    if (data.unreadNotifications >
+                    if (data
+                            .unreadNotifications >
                         0)
                       Positioned(
                         left: 7,
                         top: 7,
                         child: Container(
                           padding:
-                              const EdgeInsets.all(
+                              const EdgeInsets
+                                  .all(
                             4,
                           ),
                           decoration:
                               const BoxDecoration(
-                            color: Colors.red,
+                            color:
+                                Colors.red,
                             shape:
-                                BoxShape.circle,
+                                BoxShape
+                                    .circle,
                           ),
                           child: Text(
                             data.unreadNotifications >
@@ -1553,7 +1844,8 @@ class _CrmHomeState extends State<CrmHome> {
                                 : '${data.unreadNotifications}',
                             style:
                                 const TextStyle(
-                              color: Colors.white,
+                              color:
+                                  Colors.white,
                               fontSize: 9,
                             ),
                           ),
@@ -1562,9 +1854,12 @@ class _CrmHomeState extends State<CrmHome> {
                   ],
                 ),
                 IconButton(
-                  onPressed: openSettings,
-                  icon: const Icon(
-                    Icons.settings_outlined,
+                  onPressed:
+                      openSettings,
+                  icon:
+                      const Icon(
+                    Icons
+                        .settings_outlined,
                   ),
                 ),
               ],
@@ -1581,22 +1876,28 @@ class _CrmHomeState extends State<CrmHome> {
                   tab = index;
                 });
               },
-              destinations: const [
+              destinations:
+                  const [
                 NavigationDestination(
                   icon: Icon(
                     Icons
                         .dashboard_outlined,
                   ),
                   selectedIcon:
-                      Icon(Icons.dashboard),
+                      Icon(
+                    Icons.dashboard,
+                  ),
                   label: 'الرئيسية',
                 ),
                 NavigationDestination(
                   icon: Icon(
-                    Icons.people_outline,
+                    Icons
+                        .people_outline,
                   ),
                   selectedIcon:
-                      Icon(Icons.people),
+                      Icon(
+                    Icons.people,
+                  ),
                   label: 'العملاء',
                 ),
                 NavigationDestination(
@@ -1604,7 +1905,9 @@ class _CrmHomeState extends State<CrmHome> {
                     Icons.trending_up,
                   ),
                   selectedIcon:
-                      Icon(Icons.trending_up),
+                      Icon(
+                    Icons.trending_up,
+                  ),
                   label: 'الفرص',
                 ),
                 NavigationDestination(
@@ -1612,15 +1915,20 @@ class _CrmHomeState extends State<CrmHome> {
                     Icons.task_outlined,
                   ),
                   selectedIcon:
-                      Icon(Icons.task_alt),
+                      Icon(
+                    Icons.task_alt,
+                  ),
                   label: 'المهام',
                 ),
                 NavigationDestination(
                   icon: Icon(
-                    Icons.analytics_outlined,
+                    Icons
+                        .analytics_outlined,
                   ),
                   selectedIcon:
-                      Icon(Icons.analytics),
+                      Icon(
+                    Icons.analytics,
+                  ),
                   label: 'التقارير',
                 ),
               ],
@@ -1633,32 +1941,41 @@ class _CrmHomeState extends State<CrmHome> {
 
   Widget? floatingButton() {
     if (tab == 1) {
-      return FloatingActionButton.extended(
-        onPressed: () => customerForm(),
+      return FloatingActionButton
+          .extended(
+        onPressed: () =>
+            customerForm(),
         icon: const Icon(
           Icons.person_add_alt_1,
         ),
-        label: const Text('عميل'),
+        label:
+            const Text('عميل'),
       );
     }
 
     if (tab == 2) {
-      return FloatingActionButton.extended(
-        onPressed: () => opportunityForm(),
+      return FloatingActionButton
+          .extended(
+        onPressed: () =>
+            opportunityForm(),
         icon: const Icon(
           Icons.add_chart,
         ),
-        label: const Text('فرصة'),
+        label:
+            const Text('فرصة'),
       );
     }
 
     if (tab == 3) {
-      return FloatingActionButton.extended(
-        onPressed: () => taskForm(),
+      return FloatingActionButton
+          .extended(
+        onPressed: () =>
+            taskForm(),
         icon: const Icon(
           Icons.add_task,
         ),
-        label: const Text('مهمة'),
+        label:
+            const Text('مهمة'),
       );
     }
 
@@ -1671,19 +1988,24 @@ class _CrmHomeState extends State<CrmHome> {
 
   Widget dashboard() {
     final company =
-        data.company?.companyName ?? 'شركتك';
+        data.company?.companyName ??
+            'شركتك';
 
     final user =
-        data.session?.user['name']?.toString() ??
+        data.session?.user['name']
+                ?.toString() ??
             data.company?.managerName ??
             '';
 
-    final priorityTasks = data.tasks
-        .where(
-          (x) => !x.done &&
-              (x.today || x.overdue),
-        )
-        .toList();
+    final priorityTasks =
+        data.tasks
+            .where(
+              (x) =>
+                  !x.done &&
+                  (x.today ||
+                      x.overdue),
+            )
+            .toList();
 
     return RefreshIndicator(
       onRefresh: () async {
@@ -1691,12 +2013,15 @@ class _CrmHomeState extends State<CrmHome> {
         await data.save();
       },
       child: ListView(
-        padding: const EdgeInsets.all(14),
+        padding:
+            const EdgeInsets.all(14),
         children: [
           Card(
             child: Padding(
               padding:
-                  const EdgeInsets.all(18),
+                  const EdgeInsets.all(
+                18,
+              ),
               child: Row(
                 children: [
                   const CircleAvatar(
@@ -1705,7 +2030,9 @@ class _CrmHomeState extends State<CrmHome> {
                       Icons.business,
                     ),
                   ),
-                  const SizedBox(width: 14),
+                  const SizedBox(
+                    width: 14,
+                  ),
                   Expanded(
                     child: Column(
                       crossAxisAlignment:
@@ -1717,7 +2044,8 @@ class _CrmHomeState extends State<CrmHome> {
                           style:
                               const TextStyle(
                             fontWeight:
-                                FontWeight.bold,
+                                FontWeight
+                                    .bold,
                             fontSize: 18,
                           ),
                         ),
@@ -1739,9 +2067,9 @@ class _CrmHomeState extends State<CrmHome> {
               ),
             ),
           ),
-
-          const SizedBox(height: 12),
-
+          const SizedBox(
+            height: 12,
+          ),
           GridView.count(
             crossAxisCount: 2,
             shrinkWrap: true,
@@ -1764,68 +2092,70 @@ class _CrmHomeState extends State<CrmHome> {
               metric(
                 'Pipeline',
                 money(data.pipeline),
-                Icons.account_balance_wallet_outlined,
+                Icons
+                    .account_balance_wallet_outlined,
               ),
               metric(
                 'المهام المتأخرة',
                 '${data.overdueTasks}',
-                Icons.warning_amber_outlined,
+                Icons
+                    .warning_amber_outlined,
               ),
             ],
           ),
-
-          const SizedBox(height: 16),
-
+          const SizedBox(
+            height: 16,
+          ),
           section(
             'الأولوية اليوم',
             () => setState(() {
               tab = 3;
             }),
           ),
-
           ...priorityTasks
               .take(5)
               .map(taskCard),
-
           if (priorityTasks.isEmpty)
             emptyState(
               'لا توجد مهام عاجلة أو متأخرة اليوم.',
             ),
-
-          const SizedBox(height: 12),
-
+          const SizedBox(
+            height: 12,
+          ),
           section(
             'Pipeline',
             () => setState(() {
               tab = 2;
             }),
           ),
-
           Card(
             child: Padding(
               padding:
-                  const EdgeInsets.all(16),
+                  const EdgeInsets.all(
+                16,
+              ),
               child: Column(
                 children: [
                   pipelineRow('جديدة'),
                   pipelineRow('مؤهلة'),
                   pipelineRow('عرض سعر'),
                   pipelineRow('تفاوض'),
-                  pipelineRow('مغلقة ناجحة'),
+                  pipelineRow(
+                    'مغلقة ناجحة',
+                  ),
                 ],
               ),
             ),
           ),
-
-          const SizedBox(height: 12),
-
+          const SizedBox(
+            height: 12,
+          ),
           section(
             'آخر العملاء',
             () => setState(() {
               tab = 1;
             }),
           ),
-
           ...data.customers
               .take(4)
               .map(customerCard),
@@ -1834,12 +2164,18 @@ class _CrmHomeState extends State<CrmHome> {
     );
   }
 
-  Widget pipelineRow(String stage) {
-    final list = data.opportunities
-        .where((x) => x.stage == stage)
-        .toList();
+  Widget pipelineRow(
+    String stage,
+  ) {
+    final list =
+        data.opportunities
+            .where(
+              (x) => x.stage == stage,
+            )
+            .toList();
 
-    final value = list.fold<double>(
+    final value =
+        list.fold<double>(
       0,
       (sum, x) => sum + x.value,
     );
@@ -1855,7 +2191,9 @@ class _CrmHomeState extends State<CrmHome> {
             child: Text(stage),
           ),
           Text('${list.length}'),
-          const SizedBox(width: 12),
+          const SizedBox(
+            width: 12,
+          ),
           Text(
             money(value),
             style:
@@ -1875,21 +2213,25 @@ class _CrmHomeState extends State<CrmHome> {
 
   Widget customersPage() {
     final filtered =
-        data.customers.where((customer) {
-      final q =
-          customerSearch.trim().toLowerCase();
+        data.customers.where(
+      (customer) {
+        final q =
+            customerSearch
+                .trim()
+                .toLowerCase();
 
-      return q.isEmpty ||
-          customer.name
-              .toLowerCase()
-              .contains(q) ||
-          customer.company
-              .toLowerCase()
-              .contains(q) ||
-          customer.phone
-              .toLowerCase()
-              .contains(q);
-    }).toList();
+        return q.isEmpty ||
+            customer.name
+                .toLowerCase()
+                .contains(q) ||
+            customer.company
+                .toLowerCase()
+                .contains(q) ||
+            customer.phone
+                .toLowerCase()
+                .contains(q);
+      },
+    ).toList();
 
     return Column(
       children: [
@@ -1904,7 +2246,8 @@ class _CrmHomeState extends State<CrmHome> {
           child: TextField(
             onChanged: (value) {
               setState(() {
-                customerSearch = value;
+                customerSearch =
+                    value;
               });
             },
             decoration:
@@ -1923,9 +2266,13 @@ class _CrmHomeState extends State<CrmHome> {
                 )
               : ListView(
                   padding:
-                      const EdgeInsets.all(12),
+                      const EdgeInsets.all(
+                    12,
+                  ),
                   children: filtered
-                      .map(customerCard)
+                      .map(
+                        customerCard,
+                      )
                       .toList(),
                 ),
         ),
@@ -1933,13 +2280,20 @@ class _CrmHomeState extends State<CrmHome> {
     );
   }
 
-  Widget customerCard(Customer customer) {
+  Widget customerCard(
+    Customer customer,
+  ) {
     return Card(
       margin:
-          const EdgeInsets.only(bottom: 8),
+          const EdgeInsets.only(
+        bottom: 8,
+      ),
       child: ListTile(
-        leading: const CircleAvatar(
-          child: Icon(Icons.person),
+        leading:
+            const CircleAvatar(
+          child: Icon(
+            Icons.person,
+          ),
         ),
         title: Text(
           customer.name,
@@ -1957,38 +2311,54 @@ class _CrmHomeState extends State<CrmHome> {
         trailing:
             PopupMenuButton<String>(
           onSelected: (value) {
-            if (value == 'view') {
-              customer360(customer);
-            }
-
-            if (value == 'edit') {
-              customerForm(
-                existing: customer,
+            if (value ==
+                'view') {
+              customer360(
+                customer,
               );
             }
 
-            if (value == 'delete') {
-              deleteCustomer(customer);
+            if (value ==
+                'edit') {
+              customerForm(
+                existing:
+                    customer,
+              );
+            }
+
+            if (value ==
+                'delete') {
+              deleteCustomer(
+                customer,
+              );
             }
           },
-          itemBuilder: (_) => const [
+          itemBuilder: (_) =>
+              const [
             PopupMenuItem(
               value: 'view',
-              child:
-                  Text('Customer 360'),
+              child: Text(
+                'Customer 360',
+              ),
             ),
             PopupMenuItem(
               value: 'edit',
-              child: Text('تعديل'),
+              child: Text(
+                'تعديل',
+              ),
             ),
             PopupMenuItem(
               value: 'delete',
-              child: Text('حذف'),
+              child: Text(
+                'حذف',
+              ),
             ),
           ],
         ),
         onTap: () =>
-            customer360(customer),
+            customer360(
+          customer,
+        ),
       ),
     );
   }
@@ -2007,11 +2377,15 @@ class _CrmHomeState extends State<CrmHome> {
             Expanded(
               child: metric(
                 'Pipeline',
-                money(data.pipeline),
+                money(
+                  data.pipeline,
+                ),
                 Icons.trending_up,
               ),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(
+              width: 10,
+            ),
             Expanded(
               child: metric(
                 'Weighted',
@@ -2023,16 +2397,19 @@ class _CrmHomeState extends State<CrmHome> {
             ),
           ],
         ),
-
-        const SizedBox(height: 12),
-
-        if (data.opportunities.isEmpty)
+        const SizedBox(
+          height: 12,
+        ),
+        if (data
+            .opportunities
+            .isEmpty)
           emptyState(
             'لا توجد فرص حتى الآن.',
           ),
-
         ...data.opportunities
-            .map(opportunityCard),
+            .map(
+              opportunityCard,
+            ),
       ],
     );
   }
@@ -2042,9 +2419,12 @@ class _CrmHomeState extends State<CrmHome> {
   ) {
     return Card(
       margin:
-          const EdgeInsets.only(bottom: 8),
+          const EdgeInsets.only(
+        bottom: 8,
+      ),
       child: ListTile(
-        leading: const CircleAvatar(
+        leading:
+            const CircleAvatar(
           child: Icon(
             Icons.show_chart,
           ),
@@ -2065,32 +2445,39 @@ class _CrmHomeState extends State<CrmHome> {
         trailing:
             PopupMenuButton<String>(
           onSelected: (value) {
-            if (value == 'edit') {
+            if (value ==
+                'edit') {
               opportunityForm(
-                existing: opportunity,
+                existing:
+                    opportunity,
               );
             }
 
-            if (value == 'delete') {
+            if (value ==
+                'delete') {
               deleteOpportunity(
                 opportunity,
               );
             }
           },
-          itemBuilder: (_) => const [
+          itemBuilder: (_) =>
+              const [
             PopupMenuItem(
               value: 'edit',
-              child: Text('تعديل'),
+              child:
+                  Text('تعديل'),
             ),
             PopupMenuItem(
               value: 'delete',
-              child: Text('حذف'),
+              child:
+                  Text('حذف'),
             ),
           ],
         ),
         onTap: () =>
             opportunityForm(
-          existing: opportunity,
+          existing:
+              opportunity,
         ),
       ),
     );
@@ -2105,27 +2492,39 @@ class _CrmHomeState extends State<CrmHome> {
       ...data.tasks,
     ];
 
-    if (taskFilter == 'اليوم') {
+    if (taskFilter ==
+        'اليوم') {
       list = list
-          .where((x) => x.today)
+          .where(
+            (x) => x.today,
+          )
           .toList();
     }
 
-    if (taskFilter == 'متأخرة') {
+    if (taskFilter ==
+        'متأخرة') {
       list = list
-          .where((x) => x.overdue)
+          .where(
+            (x) => x.overdue,
+          )
           .toList();
     }
 
-    if (taskFilter == 'مفتوحة') {
+    if (taskFilter ==
+        'مفتوحة') {
       list = list
-          .where((x) => !x.done)
+          .where(
+            (x) => !x.done,
+          )
           .toList();
     }
 
-    if (taskFilter == 'منجزة') {
+    if (taskFilter ==
+        'منجزة') {
       list = list
-          .where((x) => x.done)
+          .where(
+            (x) => x.done,
+          )
           .toList();
     }
 
@@ -2148,25 +2547,31 @@ class _CrmHomeState extends State<CrmHome> {
               'متأخرة',
               'مفتوحة',
               'منجزة',
-            ].map((filter) {
-              return Padding(
-                padding:
-                    const EdgeInsets.only(
-                  left: 6,
-                ),
-                child: ChoiceChip(
-                  label: Text(filter),
-                  selected:
-                      taskFilter == filter,
-                  onSelected: (_) {
-                    setState(() {
-                      taskFilter =
-                          filter;
-                    });
-                  },
-                ),
-              );
-            }).toList(),
+            ].map(
+              (filter) {
+                return Padding(
+                  padding:
+                      const EdgeInsets.only(
+                    left: 6,
+                  ),
+                  child: ChoiceChip(
+                    label:
+                        Text(filter),
+                    selected:
+                        taskFilter ==
+                            filter,
+                    onSelected: (_) {
+                      setState(
+                        () {
+                          taskFilter =
+                              filter;
+                        },
+                      );
+                    },
+                  ),
+                );
+              },
+            ).toList(),
           ),
         ),
         Expanded(
@@ -2176,24 +2581,33 @@ class _CrmHomeState extends State<CrmHome> {
                 )
               : ListView(
                   padding:
-                      const EdgeInsets.all(12),
-                  children:
-                      list.map(taskCard).toList(),
+                      const EdgeInsets.all(
+                    12,
+                  ),
+                  children: list
+                      .map(taskCard)
+                      .toList(),
                 ),
         ),
       ],
     );
   }
 
-  Widget taskCard(CrmTask task) {
+  Widget taskCard(
+    CrmTask task,
+  ) {
     return Card(
       margin:
-          const EdgeInsets.only(bottom: 8),
+          const EdgeInsets.only(
+        bottom: 8,
+      ),
       child: ListTile(
         leading: Checkbox(
           value: task.done,
           onChanged: (_) =>
-              data.toggleTask(task),
+              data.toggleTask(
+            task,
+          ),
         ),
         title: Text(
           task.title,
@@ -2214,22 +2628,29 @@ class _CrmHomeState extends State<CrmHome> {
         trailing:
             PopupMenuButton<String>(
           onSelected: (value) {
-            if (value == 'edit') {
-              taskForm(existing: task);
+            if (value ==
+                'edit') {
+              taskForm(
+                existing: task,
+              );
             }
 
-            if (value == 'delete') {
+            if (value ==
+                'delete') {
               deleteTask(task);
             }
           },
-          itemBuilder: (_) => const [
+          itemBuilder: (_) =>
+              const [
             PopupMenuItem(
               value: 'edit',
-              child: Text('تعديل'),
+              child:
+                  Text('تعديل'),
             ),
             PopupMenuItem(
               value: 'delete',
-              child: Text('حذف'),
+              child:
+                  Text('حذف'),
             ),
           ],
         ),
@@ -2259,31 +2680,33 @@ class _CrmHomeState extends State<CrmHome> {
       children: [
         const Text(
           'تقارير الأداء',
-          style: TextStyle(
+          style:
+              TextStyle(
             fontSize: 22,
             fontWeight:
                 FontWeight.bold,
           ),
         ),
-
-        const SizedBox(height: 14),
-
+        const SizedBox(
+          height: 14,
+        ),
         metric(
           'إجمالي العملاء',
           '${data.customers.length}',
           Icons.people,
         ),
-
-        const SizedBox(height: 10),
-
+        const SizedBox(
+          height: 10,
+        ),
         metric(
           'قيمة Pipeline',
           money(data.pipeline),
-          Icons.account_balance_wallet,
+          Icons
+              .account_balance_wallet,
         ),
-
-        const SizedBox(height: 10),
-
+        const SizedBox(
+          height: 10,
+        ),
         metric(
           'Weighted Pipeline',
           money(
@@ -2291,42 +2714,48 @@ class _CrmHomeState extends State<CrmHome> {
           ),
           Icons.balance,
         ),
-
-        const SizedBox(height: 10),
-
+        const SizedBox(
+          height: 10,
+        ),
         metric(
           'نسبة إنجاز المهام',
           '$completionRate%',
           Icons.task_alt,
         ),
-
-        const SizedBox(height: 10),
-
+        const SizedBox(
+          height: 10,
+        ),
         metric(
           'المهام المتأخرة',
           '${data.overdueTasks}',
           Icons.warning_amber,
         ),
-
-        const SizedBox(height: 16),
-
+        const SizedBox(
+          height: 16,
+        ),
         Card(
           child: Padding(
             padding:
-                const EdgeInsets.all(16),
+                const EdgeInsets.all(
+              16,
+            ),
             child: Column(
               crossAxisAlignment:
-                  CrossAxisAlignment.start,
+                  CrossAxisAlignment
+                      .start,
               children: [
                 const Text(
                   'مراحل الفرص',
-                  style: TextStyle(
+                  style:
+                      TextStyle(
                     fontWeight:
                         FontWeight.bold,
                     fontSize: 18,
                   ),
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(
+                  height: 10,
+                ),
                 ...[
                   'جديدة',
                   'مؤهلة',
@@ -2334,24 +2763,29 @@ class _CrmHomeState extends State<CrmHome> {
                   'تفاوض',
                   'مغلقة ناجحة',
                   'مغلقة خاسرة',
-                ].map((stage) {
-                  final count =
-                      data.opportunities
-                          .where(
-                            (x) =>
-                                x.stage ==
-                                stage,
-                          )
-                          .length;
+                ].map(
+                  (stage) {
+                    final count =
+                        data
+                            .opportunities
+                            .where(
+                              (x) =>
+                                  x.stage ==
+                                  stage,
+                            )
+                            .length;
 
-                  return ListTile(
-                    dense: true,
-                    title:
-                        Text(stage),
-                    trailing:
-                        Text('$count'),
-                  );
-                }),
+                    return ListTile(
+                      dense: true,
+                      title:
+                          Text(stage),
+                      trailing:
+                          Text(
+                        '$count',
+                      ),
+                    );
+                  },
+                ),
               ],
             ),
           ),
@@ -2374,26 +2808,34 @@ class _CrmHomeState extends State<CrmHome> {
         return Directionality(
           textDirection:
               TextDirection.rtl,
-          child: DraggableScrollableSheet(
+          child:
+              DraggableScrollableSheet(
             expand: false,
             initialChildSize: .75,
             minChildSize: .45,
             maxChildSize: .95,
-            builder: (_, controller) {
+            builder:
+                (_, controller) {
+              // الربط الصحيح يكون باسم العميل،
+              // لأن حقلي الفرص والمهام يخزنان اسم العميل.
               final opportunities =
-                  data.customerOpportunities(
-                customer.company,
+                  data
+                      .customerOpportunities(
+                customer.name,
               );
 
               final tasks =
                   data.customerTasks(
-                customer.company,
+                customer.name,
               );
 
               return ListView(
-                controller: controller,
+                controller:
+                    controller,
                 padding:
-                    const EdgeInsets.all(18),
+                    const EdgeInsets.all(
+                  18,
+                ),
                 children: [
                   Row(
                     children: [
@@ -2413,47 +2855,40 @@ class _CrmHomeState extends State<CrmHome> {
                               const TextStyle(
                             fontSize: 22,
                             fontWeight:
-                                FontWeight.bold,
+                                FontWeight
+                                    .bold,
                           ),
                         ),
                       ),
                     ],
                   ),
-
                   const SizedBox(
                     height: 8,
                   ),
-
                   Text(
                     customer.company,
                   ),
-
                   if (customer.phone
                       .isNotEmpty)
                     Text(
                       customer.phone,
                     ),
-
                   if (customer.email
                       .isNotEmpty)
                     Text(
                       customer.email,
                     ),
-
                   const SizedBox(
                     height: 12,
                   ),
-
                   Chip(
                     label: Text(
                       customer.status,
                     ),
                   ),
-
                   const Divider(
                     height: 30,
                   ),
-
                   const Text(
                     'الفرص',
                     style:
@@ -2463,41 +2898,46 @@ class _CrmHomeState extends State<CrmHome> {
                           FontWeight.bold,
                     ),
                   ),
-
-                  if (opportunities.isEmpty)
+                  if (opportunities
+                      .isEmpty)
                     const Padding(
                       padding:
-                          EdgeInsets.all(12),
+                          EdgeInsets.all(
+                        12,
+                      ),
                       child: Text(
                         'لا توجد فرص مرتبطة.',
                       ),
                     ),
-
                   ...opportunities.map(
                     (opportunity) =>
                         ListTile(
                       leading:
                           const Icon(
-                        Icons.trending_up,
+                        Icons
+                            .trending_up,
                       ),
                       title: Text(
-                        opportunity.title,
+                        opportunity
+                            .title,
                       ),
-                      subtitle: Text(
-                        opportunity.stage,
+                      subtitle:
+                          Text(
+                        opportunity
+                            .stage,
                       ),
-                      trailing: Text(
+                      trailing:
+                          Text(
                         money(
-                          opportunity.value,
+                          opportunity
+                              .value,
                         ),
                       ),
                     ),
                   ),
-
                   const SizedBox(
                     height: 10,
                   ),
-
                   const Text(
                     'المهام',
                     style:
@@ -2507,18 +2947,19 @@ class _CrmHomeState extends State<CrmHome> {
                           FontWeight.bold,
                     ),
                   ),
-
                   if (tasks.isEmpty)
                     const Padding(
                       padding:
-                          EdgeInsets.all(12),
+                          EdgeInsets.all(
+                        12,
+                      ),
                       child: Text(
                         'لا توجد مهام مرتبطة.',
                       ),
                     ),
-
-                  ...tasks.map(taskCard),
-
+                  ...tasks.map(
+                    taskCard,
+                  ),
                   if (customer.notes
                       .isNotEmpty) ...[
                     const SizedBox(
@@ -2530,18 +2971,22 @@ class _CrmHomeState extends State<CrmHome> {
                           TextStyle(
                         fontSize: 18,
                         fontWeight:
-                            FontWeight.bold,
+                            FontWeight
+                                .bold,
                       ),
                     ),
                     Card(
                       child:
                           Padding(
                         padding:
-                            const EdgeInsets.all(
+                            const EdgeInsets
+                                .all(
                           14,
                         ),
-                        child: Text(
-                          customer.notes,
+                        child:
+                            Text(
+                          customer
+                              .notes,
                         ),
                       ),
                     ),
@@ -2598,7 +3043,8 @@ class _CrmHomeState extends State<CrmHome> {
     final saved =
         await showDialog<bool>(
       context: context,
-      builder: (dialogContext) {
+      builder:
+          (dialogContext) {
         return StatefulBuilder(
           builder:
               (context, setDialog) {
@@ -2627,7 +3073,8 @@ class _CrmHomeState extends State<CrmHome> {
                         phone,
                         'الهاتف',
                         keyboardType:
-                            TextInputType.phone,
+                            TextInputType
+                                .phone,
                       ),
                       dialogField(
                         email,
@@ -2642,7 +3089,8 @@ class _CrmHomeState extends State<CrmHome> {
                       ),
                       DropdownButtonFormField<
                           String>(
-                        value: status,
+                        initialValue:
+                            status,
                         decoration:
                             const InputDecoration(
                           labelText:
@@ -2665,19 +3113,23 @@ class _CrmHomeState extends State<CrmHome> {
                               ),
                             )
                             .toList(),
-                        onChanged: (value) {
-                          setDialog(() {
-                            status =
-                                value ??
-                                    status;
-                          });
+                        onChanged:
+                            (value) {
+                          setDialog(
+                            () {
+                              status =
+                                  value ??
+                                      status;
+                            },
+                          );
                         },
                       ),
                       const SizedBox(
                         height: 10,
                       ),
                       TextField(
-                        controller: notes,
+                        controller:
+                            notes,
                         maxLines: 3,
                         decoration:
                             const InputDecoration(
@@ -2696,7 +3148,9 @@ class _CrmHomeState extends State<CrmHome> {
                       false,
                     ),
                     child:
-                        const Text('إلغاء'),
+                        const Text(
+                      'إلغاء',
+                    ),
                   ),
                   FilledButton(
                     onPressed: () =>
@@ -2705,7 +3159,9 @@ class _CrmHomeState extends State<CrmHome> {
                       true,
                     ),
                     child:
-                        const Text('حفظ'),
+                        const Text(
+                      'حفظ',
+                    ),
                   ),
                 ],
               ),
@@ -2716,21 +3172,31 @@ class _CrmHomeState extends State<CrmHome> {
     );
 
     if (saved == true &&
-        name.text.trim().isNotEmpty) {
-      final customer = Customer(
-        id: existing?.id.isNotEmpty ==
+        name.text
+            .trim()
+            .isNotEmpty) {
+      final customer =
+          Customer(
+        id: existing?.id
+                    .isNotEmpty ==
                 true
             ? existing!.id
             : newId(),
-        name: name.text.trim(),
-        company: company.text.trim(),
-        phone: phone.text.trim(),
-        email: email.text.trim(),
+        name:
+            name.text.trim(),
+        company:
+            company.text.trim(),
+        phone:
+            phone.text.trim(),
+        email:
+            email.text.trim(),
         status: status,
         assignedTo:
             assigned.text.trim(),
-        notes: notes.text.trim(),
-        createdAt: existing?.createdAt,
+        notes:
+            notes.text.trim(),
+        createdAt:
+            existing?.createdAt,
       );
 
       if (existing == null) {
@@ -2793,7 +3259,8 @@ class _CrmHomeState extends State<CrmHome> {
     final saved =
         await showDialog<bool>(
       context: context,
-      builder: (dialogContext) {
+      builder:
+          (dialogContext) {
         return StatefulBuilder(
           builder:
               (context, setDialog) {
@@ -2822,7 +3289,8 @@ class _CrmHomeState extends State<CrmHome> {
                         value,
                         'القيمة',
                         keyboardType:
-                            TextInputType.number,
+                            TextInputType
+                                .number,
                       ),
                       dialogField(
                         assigned,
@@ -2830,7 +3298,8 @@ class _CrmHomeState extends State<CrmHome> {
                       ),
                       DropdownButtonFormField<
                           String>(
-                        value: stage,
+                        initialValue:
+                            stage,
                         decoration:
                             const InputDecoration(
                           labelText:
@@ -2856,12 +3325,15 @@ class _CrmHomeState extends State<CrmHome> {
                               ),
                             )
                             .toList(),
-                        onChanged: (value) {
-                          setDialog(() {
-                            stage =
-                                value ??
-                                    stage;
-                          });
+                        onChanged:
+                            (value) {
+                          setDialog(
+                            () {
+                              stage =
+                                  value ??
+                                      stage;
+                            },
+                          );
                         },
                       ),
                       const SizedBox(
@@ -2876,23 +3348,28 @@ class _CrmHomeState extends State<CrmHome> {
                         ),
                       ),
                       Slider(
-                        value:
-                            probability
-                                .toDouble(),
+                        value: probability
+                            .toDouble(),
                         min: 0,
                         max: 100,
                         divisions: 20,
                         label:
                             '$probability%',
-                        onChanged: (value) {
-                          setDialog(() {
-                            probability =
-                                value.round();
-                          });
+                        onChanged:
+                            (value) {
+                          setDialog(
+                            () {
+                              probability =
+                                  value
+                                      .round();
+                            },
+                          );
                         },
                       ),
-                      OutlinedButton.icon(
-                        onPressed: () async {
+                      OutlinedButton
+                          .icon(
+                        onPressed:
+                            () async {
                           final date =
                               await showDatePicker(
                             context:
@@ -2916,10 +3393,12 @@ class _CrmHomeState extends State<CrmHome> {
 
                           if (date !=
                               null) {
-                            setDialog(() {
-                              closeDate =
-                                  date;
-                            });
+                            setDialog(
+                              () {
+                                closeDate =
+                                    date;
+                              },
+                            );
                           }
                         },
                         icon:
@@ -2927,7 +3406,8 @@ class _CrmHomeState extends State<CrmHome> {
                           Icons
                               .calendar_today_outlined,
                         ),
-                        label: Text(
+                        label:
+                            Text(
                           closeDate ==
                                   null
                               ? 'تاريخ الإغلاق المتوقع'
@@ -2947,7 +3427,9 @@ class _CrmHomeState extends State<CrmHome> {
                       false,
                     ),
                     child:
-                        const Text('إلغاء'),
+                        const Text(
+                      'إلغاء',
+                    ),
                   ),
                   FilledButton(
                     onPressed: () =>
@@ -2956,7 +3438,9 @@ class _CrmHomeState extends State<CrmHome> {
                       true,
                     ),
                     child:
-                        const Text('حفظ'),
+                        const Text(
+                      'حفظ',
+                    ),
                   ),
                 ],
               ),
@@ -2967,14 +3451,18 @@ class _CrmHomeState extends State<CrmHome> {
     );
 
     if (saved == true &&
-        title.text.trim().isNotEmpty) {
+        title.text
+            .trim()
+            .isNotEmpty) {
       final opportunity =
           Opportunity(
-        id: existing?.id.isNotEmpty ==
+        id: existing?.id
+                    .isNotEmpty ==
                 true
             ? existing!.id
             : newId(),
-        title: title.text.trim(),
+        title:
+            title.text.trim(),
         customer:
             customer.text.trim(),
         value:
@@ -2994,11 +3482,13 @@ class _CrmHomeState extends State<CrmHome> {
       );
 
       if (existing == null) {
-        await data.addOpportunity(
+        await data
+            .addOpportunity(
           opportunity,
         );
       } else {
-        await data.updateOpportunity(
+        await data
+            .updateOpportunity(
           opportunity,
         );
       }
@@ -3055,7 +3545,8 @@ class _CrmHomeState extends State<CrmHome> {
     final saved =
         await showDialog<bool>(
       context: context,
-      builder: (dialogContext) {
+      builder:
+          (dialogContext) {
         return StatefulBuilder(
           builder:
               (context, setDialog) {
@@ -3090,7 +3581,8 @@ class _CrmHomeState extends State<CrmHome> {
                       ),
                       DropdownButtonFormField<
                           String>(
-                        value: priority,
+                        initialValue:
+                            priority,
                         decoration:
                             const InputDecoration(
                           labelText:
@@ -3114,12 +3606,15 @@ class _CrmHomeState extends State<CrmHome> {
                               ),
                             )
                             .toList(),
-                        onChanged: (value) {
-                          setDialog(() {
-                            priority =
-                                value ??
-                                    priority;
-                          });
+                        onChanged:
+                            (value) {
+                          setDialog(
+                            () {
+                              priority =
+                                  value ??
+                                      priority;
+                            },
+                          );
                         },
                       ),
                       const SizedBox(
@@ -3129,7 +3624,8 @@ class _CrmHomeState extends State<CrmHome> {
                         children: [
                           Expanded(
                             child:
-                                OutlinedButton.icon(
+                                OutlinedButton
+                                    .icon(
                               onPressed:
                                   () async {
                                 final date =
@@ -3157,15 +3653,11 @@ class _CrmHomeState extends State<CrmHome> {
                                     () {
                                       dueAt =
                                           DateTime(
-                                        date
-                                            .year,
-                                        date
-                                            .month,
+                                        date.year,
+                                        date.month,
                                         date.day,
-                                        dueAt
-                                            .hour,
-                                        dueAt
-                                            .minute,
+                                        dueAt.hour,
+                                        dueAt.minute,
                                       );
                                     },
                                   );
@@ -3189,7 +3681,8 @@ class _CrmHomeState extends State<CrmHome> {
                           ),
                           Expanded(
                             child:
-                                OutlinedButton.icon(
+                                OutlinedButton
+                                    .icon(
                               onPressed:
                                   () async {
                                 final time =
@@ -3222,16 +3715,11 @@ class _CrmHomeState extends State<CrmHome> {
                                     () {
                                       dueAt =
                                           DateTime(
-                                        dueAt
-                                            .year,
-                                        dueAt
-                                            .month,
-                                        dueAt
-                                            .day,
-                                        time
-                                            .hour,
-                                        time
-                                            .minute,
+                                        dueAt.year,
+                                        dueAt.month,
+                                        dueAt.day,
+                                        time.hour,
+                                        time.minute,
                                       );
                                     },
                                   );
@@ -3257,7 +3745,8 @@ class _CrmHomeState extends State<CrmHome> {
                       ),
                       DropdownButtonFormField<
                           int>(
-                        value: reminder,
+                        initialValue:
+                            reminder,
                         decoration:
                             const InputDecoration(
                           labelText:
@@ -3295,12 +3784,15 @@ class _CrmHomeState extends State<CrmHome> {
                             ),
                           ),
                         ],
-                        onChanged: (value) {
-                          setDialog(() {
-                            reminder =
-                                value ??
-                                    reminder;
-                          });
+                        onChanged:
+                            (value) {
+                          setDialog(
+                            () {
+                              reminder =
+                                  value ??
+                                      reminder;
+                            },
+                          );
                         },
                       ),
                     ],
@@ -3314,7 +3806,9 @@ class _CrmHomeState extends State<CrmHome> {
                       false,
                     ),
                     child:
-                        const Text('إلغاء'),
+                        const Text(
+                      'إلغاء',
+                    ),
                   ),
                   FilledButton(
                     onPressed: () =>
@@ -3323,7 +3817,9 @@ class _CrmHomeState extends State<CrmHome> {
                       true,
                     ),
                     child:
-                        const Text('حفظ'),
+                        const Text(
+                      'حفظ',
+                    ),
                   ),
                 ],
               ),
@@ -3334,20 +3830,26 @@ class _CrmHomeState extends State<CrmHome> {
     );
 
     if (saved == true &&
-        title.text.trim().isNotEmpty) {
-      final task = CrmTask(
-        id: existing?.id.isNotEmpty ==
+        title.text
+            .trim()
+            .isNotEmpty) {
+      final task =
+          CrmTask(
+        id: existing?.id
+                    .isNotEmpty ==
                 true
             ? existing!.id
             : newId(),
-        title: title.text.trim(),
+        title:
+            title.text.trim(),
         customer:
             customer.text.trim(),
         assignee:
             assignee.text.trim(),
         description:
             description.text.trim(),
-        priority: priority,
+        priority:
+            priority,
         done:
             existing?.done ?? false,
         dueAt: dueAt,
@@ -3381,8 +3883,10 @@ class _CrmHomeState extends State<CrmHome> {
         bottom: 10,
       ),
       child: TextField(
-        controller: controller,
-        keyboardType: keyboardType,
+        controller:
+            controller,
+        keyboardType:
+            keyboardType,
         decoration:
             InputDecoration(
           labelText: label,
@@ -3395,7 +3899,8 @@ class _CrmHomeState extends State<CrmHome> {
      NOTIFICATIONS
      ======================================================= */
 
-  Future<void> openNotifications() async {
+  Future<void>
+      openNotifications() async {
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -3434,7 +3939,8 @@ class _CrmHomeState extends State<CrmHome> {
                         onPressed: () =>
                             data
                                 .markAllNotificationsRead(),
-                        child: const Text(
+                        child:
+                            const Text(
                           'تعيين الكل كمقروء',
                         ),
                       ),
@@ -3452,65 +3958,64 @@ class _CrmHomeState extends State<CrmHome> {
                           'لا توجد تنبيهات.',
                         )
                       : ListView(
-                          children: data
-                              .notifications
-                              .map(
-                                (
-                                  notification,
-                                ) {
-                                  return ListTile(
-                                    leading:
-                                        CircleAvatar(
-                                      child:
-                                          Icon(
-                                        notification.type ==
-                                                'overdue'
-                                            ? Icons
-                                                .warning_amber
-                                            : Icons
-                                                .notifications,
-                                      ),
-                                    ),
-                                    title:
-                                        Text(
-                                      notification
-                                          .title,
-                                      style:
-                                          TextStyle(
-                                        fontWeight: notification.read
-                                            ? FontWeight
-                                                .normal
-                                            : FontWeight
-                                                .bold,
-                                      ),
-                                    ),
-                                    subtitle:
-                                        Text(
-                                      '${notification.body}\n'
-                                      '${formatDateTime(notification.createdAt)}',
-                                    ),
-                                    isThreeLine:
-                                        true,
-                                    tileColor:
-                                        notification.read
-                                            ? null
-                                            : Theme.of(
-                                                context,
-                                              )
-                                                .colorScheme
-                                                .primaryContainer
-                                                .withOpacity(
+                          children:
+                              data
+                                  .notifications
+                                  .map(
+                            (
+                              notification,
+                            ) {
+                              return ListTile(
+                                leading:
+                                    CircleAvatar(
+                                  child:
+                                      Icon(
+                                    notification.type ==
+                                            'overdue'
+                                        ? Icons
+                                            .warning_amber
+                                        : Icons
+                                            .notifications,
+                                  ),
+                                ),
+                                title:
+                                    Text(
+                                  notification
+                                      .title,
+                                  style:
+                                      TextStyle(
+                                    fontWeight: notification.read
+                                        ? FontWeight.normal
+                                        : FontWeight.bold,
+                                  ),
+                                ),
+                                subtitle:
+                                    Text(
+                                  '${notification.body}\n'
+                                  '${formatDateTime(notification.createdAt)}',
+                                ),
+                                isThreeLine:
+                                    true,
+                                tileColor:
+                                    notification.read
+                                        ? null
+                                        : Theme.of(
+                                            context,
+                                          )
+                                            .colorScheme
+                                            .primaryContainer
+                                            .withValues(
+                                              alpha:
                                                   .25,
-                                                ),
-                                    onTap: () =>
-                                        data
-                                            .markNotificationRead(
-                                      notification,
-                                    ),
-                                  );
-                                },
-                              )
-                              .toList(),
+                                            ),
+                                onTap: () =>
+                                    data
+                                        .markNotificationRead(
+                                  notification,
+                                ),
+                              );
+                            },
+                          ).toList(),
                         ),
                 ),
               ],
@@ -3555,7 +4060,8 @@ class _CrmHomeState extends State<CrmHome> {
           '/auth/logout',
           {
             'refreshToken':
-                data.session!.refreshToken,
+                data.session!
+                    .refreshToken,
           },
         );
       }
@@ -3621,7 +4127,9 @@ class _CrmHomeState extends State<CrmHome> {
     );
 
     if (confirmed) {
-      await data.deleteTask(task);
+      await data.deleteTask(
+        task,
+      );
     }
   }
 
@@ -3632,10 +4140,13 @@ class _CrmHomeState extends State<CrmHome> {
   }) async {
     return await showDialog<bool>(
           context: context,
-          builder: (dialogContext) =>
-              AlertDialog(
-            title: Text(title),
-            content: Text(message),
+          builder:
+              (dialogContext) =>
+                  AlertDialog(
+            title:
+                Text(title),
+            content:
+                Text(message),
             actions: [
               TextButton(
                 onPressed: () =>
@@ -3644,7 +4155,9 @@ class _CrmHomeState extends State<CrmHome> {
                   false,
                 ),
                 child:
-                    const Text('إلغاء'),
+                    const Text(
+                  'إلغاء',
+                ),
               ),
               FilledButton(
                 onPressed: () =>
@@ -3652,7 +4165,9 @@ class _CrmHomeState extends State<CrmHome> {
                   dialogContext,
                   true,
                 ),
-                child: Text(actionText),
+                child: Text(
+                  actionText,
+                ),
               ),
             ],
           ),
@@ -3672,14 +4187,18 @@ class _CrmHomeState extends State<CrmHome> {
     return Card(
       child: Padding(
         padding:
-            const EdgeInsets.all(14),
+            const EdgeInsets.all(
+          14,
+        ),
         child: Column(
           crossAxisAlignment:
-              CrossAxisAlignment.start,
+              CrossAxisAlignment
+                  .start,
           children: [
             Icon(
               icon,
-              color: Colors.indigo,
+              color:
+                  Colors.indigo,
             ),
             const SizedBox(
               height: 10,
@@ -3688,7 +4207,8 @@ class _CrmHomeState extends State<CrmHome> {
               value,
               maxLines: 1,
               overflow:
-                  TextOverflow.ellipsis,
+                  TextOverflow
+                      .ellipsis,
               style:
                   const TextStyle(
                 fontWeight:
@@ -3733,7 +4253,9 @@ class _CrmHomeState extends State<CrmHome> {
         TextButton(
           onPressed: action,
           child:
-              const Text('عرض الكل'),
+              const Text(
+            'عرض الكل',
+          ),
         ),
       ],
     );
@@ -3745,15 +4267,20 @@ class _CrmHomeState extends State<CrmHome> {
     return Center(
       child: Padding(
         padding:
-            const EdgeInsets.all(32),
+            const EdgeInsets.all(
+          32,
+        ),
         child: Column(
           mainAxisAlignment:
-              MainAxisAlignment.center,
+              MainAxisAlignment
+                  .center,
           children: [
             const Icon(
-              Icons.inbox_outlined,
+              Icons
+                  .inbox_outlined,
               size: 54,
-              color: Colors.black26,
+              color:
+                  Colors.black26,
             ),
             const SizedBox(
               height: 10,
@@ -3779,7 +4306,8 @@ class _CrmHomeState extends State<CrmHome> {
    SETTINGS PAGE
    ========================================================= */
 
-class SettingsPage extends StatefulWidget {
+class SettingsPage
+    extends StatefulWidget {
   const SettingsPage({
     super.key,
     required this.data,
@@ -3787,7 +4315,8 @@ class SettingsPage extends StatefulWidget {
   });
 
   final CrmData data;
-  final Future<void> Function() onLogout;
+  final Future<void> Function()
+      onLogout;
 
   @override
   State<SettingsPage> createState() =>
@@ -3796,20 +4325,28 @@ class SettingsPage extends StatefulWidget {
 
 class _SettingsPageState
     extends State<SettingsPage> {
-  CrmData get data => widget.data;
+  CrmData get data =>
+      widget.data;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(
+    BuildContext context,
+  ) {
     return Directionality(
-      textDirection: TextDirection.rtl,
+      textDirection:
+          TextDirection.rtl,
       child: Scaffold(
         appBar: AppBar(
           title:
-              const Text('الإعدادات'),
+              const Text(
+            'الإعدادات',
+          ),
         ),
         body: ListView(
           padding:
-              const EdgeInsets.all(14),
+              const EdgeInsets.all(
+            14,
+          ),
           children: [
             const Text(
               'الحساب',
@@ -3820,13 +4357,13 @@ class _SettingsPageState
                     FontWeight.bold,
               ),
             ),
-
             Card(
               child: ListTile(
                 leading:
                     const CircleAvatar(
-                  child:
-                      Icon(Icons.business),
+                  child: Icon(
+                    Icons.business,
+                  ),
                 ),
                 title: Text(
                   data.company
@@ -3835,17 +4372,15 @@ class _SettingsPageState
                 ),
                 subtitle: Text(
                   data.session?.user[
-                            'email']
+                              'email']
                           ?.toString() ??
                       '',
                 ),
               ),
             ),
-
             const SizedBox(
               height: 18,
             ),
-
             const Text(
               'التنبيهات',
               style:
@@ -3855,23 +4390,26 @@ class _SettingsPageState
                     FontWeight.bold,
               ),
             ),
-
             Card(
               child: Column(
                 children: [
                   SwitchListTile(
-                    value:
-                        data.notificationsEnabled,
-                    onChanged: (value) async {
+                    value: data
+                        .notificationsEnabled,
+                    onChanged:
+                        (value) async {
                       await data
                           .setSettings(
                         notifications:
                             value,
                       );
 
-                      setState(() {});
+                      setState(
+                        () {},
+                      );
                     },
-                    title: const Text(
+                    title:
+                        const Text(
                       'التنبيهات داخل التطبيق',
                     ),
                     secondary:
@@ -3880,14 +4418,12 @@ class _SettingsPageState
                           .notifications_outlined,
                     ),
                   ),
-
                   const Divider(
                     height: 1,
                   ),
-
                   SwitchListTile(
-                    value:
-                        data.taskRemindersEnabled,
+                    value: data
+                        .taskRemindersEnabled,
                     onChanged: data
                             .notificationsEnabled
                         ? (value) async {
@@ -3897,25 +4433,27 @@ class _SettingsPageState
                                   value,
                             );
 
-                            setState(() {});
+                            setState(
+                              () {},
+                            );
                           }
                         : null,
-                    title: const Text(
+                    title:
+                        const Text(
                       'تذكيرات المهام',
                     ),
                     secondary:
                         const Icon(
-                      Icons.alarm_outlined,
+                      Icons
+                          .alarm_outlined,
                     ),
                   ),
                 ],
               ),
             ),
-
             const SizedBox(
               height: 18,
             ),
-
             const Text(
               'المظهر',
               style:
@@ -3925,21 +4463,24 @@ class _SettingsPageState
                     FontWeight.bold,
               ),
             ),
-
             Card(
               child:
                   SwitchListTile(
                 value:
                     data.compactMode,
-                onChanged: (value) async {
+                onChanged:
+                    (value) async {
                   await data
                       .setSettings(
                     compact: value,
                   );
 
-                  setState(() {});
+                  setState(
+                    () {},
+                  );
                 },
-                title: const Text(
+                title:
+                    const Text(
                   'الوضع المختصر',
                 ),
                 secondary:
@@ -3949,11 +4490,9 @@ class _SettingsPageState
                 ),
               ),
             ),
-
             const SizedBox(
               height: 18,
             ),
-
             const Text(
               'البيانات',
               style:
@@ -3963,7 +4502,6 @@ class _SettingsPageState
                     FontWeight.bold,
               ),
             ),
-
             Card(
               child: Column(
                 children: [
@@ -4019,11 +4557,9 @@ class _SettingsPageState
                 ],
               ),
             ),
-
             const SizedBox(
               height: 18,
             ),
-
             const Text(
               'الأمان',
               style:
@@ -4033,23 +4569,25 @@ class _SettingsPageState
                     FontWeight.bold,
               ),
             ),
-
             Card(
               child: const ListTile(
                 leading:
-                    Icon(Icons.security),
+                    Icon(
+                  Icons.security,
+                ),
                 title:
-                    Text('جلسة JWT'),
-                subtitle: Text(
+                    Text(
+                  'جلسة JWT',
+                ),
+                subtitle:
+                    Text(
                   'يتم حفظ رموز الجلسة فقط ولا يتم حفظ كلمة المرور.',
                 ),
               ),
             ),
-
             const SizedBox(
               height: 18,
             ),
-
             const Text(
               'الإصدار',
               style:
@@ -4059,37 +4597,38 @@ class _SettingsPageState
                     FontWeight.bold,
               ),
             ),
-
             const Card(
               child: ListTile(
                 leading:
                     Icon(Icons.apps),
                 title:
-                    Text('CRM Business'),
-                subtitle: Text(
+                    Text(
+                  'CRM Business',
+                ),
+                subtitle:
+                    Text(
                   'واجهة CRM مطورة • الإصدار 4.0.0',
                 ),
               ),
             ),
-
             const SizedBox(
               height: 24,
             ),
-
             SizedBox(
               height: 52,
-              child: FilledButton.tonalIcon(
+              child:
+                  FilledButton.tonalIcon(
                 onPressed:
                     widget.onLogout,
                 icon: const Icon(
                   Icons.logout,
                 ),
-                label: const Text(
+                label:
+                    const Text(
                   'تسجيل الخروج',
                 ),
               ),
             ),
-
             const SizedBox(
               height: 30,
             ),
@@ -4130,11 +4669,18 @@ String money(double value) {
   for (var i = 0;
       i < digits.length;
       i++) {
-    result.write(digits[i]);
+    result.write(
+      digits[i],
+    );
 
-    if ((digits.length - i - 1) % 3 ==
+    if ((digits.length -
+                    i -
+                    1) %
+                3 ==
             0 &&
-        i != digits.length - 1) {
+        i !=
+            digits.length -
+                1) {
       result.write(',');
     }
   }
@@ -4142,22 +4688,30 @@ String money(double value) {
   return result.toString();
 }
 
-String formatDate(DateTime date) {
+String formatDate(
+  DateTime date,
+) {
   return '${date.day.toString().padLeft(2, '0')}/'
       '${date.month.toString().padLeft(2, '0')}/'
       '${date.year}';
 }
 
-String formatTime(DateTime date) {
+String formatTime(
+  DateTime date,
+) {
   return '${date.hour.toString().padLeft(2, '0')}:'
       '${date.minute.toString().padLeft(2, '0')}';
 }
 
-String formatDateTime(DateTime date) {
+String formatDateTime(
+  DateTime date,
+) {
   return '${formatDate(date)} ${formatTime(date)}';
 }
 
-String cleanError(Object error) {
+String cleanError(
+  Object error,
+) {
   final message = error
       .toString()
       .replaceFirst(
