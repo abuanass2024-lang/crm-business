@@ -9,3 +9,6 @@
 **/android/app/release/
 *.jks
 *.keystore
+
+**/node_modules/
+**/dist/
