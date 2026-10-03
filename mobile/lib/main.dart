@@ -1,6 +1,9 @@
+// ignore_for_file: prefer_const_constructors, library_private_types_in_public_api
+
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:convert';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -251,19 +254,35 @@ class CrmStore extends ChangeNotifier {
         final data = jsonDecode(raw) as Map<String, dynamic>;
 
         customers = (data['customers'] as List)
-            .map((e) => Customer.fromJson(Map<String, dynamic>.from(e)))
+            .map(
+              (e) => Customer.fromJson(
+                Map<String, dynamic>.from(e),
+              ),
+            )
             .toList();
 
         opportunities = (data['opportunities'] as List)
-            .map((e) => Opportunity.fromJson(Map<String, dynamic>.from(e)))
+            .map(
+              (e) => Opportunity.fromJson(
+                Map<String, dynamic>.from(e),
+              ),
+            )
             .toList();
 
         tasks = (data['tasks'] as List)
-            .map((e) => CrmTask.fromJson(Map<String, dynamic>.from(e)))
+            .map(
+              (e) => CrmTask.fromJson(
+                Map<String, dynamic>.from(e),
+              ),
+            )
             .toList();
 
         activities = (data['activities'] as List)
-            .map((e) => Activity.fromJson(Map<String, dynamic>.from(e)))
+            .map(
+              (e) => Activity.fromJson(
+                Map<String, dynamic>.from(e),
+              ),
+            )
             .toList();
       } catch (_) {
         seed();
@@ -284,7 +303,10 @@ class CrmStore extends ChangeNotifier {
       'activities': activities.map((e) => e.toJson()).toList(),
     };
 
-    await prefs.setString(storageKey, jsonEncode(data));
+    await prefs.setString(
+      storageKey,
+      jsonEncode(data),
+    );
   }
 
   void seed() {
@@ -572,7 +594,9 @@ class CrmStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> addOpportunity(Opportunity opportunity) async {
+  Future<void> addOpportunity(
+    Opportunity opportunity,
+  ) async {
     opportunities.add(opportunity);
     await save();
     notifyListeners();
@@ -591,43 +615,84 @@ class CrmStore extends ChangeNotifier {
   }
 
   Future<void> toggleTask(int id) async {
-    final task = tasks.firstWhere((e) => e.id == id);
+    final task = tasks.firstWhere(
+      (e) => e.id == id,
+    );
+
     task.completed = !task.completed;
+
     await save();
     notifyListeners();
   }
 
-  double get pipelineValue => opportunities
-      .where((o) => o.stage != 'Won')
-      .fold(0, (sum, o) => sum + o.value);
+  double get pipelineValue {
+    return opportunities
+        .where((o) => o.stage != 'Won')
+        .fold(
+          0,
+          (sum, o) => sum + o.value,
+        );
+  }
 
-  double get forecastValue =>
-      opportunities.fold(0, (sum, o) => sum + (o.value * o.probability / 100));
+  double get forecastValue {
+    return opportunities.fold(
+      0,
+      (sum, o) => sum + (o.value * o.probability / 100),
+    );
+  }
 
-  double get wonValue => opportunities
-      .where((o) => o.stage == 'Won')
-      .fold(0, (sum, o) => sum + o.value);
+  double get wonValue {
+    return opportunities
+        .where((o) => o.stage == 'Won')
+        .fold(
+          0,
+          (sum, o) => sum + o.value,
+        );
+  }
 
-  int get openTasks => tasks.where((t) => !t.completed).length;
+  int get openTasks {
+    return tasks.where((t) => !t.completed).length;
+  }
 
-  int get urgentTasks =>
-      tasks.where((t) => !t.completed && t.priority == 'عاجل').length;
+  int get urgentTasks {
+    return tasks
+        .where(
+          (t) => !t.completed && t.priority == 'عاجل',
+        )
+        .length;
+  }
 
-  int get atRiskCustomers => customers.where((c) => c.health < 50).length;
+  int get atRiskCustomers {
+    return customers.where((c) => c.health < 50).length;
+  }
 
-  int get attentionCustomers =>
-      customers.where((c) => c.health >= 50 && c.health < 70).length;
+  int get attentionCustomers {
+    return customers
+        .where(
+          (c) => c.health >= 50 && c.health < 70,
+        )
+        .length;
+  }
 
-  int get activeCustomers =>
-      customers.where((c) => c.lastActivityDays <= 7).length;
+  int get activeCustomers {
+    return customers
+        .where((c) => c.lastActivityDays <= 7)
+        .length;
+  }
 
-  int get overdueOpportunities =>
-      opportunities.where((o) => o.daysSinceActivity >= 7).length;
+  int get overdueOpportunities {
+    return opportunities
+        .where((o) => o.daysSinceActivity >= 7)
+        .length;
+  }
 
   Customer? getCustomer(String company) {
     for (final customer in customers) {
-      if (customer.company == company) return customer;
+      if (customer.company == company) {
+        return customer;
+      }
     }
+
     return null;
   }
 }
@@ -678,7 +743,9 @@ class _AppShellState extends State<AppShell> {
         final pages = [
           DashboardPage(
             store: store,
-            onNavigate: (value) => setState(() => index = value),
+            onNavigate: (value) {
+              setState(() => index = value);
+            },
           ),
           CustomersPage(store: store),
           OpportunitiesPage(store: store),
@@ -690,19 +757,25 @@ class _AppShellState extends State<AppShell> {
           appBar: AppBar(
             title: Text(
               titles[index],
-              style: const TextStyle(fontWeight: FontWeight.bold),
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+              ),
             ),
             centerTitle: false,
             backgroundColor: Colors.transparent,
             actions: [
               IconButton(
                 tooltip: 'AI Assistant',
-                onPressed: () => showAiAssistant(context, store),
+                onPressed: () {
+                  showAiAssistant(context, store);
+                },
                 icon: const Icon(Icons.auto_awesome),
               ),
               IconButton(
                 tooltip: 'إعادة البيانات التجريبية',
-                onPressed: () => confirmReset(context),
+                onPressed: () {
+                  confirmReset(context);
+                },
                 icon: const Icon(Icons.restart_alt),
               ),
               const SizedBox(width: 8),
@@ -751,7 +824,9 @@ class _AppShellState extends State<AppShell> {
   Widget? _buildFab() {
     if (index == 1) {
       return FloatingActionButton.extended(
-        onPressed: () => showAddCustomerDialog(context, store),
+        onPressed: () {
+          showAddCustomerDialog(context, store);
+        },
         icon: const Icon(Icons.person_add),
         label: const Text('عميل جديد'),
       );
@@ -759,7 +834,9 @@ class _AppShellState extends State<AppShell> {
 
     if (index == 2) {
       return FloatingActionButton.extended(
-        onPressed: () => showAddOpportunityDialog(context, store),
+        onPressed: () {
+          showAddOpportunityDialog(context, store);
+        },
         icon: const Icon(Icons.add_business),
         label: const Text('فرصة جديدة'),
       );
@@ -767,7 +844,9 @@ class _AppShellState extends State<AppShell> {
 
     if (index == 3) {
       return FloatingActionButton.extended(
-        onPressed: () => showAddTaskDialog(context, store),
+        onPressed: () {
+          showAddTaskDialog(context, store);
+        },
         icon: const Icon(Icons.add_task),
         label: const Text('مهمة جديدة'),
       );
@@ -779,22 +858,28 @@ class _AppShellState extends State<AppShell> {
   Future<void> confirmReset(BuildContext context) async {
     final result = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('إعادة البيانات التجريبية'),
-        content: const Text(
-          'سيتم حذف التعديلات الحالية وإعادة بيانات Demo الأصلية.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('إلغاء'),
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('إعادة البيانات التجريبية'),
+          content: const Text(
+            'سيتم حذف التعديلات الحالية وإعادة بيانات Demo الأصلية.',
           ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('إعادة'),
-          ),
-        ],
-      ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context, false);
+              },
+              child: const Text('إلغاء'),
+            ),
+            FilledButton(
+              onPressed: () {
+                Navigator.pop(context, true);
+              },
+              child: const Text('إعادة'),
+            ),
+          ],
+        );
+      },
     );
 
     if (result == true) {
@@ -827,19 +912,29 @@ class DashboardPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final risky = store.customers.where((c) => c.health < 70).take(3).toList();
+    final risky = store.customers
+        .where((c) => c.health < 70)
+        .take(3)
+        .toList();
 
     final importantOpps = store.opportunities
         .where((o) => o.stage != 'Won')
         .toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
+      ..sort(
+        (a, b) => b.value.compareTo(a.value),
+      );
 
     final actions = _buildActions();
 
     return RefreshIndicator(
       onRefresh: store.load,
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+        padding: const EdgeInsets.fromLTRB(
+          16,
+          8,
+          16,
+          100,
+        ),
         children: [
           _welcomeCard(context),
           const SizedBox(height: 16),
@@ -852,19 +947,27 @@ class DashboardPage extends StatelessWidget {
           ...actions.map(
             (action) => Padding(
               padding: const EdgeInsets.only(bottom: 10),
-              child: _actionCard(context, action),
+              child: _actionCard(
+                context,
+                action,
+              ),
             ),
           ),
           const SizedBox(height: 10),
           _sectionTitle('❤️ صحة العملاء'),
           const SizedBox(height: 10),
           if (risky.isEmpty)
-            _emptyCard('لا توجد عملاء يحتاجون انتباهاً حالياً.')
+            _emptyCard(
+              'لا توجد عملاء يحتاجون انتباهاً حالياً.',
+            )
           else
             ...risky.map(
               (customer) => Padding(
                 padding: const EdgeInsets.only(bottom: 10),
-                child: _customerHealthCard(context, customer),
+                child: _customerHealthCard(
+                  context,
+                  customer,
+                ),
               ),
             ),
           const SizedBox(height: 10),
@@ -873,7 +976,9 @@ class DashboardPage extends StatelessWidget {
           ...importantOpps.take(4).map(
                 (opportunity) => Padding(
                   padding: const EdgeInsets.only(bottom: 10),
-                  child: _opportunityCard(opportunity),
+                  child: _opportunityCard(
+                    opportunity,
+                  ),
                 ),
               ),
           const SizedBox(height: 10),
@@ -924,7 +1029,10 @@ class DashboardPage extends StatelessWidget {
           const SizedBox(height: 18),
           Text(
             'صباح الخير 👋',
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+            style: Theme.of(context)
+                .textTheme
+                .headlineSmall
+                ?.copyWith(
                   fontWeight: FontWeight.bold,
                 ),
           ),
@@ -965,7 +1073,8 @@ class DashboardPage extends StatelessWidget {
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       itemCount: metrics.length,
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+      gridDelegate:
+          const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
         mainAxisSpacing: 10,
         crossAxisSpacing: 10,
@@ -978,13 +1087,16 @@ class DashboardPage extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.all(15),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment:
+                  CrossAxisAlignment.start,
               children: [
                 Icon(item.icon),
                 const Spacer(),
                 Text(
                   item.title,
-                  style: const TextStyle(fontSize: 12),
+                  style: const TextStyle(
+                    fontSize: 12,
+                  ),
                 ),
                 const SizedBox(height: 4),
                 Text(
@@ -1042,7 +1154,8 @@ class DashboardPage extends StatelessWidget {
         _ActionData(
           level: 'جيد',
           title: 'لا توجد إجراءات عاجلة',
-          description: 'جميع المتابعات الأساسية تحت السيطرة.',
+          description:
+              'جميع المتابعات الأساسية تحت السيطرة.',
           action: 'استكشف العملاء',
           icon: Icons.check_circle,
         ),
@@ -1052,7 +1165,10 @@ class DashboardPage extends StatelessWidget {
     return result.take(4).toList();
   }
 
-  Widget _actionCard(BuildContext context, _ActionData data) {
+  Widget _actionCard(
+    BuildContext context,
+    _ActionData data,
+  ) {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(14),
@@ -1064,7 +1180,8 @@ class DashboardPage extends StatelessWidget {
             const SizedBox(width: 12),
             Expanded(
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment:
+                    CrossAxisAlignment.start,
                 children: [
                   Text(
                     data.level,
@@ -1111,26 +1228,40 @@ class DashboardPage extends StatelessWidget {
         ),
         title: Text(
           customer.company,
-          style: const TextStyle(fontWeight: FontWeight.bold),
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+          ),
         ),
         subtitle: Text(
           '${status.label} • آخر نشاط منذ ${customer.lastActivityDays} أيام',
         ),
         trailing: const Icon(Icons.chevron_left),
-        onTap: () => showCustomer360(context, store, customer),
+        onTap: () {
+          showCustomer360(
+            context,
+            store,
+            customer,
+          );
+        },
       ),
     );
   }
 
-  Widget _opportunityCard(Opportunity opportunity) {
+  Widget _opportunityCard(
+    Opportunity opportunity,
+  ) {
     return Card(
       child: ListTile(
         leading: CircleAvatar(
-          child: Icon(stageIcon(opportunity.stage)),
+          child: Icon(
+            stageIcon(opportunity.stage),
+          ),
         ),
         title: Text(
           opportunity.customer,
-          style: const TextStyle(fontWeight: FontWeight.bold),
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+          ),
         ),
         subtitle: Text(
           '${opportunity.title} • ${opportunity.stage}',
@@ -1169,14 +1300,17 @@ class DashboardPage extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(18),
         child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment:
+              CrossAxisAlignment.start,
           children: [
             const Icon(Icons.insights),
             const SizedBox(width: 12),
             Expanded(
               child: Text(
                 message,
-                style: const TextStyle(height: 1.5),
+                style: const TextStyle(
+                  height: 1.5,
+                ),
               ),
             ),
           ],
@@ -1188,8 +1322,12 @@ class DashboardPage extends StatelessWidget {
   Widget _demoTourButton(BuildContext context) {
     return FilledButton.icon(
       onPressed: () => showDemoTour(context),
-      icon: const Icon(Icons.play_circle_outline),
-      label: const Text('ابدأ الجولة التجريبية'),
+      icon: const Icon(
+        Icons.play_circle_outline,
+      ),
+      label: const Text(
+        'ابدأ الجولة التجريبية',
+      ),
     );
   }
 
@@ -1214,7 +1352,11 @@ class DashboardPage extends StatelessWidget {
 }
 
 class _MetricData {
-  const _MetricData(this.title, this.value, this.icon);
+  const _MetricData(
+    this.title,
+    this.value,
+    this.icon,
+  );
 
   final String title;
   final String value;
@@ -1250,7 +1392,8 @@ class CustomersPage extends StatefulWidget {
   final CrmStore store;
 
   @override
-  State<CustomersPage> createState() => _CustomersPageState();
+  State<CustomersPage> createState() =>
+      _CustomersPageState();
 }
 
 class _CustomersPageState extends State<CustomersPage> {
@@ -1258,18 +1401,32 @@ class _CustomersPageState extends State<CustomersPage> {
 
   @override
   Widget build(BuildContext context) {
-    final filtered = widget.store.customers.where((customer) {
+    final filtered =
+        widget.store.customers.where((customer) {
       final q = search.trim().toLowerCase();
 
-      if (q.isEmpty) return true;
+      if (q.isEmpty) {
+        return true;
+      }
 
-      return customer.company.toLowerCase().contains(q) ||
-          customer.name.toLowerCase().contains(q) ||
-          customer.industry.toLowerCase().contains(q);
+      return customer.company
+              .toLowerCase()
+              .contains(q) ||
+          customer.name
+              .toLowerCase()
+              .contains(q) ||
+          customer.industry
+              .toLowerCase()
+              .contains(q);
     }).toList();
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+      padding: const EdgeInsets.fromLTRB(
+        16,
+        8,
+        16,
+        100,
+      ),
       children: [
         TextField(
           decoration: const InputDecoration(
@@ -1285,20 +1442,29 @@ class _CustomersPageState extends State<CustomersPage> {
           children: [
             Text(
               '${filtered.length} عميل',
-              style: const TextStyle(fontWeight: FontWeight.bold),
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+              ),
             ),
             const Spacer(),
             Text(
               '${widget.store.atRiskCustomers} في خطر',
-              style: const TextStyle(fontWeight: FontWeight.bold),
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ],
         ),
         const SizedBox(height: 12),
         ...filtered.map(
           (customer) => Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: _customerCard(context, customer),
+            padding: const EdgeInsets.only(
+              bottom: 10,
+            ),
+            child: _customerCard(
+              context,
+              customer,
+            ),
           ),
         ),
       ],
@@ -1314,11 +1480,13 @@ class _CustomersPageState extends State<CustomersPage> {
     return Card(
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
-        onTap: () => showCustomer360(
-          context,
-          widget.store,
-          customer,
-        ),
+        onTap: () {
+          showCustomer360(
+            context,
+            widget.store,
+            customer,
+          );
+        },
         child: Padding(
           padding: const EdgeInsets.all(15),
           child: Row(
@@ -1335,7 +1503,8 @@ class _CustomersPageState extends State<CustomersPage> {
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment:
+                      CrossAxisAlignment.start,
                   children: [
                     Text(
                       customer.company,
@@ -1351,7 +1520,9 @@ class _CustomersPageState extends State<CustomersPage> {
                     const SizedBox(height: 5),
                     Text(
                       'قيمة العميل: ${money(customer.value)}',
-                      style: const TextStyle(fontSize: 12),
+                      style: const TextStyle(
+                        fontSize: 12,
+                      ),
                     ),
                   ],
                 ),
@@ -1370,7 +1541,9 @@ class _CustomersPageState extends State<CustomersPage> {
                   const SizedBox(height: 4),
                   Text(
                     health.label,
-                    style: const TextStyle(fontSize: 10),
+                    style: const TextStyle(
+                      fontSize: 10,
+                    ),
                   ),
                 ],
               ),
@@ -1394,11 +1567,15 @@ Future<void> showCustomer360(
   final health = healthStatus(customer.health);
 
   final customerOpps = store.opportunities
-      .where((o) => o.customer == customer.company)
+      .where(
+        (o) => o.customer == customer.company,
+      )
       .toList();
 
   final customerActivities = store.activities
-      .where((a) => a.customer == customer.company)
+      .where(
+        (a) => a.customer == customer.company,
+      )
       .toList();
 
   await showModalBottomSheet(
@@ -1412,10 +1589,18 @@ Future<void> showCustomer360(
           initialChildSize: 0.88,
           maxChildSize: 0.95,
           minChildSize: 0.55,
-          builder: (context, controller) {
+          builder: (
+            context,
+            controller,
+          ) {
             return ListView(
               controller: controller,
-              padding: const EdgeInsets.fromLTRB(18, 0, 18, 30),
+              padding: const EdgeInsets.fromLTRB(
+                18,
+                0,
+                18,
+                30,
+              ),
               children: [
                 Row(
                   children: [
@@ -1423,13 +1608,16 @@ Future<void> showCustomer360(
                       radius: 30,
                       child: Text(
                         customer.company.substring(0, 1),
-                        style: const TextStyle(fontSize: 22),
+                        style: const TextStyle(
+                          fontSize: 22,
+                        ),
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                        crossAxisAlignment:
+                            CrossAxisAlignment.start,
                         children: [
                           Text(
                             customer.company,
@@ -1445,9 +1633,15 @@ Future<void> showCustomer360(
                   ],
                 ),
                 const SizedBox(height: 20),
-                _healthPanel(customer, health),
+                _healthPanel(
+                  customer,
+                  health,
+                ),
                 const SizedBox(height: 16),
-                _customerStats(customer, customerOpps),
+                _customerStats(
+                  customer,
+                  customerOpps,
+                ),
                 const SizedBox(height: 20),
                 const Text(
                   '🔥 الإجراء التالي',
@@ -1475,10 +1669,12 @@ Future<void> showCustomer360(
                     trailing: FilledButton(
                       onPressed: () {
                         Navigator.pop(context);
+
                         showAddTaskDialog(
                           context,
                           store,
-                          initialCustomer: customer.company,
+                          initialCustomer:
+                              customer.company,
                         );
                       },
                       child: const Text('مهمة'),
@@ -1498,7 +1694,9 @@ Future<void> showCustomer360(
                   const Card(
                     child: Padding(
                       padding: EdgeInsets.all(16),
-                      child: Text('لا توجد فرص لهذا العميل.'),
+                      child: Text(
+                        'لا توجد فرص لهذا العميل.',
+                      ),
                     ),
                   )
                 else
@@ -1531,14 +1729,22 @@ Future<void> showCustomer360(
                   const Card(
                     child: Padding(
                       padding: EdgeInsets.all(16),
-                      child: Text('لا توجد أنشطة مسجلة.'),
+                      child: Text(
+                        'لا توجد أنشطة مسجلة.',
+                      ),
                     ),
                   )
                 else
                   ...customerActivities.map(
                     (activity) => ListTile(
-                      leading: Icon(activityIcon(activity.type)),
-                      title: Text(activity.description),
+                      leading: Icon(
+                        activityIcon(
+                          activity.type,
+                        ),
+                      ),
+                      title: Text(
+                        activity.description,
+                      ),
                       subtitle: Text(
                         '${activity.type} • ${activity.dateLabel}',
                       ),
@@ -1575,7 +1781,8 @@ Widget _healthPanel(
     child: Padding(
       padding: const EdgeInsets.all(18),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment:
+            CrossAxisAlignment.start,
         children: [
           Row(
             children: [
@@ -1655,11 +1862,16 @@ Widget _smallStat(
       padding: const EdgeInsets.all(10),
       child: Column(
         children: [
-          Icon(icon, size: 20),
+          Icon(
+            icon,
+            size: 20,
+          ),
           const SizedBox(height: 5),
           Text(
             title,
-            style: const TextStyle(fontSize: 10),
+            style: const TextStyle(
+              fontSize: 10,
+            ),
           ),
           const SizedBox(height: 3),
           Text(
@@ -1700,7 +1912,12 @@ class OpportunitiesPage extends StatelessWidget {
     ];
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+      padding: const EdgeInsets.fromLTRB(
+        16,
+        8,
+        16,
+        100,
+      ),
       children: [
         _pipelineSummary(),
         const SizedBox(height: 18),
@@ -1714,7 +1931,9 @@ class OpportunitiesPage extends StatelessWidget {
         const SizedBox(height: 12),
         ...stages.map(
           (stage) => Padding(
-            padding: const EdgeInsets.only(bottom: 15),
+            padding: const EdgeInsets.only(
+              bottom: 15,
+            ),
             child: _stageSection(stage),
           ),
         ),
@@ -1753,19 +1972,22 @@ class OpportunitiesPage extends StatelessWidget {
   }
 
   Widget _stageSection(String stage) {
-    final list =
-        store.opportunities.where((o) => o.stage == stage).toList();
+    final list = store.opportunities
+        .where((o) => o.stage == stage)
+        .toList();
 
     final total = list.fold<double>(
       0,
-      (sum, opportunity) => sum + opportunity.value,
+      (sum, opportunity) =>
+          sum + opportunity.value,
     );
 
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(14),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment:
+              CrossAxisAlignment.start,
           children: [
             Row(
               children: [
@@ -1797,10 +2019,14 @@ class OpportunitiesPage extends StatelessWidget {
                   leading: CircleAvatar(
                     child: Text(
                       '${opportunity.probability}%',
-                      style: const TextStyle(fontSize: 10),
+                      style: const TextStyle(
+                        fontSize: 10,
+                      ),
                     ),
                   ),
-                  title: Text(opportunity.customer),
+                  title: Text(
+                    opportunity.customer,
+                  ),
                   subtitle: Text(
                     '${opportunity.title} • ${opportunity.nextAction}',
                   ),
@@ -1833,11 +2059,19 @@ class TasksPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final open = store.tasks.where((t) => !t.completed).toList();
-    final completed = store.tasks.where((t) => t.completed).toList();
+    final open =
+        store.tasks.where((t) => !t.completed).toList();
+
+    final completed =
+        store.tasks.where((t) => t.completed).toList();
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+      padding: const EdgeInsets.fromLTRB(
+        16,
+        8,
+        16,
+        100,
+      ),
       children: [
         Row(
           children: [
@@ -1876,7 +2110,10 @@ class TasksPage extends StatelessWidget {
         ),
         const SizedBox(height: 10),
         ...open.map(
-          (task) => _taskCard(context, task),
+          (task) => _taskCard(
+            context,
+            task,
+          ),
         ),
         if (completed.isNotEmpty) ...[
           const SizedBox(height: 20),
@@ -1889,7 +2126,10 @@ class TasksPage extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           ...completed.map(
-            (task) => _taskCard(context, task),
+            (task) => _taskCard(
+              context,
+              task,
+            ),
           ),
         ],
       ],
@@ -1904,14 +2144,17 @@ class TasksPage extends StatelessWidget {
       child: ListTile(
         leading: Checkbox(
           value: task.completed,
-          onChanged: (_) => store.toggleTask(task.id),
+          onChanged: (_) {
+            store.toggleTask(task.id);
+          },
         ),
         title: Text(
           task.title,
           style: TextStyle(
             fontWeight: FontWeight.bold,
-            decoration:
-                task.completed ? TextDecoration.lineThrough : null,
+            decoration: task.completed
+                ? TextDecoration.lineThrough
+                : null,
           ),
         ),
         subtitle: Text(
@@ -1939,22 +2182,37 @@ class AnalyticsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final totalCustomers = store.customers.length;
-    final healthy =
-        store.customers.where((c) => c.health >= 70).length;
-    final attention = store.attentionCustomers;
-    final risk = store.atRiskCustomers;
+    final totalCustomers =
+        store.customers.length;
 
-    final totalOpps = store.opportunities.length;
+    final healthy = store.customers
+        .where((c) => c.health >= 70)
+        .length;
+
+    final attention =
+        store.attentionCustomers;
+
+    final risk =
+        store.atRiskCustomers;
+
+    final totalOpps =
+        store.opportunities.length;
+
     final won = store.opportunities
         .where((o) => o.stage == 'Won')
         .length;
 
-    final conversion =
-        totalOpps == 0 ? 0 : (won / totalOpps * 100).round();
+    final conversion = totalOpps == 0
+        ? 0
+        : (won / totalOpps * 100).round();
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+      padding: const EdgeInsets.fromLTRB(
+        16,
+        8,
+        16,
+        100,
+      ),
       children: [
         const Text(
           '📊 ذكاء الأعمال',
@@ -2016,7 +2274,8 @@ class AnalyticsPage extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.all(18),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment:
+                  CrossAxisAlignment.start,
               children: [
                 const Text(
                   '🎯 Conversion',
@@ -2046,7 +2305,8 @@ class AnalyticsPage extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.all(18),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment:
+                  CrossAxisAlignment.start,
               children: [
                 const Text(
                   '⚠️ مؤشرات الانتباه',
@@ -2081,7 +2341,8 @@ class AnalyticsPage extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(18),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment:
+              CrossAxisAlignment.start,
           children: [
             Text(
               title,
@@ -2093,7 +2354,9 @@ class AnalyticsPage extends StatelessWidget {
             const SizedBox(height: 16),
             ...rows.map(
               (row) => Padding(
-                padding: const EdgeInsets.only(bottom: 15),
+                padding: const EdgeInsets.only(
+                  bottom: 15,
+                ),
                 child: Column(
                   children: [
                     Row(
@@ -2110,9 +2373,13 @@ class AnalyticsPage extends StatelessWidget {
                     ),
                     const SizedBox(height: 7),
                     LinearProgressIndicator(
-                      value: row.progress.clamp(0, 1),
+                      value: row.progress.clamp(
+                        0,
+                        1,
+                      ),
                       minHeight: 7,
-                      borderRadius: BorderRadius.circular(20),
+                      borderRadius:
+                          BorderRadius.circular(20),
                     ),
                   ],
                 ),
@@ -2198,18 +2465,24 @@ Future<void> showAddCustomerDialog(
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () {
+              Navigator.pop(context);
+            },
             child: const Text('إلغاء'),
           ),
           FilledButton(
             onPressed: () async {
-              if (company.text.trim().isEmpty) return;
+              if (company.text.trim().isEmpty) {
+                return;
+              }
 
               final nextId = store.customers.isEmpty
                   ? 1
                   : store.customers
                           .map((e) => e.id)
-                          .reduce((a, b) => a > b ? a : b) +
+                          .reduce(
+                            (a, b) => a > b ? a : b,
+                          ) +
                       1;
 
               await store.addCustomer(
@@ -2221,14 +2494,16 @@ Future<void> showAddCustomerDialog(
                   company: company.text.trim(),
                   phone: phone.text.trim(),
                   email: email.text.trim(),
-                  industry: industry.text.trim().isEmpty
-                      ? 'عام'
-                      : industry.text.trim(),
+                  industry:
+                      industry.text.trim().isEmpty
+                          ? 'عام'
+                          : industry.text.trim(),
                   value: 0,
                   health: 70,
                   lastActivityDays: 0,
                   owner: 'أنا',
-                  notes: 'عميل تمت إضافته من النسخة التجريبية.',
+                  notes:
+                      'عميل تمت إضافته من النسخة التجريبية.',
                 ),
               );
 
@@ -2256,7 +2531,9 @@ Future<void> showAddOpportunityDialog(
   final value = TextEditingController();
 
   String? selectedCustomer =
-      store.customers.isEmpty ? null : store.customers.first.company;
+      store.customers.isEmpty
+          ? null
+          : store.customers.first.company;
 
   String stage = 'Qualified';
 
@@ -2264,48 +2541,66 @@ Future<void> showAddOpportunityDialog(
     context: context,
     builder: (context) {
       return StatefulBuilder(
-        builder: (context, setState) {
+        builder: (
+          context,
+          setState,
+        ) {
           return AlertDialog(
-            title: const Text('فرصة بيع جديدة'),
+            title: const Text(
+              'فرصة بيع جديدة',
+            ),
             content: SingleChildScrollView(
               child: Column(
                 children: [
                   TextField(
                     controller: title,
-                    decoration: const InputDecoration(
+                    decoration:
+                        const InputDecoration(
                       labelText: 'اسم الفرصة',
                     ),
                   ),
                   const SizedBox(height: 10),
                   TextField(
                     controller: value,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
+                    keyboardType:
+                        TextInputType.number,
+                    decoration:
+                        const InputDecoration(
                       labelText: 'القيمة',
                     ),
                   ),
                   const SizedBox(height: 10),
                   DropdownButtonFormField<String>(
-                    initialValue: selectedCustomer,
-                    decoration: const InputDecoration(
+                    initialValue:
+                        selectedCustomer,
+                    decoration:
+                        const InputDecoration(
                       labelText: 'العميل',
                     ),
                     items: store.customers
                         .map(
-                          (customer) => DropdownMenuItem(
-                            value: customer.company,
-                            child: Text(customer.company),
+                          (customer) =>
+                              DropdownMenuItem(
+                            value:
+                                customer.company,
+                            child: Text(
+                              customer.company,
+                            ),
                           ),
                         )
                         .toList(),
                     onChanged: (value) {
-                      setState(() => selectedCustomer = value);
+                      setState(
+                        () => selectedCustomer =
+                            value,
+                      );
                     },
                   ),
                   const SizedBox(height: 10),
                   DropdownButtonFormField<String>(
                     initialValue: stage,
-                    decoration: const InputDecoration(
+                    decoration:
+                        const InputDecoration(
                       labelText: 'المرحلة',
                     ),
                     items: const [
@@ -2315,15 +2610,21 @@ Future<void> showAddOpportunityDialog(
                       ),
                       DropdownMenuItem(
                         value: 'Qualified',
-                        child: Text('Qualified'),
+                        child: Text(
+                          'Qualified',
+                        ),
                       ),
                       DropdownMenuItem(
                         value: 'Proposal',
-                        child: Text('Proposal'),
+                        child: Text(
+                          'Proposal',
+                        ),
                       ),
                       DropdownMenuItem(
                         value: 'Negotiation',
-                        child: Text('Negotiation'),
+                        child: Text(
+                          'Negotiation',
+                        ),
                       ),
                       DropdownMenuItem(
                         value: 'Won',
@@ -2332,7 +2633,9 @@ Future<void> showAddOpportunityDialog(
                     ],
                     onChanged: (value) {
                       if (value != null) {
-                        setState(() => stage = value);
+                        setState(
+                          () => stage = value,
+                        );
                       }
                     },
                   ),
@@ -2341,47 +2644,68 @@ Future<void> showAddOpportunityDialog(
             ),
             actions: [
               TextButton(
-                onPressed: () => Navigator.pop(context),
+                onPressed: () {
+                  Navigator.pop(context);
+                },
                 child: const Text('إلغاء'),
               ),
               FilledButton(
                 onPressed: () async {
                   final amount =
-                      double.tryParse(value.text.trim()) ?? 0;
+                      double.tryParse(
+                            value.text.trim(),
+                          ) ??
+                          0;
 
-                  if (title.text.trim().isEmpty ||
+                  if (title.text
+                          .trim()
+                          .isEmpty ||
                       selectedCustomer == null) {
                     return;
                   }
 
-                  final nextId = store.opportunities.isEmpty
-                      ? 1
-                      : store.opportunities
-                              .map((e) => e.id)
-                              .reduce((a, b) => a > b ? a : b) +
-                          1;
+                  final nextId =
+                      store.opportunities.isEmpty
+                          ? 1
+                          : store.opportunities
+                                  .map(
+                                    (e) => e.id,
+                                  )
+                                  .reduce(
+                                    (a, b) =>
+                                        a > b
+                                            ? a
+                                            : b,
+                                  ) +
+                              1;
 
-                  final probability = stage == 'Won'
-                      ? 100
-                      : stage == 'Negotiation'
-                          ? 70
-                          : stage == 'Proposal'
-                              ? 55
-                              : stage == 'Qualified'
-                                  ? 40
-                                  : 20;
+                  final probability =
+                      stage == 'Won'
+                          ? 100
+                          : stage == 'Negotiation'
+                              ? 70
+                              : stage == 'Proposal'
+                                  ? 55
+                                  : stage == 'Qualified'
+                                      ? 40
+                                      : 20;
 
-                  await store.addOpportunity(
+                  await store
+                      .addOpportunity(
                     Opportunity(
                       id: nextId,
-                      title: title.text.trim(),
-                      customer: selectedCustomer!,
+                      title:
+                          title.text.trim(),
+                      customer:
+                          selectedCustomer!,
                       value: amount,
                       stage: stage,
-                      probability: probability,
+                      probability:
+                          probability,
                       owner: 'أنا',
                       daysSinceActivity: 0,
-                      nextAction: 'تحديد الإجراء التالي',
+                      nextAction:
+                          'تحديد الإجراء التالي',
                     ),
                   );
 
@@ -2410,8 +2734,11 @@ Future<void> showAddTaskDialog(
 }) async {
   final title = TextEditingController();
 
-  String? selectedCustomer = initialCustomer ??
-      (store.customers.isEmpty ? null : store.customers.first.company);
+  String? selectedCustomer =
+      initialCustomer ??
+          (store.customers.isEmpty
+              ? null
+              : store.customers.first.company);
 
   String priority = 'مهم';
 
@@ -2419,40 +2746,56 @@ Future<void> showAddTaskDialog(
     context: context,
     builder: (context) {
       return StatefulBuilder(
-        builder: (context, setState) {
+        builder: (
+          context,
+          setState,
+        ) {
           return AlertDialog(
-            title: const Text('مهمة جديدة'),
+            title: const Text(
+              'مهمة جديدة',
+            ),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 TextField(
                   controller: title,
-                  decoration: const InputDecoration(
+                  decoration:
+                      const InputDecoration(
                     labelText: 'المهمة',
                   ),
                 ),
                 const SizedBox(height: 10),
                 DropdownButtonFormField<String>(
-                  initialValue: selectedCustomer,
-                  decoration: const InputDecoration(
+                  initialValue:
+                      selectedCustomer,
+                  decoration:
+                      const InputDecoration(
                     labelText: 'العميل',
                   ),
                   items: store.customers
                       .map(
-                        (customer) => DropdownMenuItem(
-                          value: customer.company,
-                          child: Text(customer.company),
+                        (customer) =>
+                            DropdownMenuItem(
+                          value:
+                              customer.company,
+                          child: Text(
+                            customer.company,
+                          ),
                         ),
                       )
                       .toList(),
                   onChanged: (value) {
-                    setState(() => selectedCustomer = value);
+                    setState(
+                      () => selectedCustomer =
+                          value,
+                    );
                   },
                 ),
                 const SizedBox(height: 10),
                 DropdownButtonFormField<String>(
                   initialValue: priority,
-                  decoration: const InputDecoration(
+                  decoration:
+                      const InputDecoration(
                     labelText: 'الأولوية',
                   ),
                   items: const [
@@ -2471,7 +2814,9 @@ Future<void> showAddTaskDialog(
                   ],
                   onChanged: (value) {
                     if (value != null) {
-                      setState(() => priority = value);
+                      setState(
+                        () => priority = value,
+                      );
                     }
                   },
                 ),
@@ -2479,28 +2824,42 @@ Future<void> showAddTaskDialog(
             ),
             actions: [
               TextButton(
-                onPressed: () => Navigator.pop(context),
+                onPressed: () {
+                  Navigator.pop(context);
+                },
                 child: const Text('إلغاء'),
               ),
               FilledButton(
                 onPressed: () async {
-                  if (title.text.trim().isEmpty ||
+                  if (title.text
+                          .trim()
+                          .isEmpty ||
                       selectedCustomer == null) {
                     return;
                   }
 
-                  final nextId = store.tasks.isEmpty
-                      ? 1
-                      : store.tasks
-                              .map((e) => e.id)
-                              .reduce((a, b) => a > b ? a : b) +
-                          1;
+                  final nextId =
+                      store.tasks.isEmpty
+                          ? 1
+                          : store.tasks
+                                  .map(
+                                    (e) => e.id,
+                                  )
+                                  .reduce(
+                                    (a, b) =>
+                                        a > b
+                                            ? a
+                                            : b,
+                                  ) +
+                              1;
 
                   await store.addTask(
                     CrmTask(
                       id: nextId,
-                      title: title.text.trim(),
-                      customer: selectedCustomer!,
+                      title:
+                          title.text.trim(),
+                      customer:
+                          selectedCustomer!,
                       priority: priority,
                       dueLabel: 'اليوم',
                       completed: false,
@@ -2536,15 +2895,23 @@ Future<void> showAiAssistant(
     builder: (context) {
       return SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(18, 8, 18, 30),
+          padding: const EdgeInsets.fromLTRB(
+            18,
+            8,
+            18,
+            30,
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment:
+                CrossAxisAlignment.start,
             children: [
               const Row(
                 children: [
                   CircleAvatar(
-                    child: Icon(Icons.auto_awesome),
+                    child: Icon(
+                      Icons.auto_awesome,
+                    ),
                   ),
                   SizedBox(width: 10),
                   Text(
@@ -2594,9 +2961,17 @@ Widget _aiQuestion(
 ) {
   return Card(
     child: ExpansionTile(
-      leading: const Icon(Icons.chat_bubble_outline),
+      leading: const Icon(
+        Icons.chat_bubble_outline,
+      ),
       title: Text(question),
-      childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      childrenPadding:
+          const EdgeInsets.fromLTRB(
+        16,
+        0,
+        16,
+        16,
+      ),
       children: [
         Align(
           alignment: Alignment.centerRight,
@@ -2611,7 +2986,9 @@ Widget _aiQuestion(
 // DEMO TOUR
 // ============================================================
 
-Future<void> showDemoTour(BuildContext context) async {
+Future<void> showDemoTour(
+  BuildContext context,
+) async {
   final steps = [
     (
       '1',
@@ -2644,14 +3021,23 @@ Future<void> showDemoTour(BuildContext context) async {
     context: context,
     builder: (context) {
       return AlertDialog(
-        title: const Text('CRM Business Demo Tour'),
+        title: const Text(
+          'CRM Business Demo Tour',
+        ),
         content: SizedBox(
           width: double.maxFinite,
           child: ListView.separated(
             shrinkWrap: true,
             itemCount: steps.length,
-            separatorBuilder: (_, __) => const Divider(),
-            itemBuilder: (context, index) {
+            separatorBuilder: (
+              _,
+              __,
+            ) =>
+                const Divider(),
+            itemBuilder: (
+              context,
+              index,
+            ) {
               final step = steps[index];
 
               return ListTile(
@@ -2671,8 +3057,12 @@ Future<void> showDemoTour(BuildContext context) async {
         ),
         actions: [
           FilledButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('ابدأ الاستكشاف'),
+            onPressed: () {
+              Navigator.pop(context);
+            },
+            child: const Text(
+              'ابدأ الاستكشاف',
+            ),
           ),
         ],
       );
@@ -2749,20 +3139,23 @@ _HealthStatus healthStatus(int score) {
   if (score >= 70) {
     return const _HealthStatus(
       label: 'Healthy',
-      explanation: 'العميل نشط والتفاعل معه جيد.',
+      explanation:
+          'العميل نشط والتفاعل معه جيد.',
     );
   }
 
   if (score >= 50) {
     return const _HealthStatus(
       label: 'Attention',
-      explanation: 'العميل يحتاج متابعة أقرب.',
+      explanation:
+          'العميل يحتاج متابعة أقرب.',
     );
   }
 
   return const _HealthStatus(
     label: 'Risk',
-    explanation: 'هناك مؤشرات تستدعي تدخلاً سريعاً.',
+    explanation:
+        'هناك مؤشرات تستدعي تدخلاً سريعاً.',
   );
 }
 
