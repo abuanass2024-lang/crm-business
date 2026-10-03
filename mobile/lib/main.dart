@@ -680,6 +680,7 @@ class _CrmHomeState extends State<CrmHome> {
                 IconButton(
                   onPressed: _showCompany,
                   icon: const Icon(Icons.business_outlined),
+                  tooltip: 'ملف الشركة',
                 ),
                 IconButton(
                   onPressed: () => showAboutDialog(
@@ -688,6 +689,12 @@ class _CrmHomeState extends State<CrmHome> {
                     applicationVersion: '3.0.0',
                   ),
                   icon: const Icon(Icons.info_outline),
+                  tooltip: 'حول التطبيق',
+                ),
+                IconButton(
+                  onPressed: _logout,
+                  icon: const Icon(Icons.logout),
+                  tooltip: 'تسجيل الخروج',
                 ),
               ],
             ),
@@ -745,6 +752,46 @@ class _CrmHomeState extends State<CrmHome> {
           ),
         );
       },
+    );
+  }
+
+  Future<void> _logout() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          title: const Text('تسجيل الخروج'),
+          content: const Text(
+            'هل تريد تسجيل الخروج من CRM Business؟',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('إلغاء'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('تسجيل الخروج'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (confirm != true) return;
+
+    final prefs = await SharedPreferences.getInstance();
+
+    await prefs.remove('crm_company_profile');
+
+    if (!mounted) return;
+
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(
+        builder: (_) => CompanyRegistrationPage(data: data),
+      ),
+      (route) => false,
     );
   }
 
