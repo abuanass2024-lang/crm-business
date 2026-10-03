@@ -1,11 +1,48 @@
-generator client { provider = "prisma-client-js" }
-datasource db { provider = "postgresql" url = env("DATABASE_URL") }
+generator client {
+  provider = "prisma-client-js"
+}
 
-enum UserRole { OWNER ADMIN MANAGER SALES VIEWER }
-enum CompanyStatus { ACTIVE SUSPENDED }
-enum OpportunityStage { LEAD QUALIFIED MEETING PROPOSAL NEGOTIATION WON LOST }
-enum TaskStatus { TODO IN_PROGRESS COMPLETED CANCELLED }
-enum TaskPriority { LOW MEDIUM HIGH URGENT }
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  OWNER
+  ADMIN
+  MANAGER
+  SALES
+  VIEWER
+}
+
+enum CompanyStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum OpportunityStage {
+  LEAD
+  QUALIFIED
+  MEETING
+  PROPOSAL
+  NEGOTIATION
+  WON
+  LOST
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
 
 model Company {
   id String @id @default(cuid())
@@ -215,7 +252,13 @@ model AutomationExecution {
 }
 
 
-enum SubscriptionStatus { TRIAL ACTIVE PAST_DUE SUSPENDED CANCELLED }
+enum SubscriptionStatus {
+  TRIAL
+  ACTIVE
+  PAST_DUE
+  SUSPENDED
+  CANCELLED
+}
 
 model Plan {
   id String @id @default(cuid())
