@@ -183,7 +183,9 @@ export class AutomationService {
         continue;
       }
 
-      out.push(await this.executeRule(rule, context));
+      out.push(
+        await this.executeRule(rule, context),
+      );
     }
 
     return out;
@@ -249,14 +251,20 @@ export class AutomationService {
     };
   }
 
-  private matches(condition: any, ctx: any) {
+  private matches(
+    condition: any,
+    ctx: any,
+  ) {
     if (!condition) {
       return true;
     }
 
     return Object.entries(condition).every(
       ([key, val]) => {
-        const actual = this.resolve(key, ctx);
+        const actual = this.resolve(
+          key,
+          ctx,
+        );
 
         if (Array.isArray(val)) {
           return val
@@ -272,7 +280,10 @@ export class AutomationService {
     );
   }
 
-  private resolve(path: string, ctx: any) {
+  private resolve(
+    path: string,
+    ctx: any,
+  ) {
     return path
       .split('.')
       .reduce(
@@ -309,7 +320,9 @@ export class AutomationService {
 
       const d = rule.actionData || {};
 
-      switch (rule.action as AutomationActionDto) {
+      switch (
+        rule.action as AutomationActionDto
+      ) {
         case AutomationActionDto.CREATE_TASK: {
           const source =
             ctx.task ||
@@ -318,7 +331,9 @@ export class AutomationService {
 
           const due = new Date(
             Date.now() +
-              Number(d.dueInDays ?? 1) *
+              Number(
+                d.dueInDays ?? 1,
+              ) *
                 86400000,
           );
 
@@ -330,7 +345,8 @@ export class AutomationService {
           result =
             await this.prisma.task.create({
               data: {
-                companyId: rule.companyId,
+                companyId:
+                  rule.companyId,
                 title:
                   d.title ||
                   `متابعة آلية: ${
@@ -372,7 +388,8 @@ export class AutomationService {
           result =
             await this.prisma.notification.create({
               data: {
-                companyId: rule.companyId,
+                companyId:
+                  rule.companyId,
                 userId,
                 type: 'AUTOMATION',
                 title:
@@ -411,7 +428,8 @@ export class AutomationService {
               },
               data: {
                 status: String(
-                  d.status || 'ACTIVE',
+                  d.status ||
+                    'ACTIVE',
                 ),
               },
             });
@@ -433,12 +451,14 @@ export class AutomationService {
           result =
             await this.prisma.activity.create({
               data: {
-                companyId: rule.companyId,
+                companyId:
+                  rule.companyId,
                 userId,
                 customerId:
                   d.customerId ||
                   ctx.customerId ||
-                  ctx.opportunity?.customerId,
+                  ctx.opportunity
+                    ?.customerId,
                 opportunityId:
                   d.opportunityId ||
                   ctx.opportunityId ||
@@ -461,7 +481,8 @@ export class AutomationService {
 
       return await this.prisma.automationExecution.create({
         data: {
-          companyId: rule.companyId,
+          companyId:
+            rule.companyId,
           ruleId: rule.id,
           executionKey,
           trigger:
@@ -475,7 +496,8 @@ export class AutomationService {
       try {
         return await this.prisma.automationExecution.create({
           data: {
-            companyId: rule.companyId,
+            companyId:
+              rule.companyId,
             ruleId: rule.id,
             executionKey,
             trigger:
@@ -507,7 +529,10 @@ export class AutomationService {
       ctx.taskId ||
       ctx.opportunityId ||
       ctx.customerId ||
-      JSON.stringify(ctx).slice(0, 180)
+      JSON.stringify(ctx).slice(
+        0,
+        180,
+      )
     }`;
   }
 
@@ -528,8 +553,10 @@ export class AutomationService {
         entity,
         entityId,
         metadata: {
-          oldValue: this.clean(oldValue),
-          newValue: this.clean(newValue),
+          oldValue:
+            this.clean(oldValue),
+          newValue:
+            this.clean(newValue),
         },
       },
     });
