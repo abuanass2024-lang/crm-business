@@ -12,3 +12,7 @@
 
 **/node_modules/
 **/dist/
+
+backend/.env
+bundle/
+flutter-apk/
