@@ -33,14 +33,14 @@ jobs:
       - name: Fix AGP and Kotlin versions
         run: |
           cd mobile_v2/android
-          sed -i 's/version "9.1.0"/version "8.7.3"/' settings.gradle.kts || true
+          sed -i 's/version "9.1.0"/version "8.11.1"/' settings.gradle.kts || true
           sed -i 's/version "2.4.0"/version "2.1.0"/' settings.gradle.kts || true
+          sed -i 's/version "8.7.3"/version "8.11.1"/' settings.gradle.kts || true
           cat settings.gradle.kts
 
       - name: Get Flutter dependencies
         run: |
           cd mobile_v2
-          ls -la
           flutter pub get
 
       - name: Build Release APK (split per ABI)
