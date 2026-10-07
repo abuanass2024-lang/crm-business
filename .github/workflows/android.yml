@@ -1,25 +1,61 @@
 name: Build Android APK
+
 on:
   workflow_dispatch:
   push:
     branches: [ main ]
+
 jobs:
   build:
+    name: Build CRM Business APK
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: mobile
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: subosito/flutter-action@v2
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
         with:
-          channel: stable
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.6'
+          channel: 'stable'
           cache: true
-      - run: flutter pub get
-      - run: flutter analyze
-      - run: flutter test
-      - run: flutter build apk --release
-      - uses: actions/upload-artifact@v4
+
+      - name: Verify Flutter installation
+        run: flutter --version
+
+      - name: Fix AGP and Kotlin versions
+        run: |
+          cd mobile_v2/android
+          sed -i 's/version "9.1.0"/version "8.11.1"/' settings.gradle.kts || true
+          sed -i 's/version "2.4.0"/version "2.2.20"/' settings.gradle.kts || true
+          sed -i 's/version "8.7.3"/version "8.11.1"/' settings.gradle.kts || true
+          cat settings.gradle.kts
+
+      - name: Get Flutter dependencies
+        run: |
+          cd mobile_v2
+          flutter pub get
+
+      - name: Build Release APK
+        run: |
+          cd mobile_v2
+          flutter build apk --release
+
+      - name: Verify APK exists
+        run: |
+          cd mobile_v2
+          ls -lh build/app/outputs/flutter-apk/
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
         with:
-          name: crm-business-v1.0-apk
-          path: mobile/build/app/outputs/flutter-apk/app-release.apk
+          name: crm-business-v2-apk
+          path: mobile_v2/build/app/outputs/flutter-apk/app-release.apk
+          retention-days: 30
