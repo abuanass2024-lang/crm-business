@@ -19,7 +19,7 @@ const String apiBaseUrl = String.fromEnvironment(
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(CrmApp(home: const Scaffold(body: Center(child: Text("CRM TEST SCREEN")))));
+  runApp(CrmApp(home: const StartupPage()));
 }
 
 /* =========================================================
@@ -1231,7 +1231,7 @@ class _StartupPageState
   void _onWelcomeComplete() {
     if (!mounted) return;
 
-    if (true) {
+    if (data.session != null) {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(

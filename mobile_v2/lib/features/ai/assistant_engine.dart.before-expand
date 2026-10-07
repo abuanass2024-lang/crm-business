@@ -1,0 +1,112 @@
+import '../../main.dart' show CrmData;
+
+class AIAnswer {
+  final String text;
+  final String? category;
+  const AIAnswer({required this.text, this.category});
+}
+
+class AssistantEngine {
+  static AIAnswer ask(String question, CrmData data) {
+    final q = question.toLowerCase().trim();
+
+    // عدد العملاء
+    if (q.contains('كم عميل') || q.contains('عدد العملاء')) {
+      final total = data.customers.length;
+      final active = data.customers.where((c) => c.status == 'نشط').length;
+      return AIAnswer(
+        text: 'عندك $total عميل.\n$active نشط، ${total - active} بحاجة متابعة.',
+        category: 'عملاء',
+      );
+    }
+
+    // أفضل مندوب
+    if (q.contains('أفضل مندوب') || q.contains('افضل مندوب')) {
+      final map = <String, int>{};
+      for (final c in data.customers) {
+        if (c.salesRep.isEmpty) continue;
+        map[c.salesRep] = (map[c.salesRep] ?? 0) + 1;
+      }
+      if (map.isEmpty) return const AIAnswer(text: 'لا يوجد مندوبون بعد.');
+      final sorted = map.entries.toList()
+        ..sort((a, b) => b.value.compareTo(a.value));
+      final top = sorted.first;
+      return AIAnswer(
+        text: 'أفضل مندوب: ${top.key}\nلديه ${top.value} عميل.',
+        category: 'أداء',
+      );
+    }
+
+    // الفرص المفتوحة
+    if (q.contains('فرص') || q.contains('فرصة')) {
+      final open = data.opportunities
+          .where((o) => o.stage != 'Won' && o.stage != 'Lost')
+          .toList();
+      if (open.isEmpty) return const AIAnswer(text: 'لا توجد فرص مفتوحة.');
+      final buf = StringBuffer('عندك ${open.length} فرصة مفتوحة:\n');
+      for (final o in open.take(5)) {
+        buf.writeln('• ${o.title} — ${_money(o.value)}');
+      }
+      return AIAnswer(text: buf.toString(), category: 'فرص');
+    }
+
+    // المهام المتأخرة
+    if (q.contains('مهام') || q.contains('مهمة')) {
+      final overdue = data.tasks.where((t) => !t.done && t.overdue).toList();
+      final today = data.tasks.where((t) => !t.done && t.today).toList();
+      return AIAnswer(
+        text: 'المهام:\n• ${today.length} اليوم\n• ${overdue.length} متأخرة',
+        category: 'مهام',
+      );
+    }
+
+    // ماذا أفعل اليوم
+    if (q.contains('ماذا أفعل') || q.contains('اقترح') || q.contains('نصيحة')) {
+      final buf = StringBuffer('اقتراحاتي اليوم:\n');
+      final overdue = data.tasks.where((t) => !t.done && t.overdue).length;
+      if (overdue > 0) buf.writeln('1. أكمل $overdue مهمة متأخرة');
+      final stale = data.customers
+          .where((c) => DateTime.now().difference(c.createdAt).inDays > 30)
+          .length;
+      if (stale > 0) buf.writeln('2. تابع $stale عميل قديم');
+      final closing = data.opportunities.where((o) {
+        if (o.expectedCloseDate == null) return false;
+        final d = o.expectedCloseDate!.difference(DateTime.now()).inDays;
+        return d >= 0 && d <= 7;
+      }).length;
+      if (closing > 0) buf.writeln('3. راجع $closing فرصة تُغلق قريبًا');
+      if (buf.toString() == 'اقتراحاتي اليوم:\n') {
+        buf.writeln('كل شيء تحت السيطرة ✅');
+      }
+      return AIAnswer(text: buf.toString(), category: 'توصية');
+    }
+
+    // مساعدة
+    if (q.contains('مساعدة') || q.contains('مرحبا') || q.contains('اهلا')) {
+      return const AIAnswer(
+        text: 'مرحبًا!\nيمكنك أن تسألني:\n'
+            '• كم عميل عندي؟\n'
+            '• من أفضل مندوب؟\n'
+            '• ما الفرص المفتوحة؟\n'
+            '• ما المهام المتأخرة؟\n'
+            '• ماذا أفعل اليوم؟',
+        category: 'مساعدة',
+      );
+    }
+
+    // افتراضي
+    return const AIAnswer(
+      text: 'لم أفهم السؤال.\nجرّب:\n'
+          '• كم عميل عندي؟\n'
+          '• من أفضل مندوب؟\n'
+          '• ماذا أفعل اليوم؟',
+      category: 'عام',
+    );
+  }
+
+  static String _money(double v) {
+    if (v >= 1000000) return '${(v / 1000000).toStringAsFixed(1)}M';
+    if (v >= 1000) return '${(v / 1000).toStringAsFixed(1)}K';
+    return v.toStringAsFixed(0);
+  }
+}

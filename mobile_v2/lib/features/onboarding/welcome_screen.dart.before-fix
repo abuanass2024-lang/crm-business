@@ -1,0 +1,223 @@
+import 'package:flutter/material.dart';
+import '../../core/theme/app_theme.dart';
+
+/// شاشة ترحيب تفاعلية
+class WelcomeScreen extends StatefulWidget {
+  const WelcomeScreen({
+    super.key,
+    required this.userName,
+    required this.onComplete,
+  });
+
+  final String userName;
+  final VoidCallback onComplete;
+
+  @override
+  State<WelcomeScreen> createState() => _WelcomeScreenState();
+}
+
+class _WelcomeScreenState extends State<WelcomeScreen>
+    with TickerProviderStateMixin {
+  late AnimationController _fadeController;
+  late AnimationController _scaleController;
+  late AnimationController _waveController;
+
+  late Animation<double> _fadeAnimation;
+  late Animation<double> _scaleAnimation;
+  late Animation<double> _waveAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _fadeController = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
+    );
+    _fadeAnimation = CurvedAnimation(
+      parent: _fadeController,
+      curve: Curves.easeIn,
+    );
+
+    _scaleController = AnimationController(
+      duration: const Duration(milliseconds: 900),
+      vsync: this,
+    );
+    _scaleAnimation = Tween<double>(begin: 0.6, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _scaleController,
+        curve: Curves.elasticOut,
+      ),
+    );
+
+    _waveController = AnimationController(
+      duration: const Duration(milliseconds: 600),
+      vsync: this,
+    )..repeat(reverse: true);
+    _waveAnimation = Tween<double>(begin: -0.3, end: 0.3).animate(
+      CurvedAnimation(
+        parent: _waveController,
+        curve: Curves.easeInOut,
+      ),
+    );
+
+    _fadeController.forward();
+    _scaleController.forward();
+
+    Future.delayed(const Duration(milliseconds: 2500), () {
+      if (mounted) widget.onComplete();
+    });
+  }
+
+  @override
+  void dispose() {
+    _fadeController.dispose();
+    _scaleController.dispose();
+    _waveController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        body: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                AppTheme.primaryTeal,
+                AppTheme.primaryTealLight,
+              ],
+              begin: Alignment.topRight,
+              end: Alignment.bottomLeft,
+            ),
+          ),
+          child: SafeArea(
+            child: FadeTransition(
+              opacity: _fadeAnimation,
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Spacer(),
+                    ScaleTransition(
+                      scale: _scaleAnimation,
+                      child: _buildCharacter(),
+                    ),
+                    const SizedBox(height: 40),
+                    const Text(
+                      'أهلاً يا عزيزي',
+                      style: TextStyle(
+                        fontSize: 36,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    if (widget.userName.isNotEmpty)
+                      Text(
+                        widget.userName,
+                        style: TextStyle(
+                          fontSize: 20,
+                          color: Colors.white.withAlpha(230),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    const SizedBox(height: 20),
+                    Text(
+                      'مرحبًا بك في CRM Business',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.white.withAlpha(180),
+                      ),
+                    ),
+                    const Spacer(),
+                    SizedBox(
+                      width: 40,
+                      height: 40,
+                      child: CircularProgressIndicator(
+                        valueColor: AlwaysStoppedAnimation(
+                          Colors.white.withAlpha(200),
+                        ),
+                        strokeWidth: 3,
+                      ),
+                    ),
+                    const SizedBox(height: 40),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCharacter() {
+    return SizedBox(
+      width: 180,
+      height: 180,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Container(
+            width: 140,
+            height: 140,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withAlpha(40),
+                  blurRadius: 20,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+            ),
+            child: const Center(
+              child: Icon(
+                Icons.sentiment_satisfied_alt,
+                size: 90,
+                color: AppTheme.primaryTeal,
+              ),
+            ),
+          ),
+          Positioned(
+            top: 0,
+            right: 10,
+            child: AnimatedBuilder(
+              animation: _waveAnimation,
+              builder: (context, child) {
+                return Transform.rotate(
+                  angle: _waveAnimation.value,
+                  alignment: Alignment.bottomCenter,
+                  child: child,
+                );
+              },
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppTheme.amber,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppTheme.amber.withAlpha(80),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: const Icon(
+                  Icons.waving_hand_rounded,
+                  size: 32,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

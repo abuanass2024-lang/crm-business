@@ -1,7 +1,3 @@
-import 'features/reports/reports_page.dart';
-import 'features/onboarding/welcome_screen.dart';
-import 'features/ai/ai_chat_page.dart';
-import 'features/customers/customer_360_page.dart';
 import 'features/home/dashboard_v2.dart';
 import 'core/theme/crm_app.dart';
 // ignore_for_file: prefer_const_constructors
@@ -19,7 +15,7 @@ const String apiBaseUrl = String.fromEnvironment(
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(CrmApp(home: const Scaffold(body: Center(child: Text("CRM TEST SCREEN")))));
+  runApp(const CrmApp(home: StartupPage()));
 }
 
 /* =========================================================
@@ -331,10 +327,6 @@ class Customer {
     this.email = '',
     this.status = 'نشط',
     this.assignedTo = '',
-      this.sector = '',
-      this.size = '',
-      this.branch = '',
-      this.salesRep = '',
     this.notes = '',
     DateTime? createdAt,
   }) : createdAt =
@@ -349,10 +341,6 @@ class Customer {
   String status;
   String assignedTo;
   String notes;
-  String sector;   // القطاع: تجاري، صناعي، خدمي
-  String size;     // الحجم: صغير، متوسط، كبير
-  String branch;   // الفرع
-  String salesRep; // المندوب
 
   DateTime createdAt;
 
@@ -366,10 +354,6 @@ class Customer {
       'status': status,
       'assignedTo': assignedTo,
       'notes': notes,
-      'sector': sector,
-      'size': size,
-      'branch': branch,
-      'salesRep': salesRep,
       'createdAt':
           createdAt.toIso8601String(),
     };
@@ -393,14 +377,6 @@ class Customer {
           json['assignedTo']?.toString() ?? '',
       notes:
           json['notes']?.toString() ?? '',
-      sector:
-          json['sector']?.toString() ?? '',
-      size:
-          json['size']?.toString() ?? '',
-      branch:
-          json['branch']?.toString() ?? '',
-      salesRep:
-          json['salesRep']?.toString() ?? '',
       createdAt: DateTime.tryParse(
             json['createdAt']?.toString() ??
                 '',
@@ -1201,48 +1177,24 @@ class _StartupPageState
   }
 
   Future<void> start() async {
-    // ✅ try/catch + timeout
-    try {
-      await data.load().timeout(
-        const Duration(seconds: 5),
-        onTimeout: () {
-          // إذا انتهت المدة، نستمر بدون بيانات
-        },
-      );
-    } catch (e) {
-      // نستمر حتى لو فشل التحميل
-    }
+    await data.load();
 
     if (!mounted) return;
 
-    final userName = data.session?.user['name']?.toString() ??
-        data.company?.managerName ??
-        '';
-
-    setState(() {
-      _showWelcome = true;
-      _userName = userName;
-    });
-  }
-
-  bool _showWelcome = false;
-  String _userName = '';
-
-  void _onWelcomeComplete() {
-    if (!mounted) return;
-
-    if (true) {
+    if (data.session != null) {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (_) => CrmHome(data: data),
+          builder: (_) =>
+              CrmHome(data: data),
         ),
       );
     } else {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (_) => AuthPage(data: data),
+          builder: (_) =>
+              AuthPage(data: data),
         ),
       );
     }
@@ -1250,18 +1202,12 @@ class _StartupPageState
 
   @override
   Widget build(BuildContext context) {
-    if (_showWelcome) {
-      return WelcomeScreen(
-        userName: _userName,
-        onComplete: _onWelcomeComplete,
-      );
-    }
-
     return const Scaffold(
       body: Center(
-        child: CircularProgressIndicator(),
+        child:
+            CircularProgressIndicator(),
       ),
-        );
+    );
   }
 
   @override
@@ -2009,24 +1955,184 @@ class _CrmHomeState
      DASHBOARD
      ======================================================= */
 
-  void openAIAssistant() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => AIChatPage(data: data),
+  Widget dashboard() {
+    final company =
+        data.company?.companyName ??
+            'شركتك';
+
+    final user =
+        data.session?.user['name']
+                ?.toString() ??
+            data.company?.managerName ??
+            '';
+
+    final priorityTasks =
+        data.tasks
+            .where(
+              (x) =>
+                  !x.done &&
+                  (x.today ||
+                      x.overdue),
+            )
+            .toList();
+
+    return RefreshIndicator(
+      onRefresh: () async {
+        data.refreshSystemNotifications();
+        await data.save();
+      },
+      child: ListView(
+        padding:
+            const EdgeInsets.all(14),
+        children: [
+          Card(
+            child: Padding(
+              padding:
+                  const EdgeInsets.all(
+                18,
+              ),
+              child: Row(
+                children: [
+                  const CircleAvatar(
+                    radius: 28,
+                    child: Icon(
+                      Icons.business,
+                    ),
+                  ),
+                  const SizedBox(
+                    width: 14,
+                  ),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment:
+                          CrossAxisAlignment
+                              .start,
+                      children: [
+                        Text(
+                          'مرحباً $user',
+                          style:
+                              const TextStyle(
+                            fontWeight:
+                                FontWeight
+                                    .bold,
+                            fontSize: 18,
+                          ),
+                        ),
+                        const SizedBox(
+                          height: 4,
+                        ),
+                        Text(
+                          company,
+                          style:
+                              const TextStyle(
+                            color:
+                                Colors.black54,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(
+            height: 12,
+          ),
+          GridView.count(
+            crossAxisCount: 2,
+            shrinkWrap: true,
+            physics:
+                const NeverScrollableScrollPhysics(),
+            mainAxisSpacing: 10,
+            crossAxisSpacing: 10,
+            childAspectRatio: 1.35,
+            children: [
+              metric(
+                'العملاء',
+                '${data.customers.length}',
+                Icons.people,
+              ),
+              metric(
+                'الفرص المفتوحة',
+                '${data.opportunities.where((x) => !x.stage.startsWith('مغلقة')).length}',
+                Icons.trending_up,
+              ),
+              metric(
+                'Pipeline',
+                money(data.pipeline),
+                Icons
+                    .account_balance_wallet_outlined,
+              ),
+              metric(
+                'المهام المتأخرة',
+                '${data.overdueTasks}',
+                Icons
+                    .warning_amber_outlined,
+              ),
+            ],
+          ),
+          const SizedBox(
+            height: 16,
+          ),
+          section(
+            'الأولوية اليوم',
+            () => setState(() {
+              tab = 3;
+            }),
+          ),
+          ...priorityTasks
+              .take(5)
+              .map(taskCard),
+          if (priorityTasks.isEmpty)
+            emptyState(
+              'لا توجد مهام عاجلة أو متأخرة اليوم.',
+            ),
+          const SizedBox(
+            height: 12,
+          ),
+          section(
+            'Pipeline',
+            () => setState(() {
+              tab = 2;
+            }),
+          ),
+          Card(
+            child: Padding(
+              padding:
+                  const EdgeInsets.all(
+                16,
+              ),
+              child: Column(
+                children: [
+                  pipelineRow('جديدة'),
+                  pipelineRow('مؤهلة'),
+                  pipelineRow('عرض سعر'),
+                  pipelineRow('تفاوض'),
+                  pipelineRow(
+                    'مغلقة ناجحة',
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(
+            height: 12,
+          ),
+          section(
+            'آخر العملاء',
+            () => setState(() {
+              tab = 1;
+            }),
+          ),
+          ...data.customers
+              .take(4)
+              .map(customerCard),
+        ],
       ),
     );
   }
 
-  Widget dashboard() {
-    return buildDashboardV2(
-      data: data,
-      onAddCustomer: () => customerForm(),
-      onOpenNotifications: openNotifications,
-      onOpenSettings: openSettings,
-      onOpenAI: openAIAssistant,
-    );
-  }
   Widget pipelineRow(
     String stage,
   ) {
@@ -2526,22 +2632,346 @@ class _CrmHomeState
      ======================================================= */
 
   Widget reportsPage() {
-    return buildReportsPage(data: data);
+    final totalTasks =
+        data.tasks.length;
+
+    final completionRate =
+        totalTasks == 0
+            ? 0
+            : ((data.completedTasks /
+                        totalTasks) *
+                    100)
+                .round();
+
+    return ListView(
+      padding:
+          const EdgeInsets.all(14),
+      children: [
+        const Text(
+          'تقارير الأداء',
+          style:
+              TextStyle(
+            fontSize: 22,
+            fontWeight:
+                FontWeight.bold,
+          ),
+        ),
+        const SizedBox(
+          height: 14,
+        ),
+        metric(
+          'إجمالي العملاء',
+          '${data.customers.length}',
+          Icons.people,
+        ),
+        const SizedBox(
+          height: 10,
+        ),
+        metric(
+          'قيمة Pipeline',
+          money(data.pipeline),
+          Icons
+              .account_balance_wallet,
+        ),
+        const SizedBox(
+          height: 10,
+        ),
+        metric(
+          'Weighted Pipeline',
+          money(
+            data.weightedPipeline,
+          ),
+          Icons.balance,
+        ),
+        const SizedBox(
+          height: 10,
+        ),
+        metric(
+          'نسبة إنجاز المهام',
+          '$completionRate%',
+          Icons.task_alt,
+        ),
+        const SizedBox(
+          height: 10,
+        ),
+        metric(
+          'المهام المتأخرة',
+          '${data.overdueTasks}',
+          Icons.warning_amber,
+        ),
+        const SizedBox(
+          height: 16,
+        ),
+        Card(
+          child: Padding(
+            padding:
+                const EdgeInsets.all(
+              16,
+            ),
+            child: Column(
+              crossAxisAlignment:
+                  CrossAxisAlignment
+                      .start,
+              children: [
+                const Text(
+                  'مراحل الفرص',
+                  style:
+                      TextStyle(
+                    fontWeight:
+                        FontWeight.bold,
+                    fontSize: 18,
+                  ),
+                ),
+                const SizedBox(
+                  height: 10,
+                ),
+                ...[
+                  'جديدة',
+                  'مؤهلة',
+                  'عرض سعر',
+                  'تفاوض',
+                  'مغلقة ناجحة',
+                  'مغلقة خاسرة',
+                ].map(
+                  (stage) {
+                    final count =
+                        data
+                            .opportunities
+                            .where(
+                              (x) =>
+                                  x.stage ==
+                                  stage,
+                            )
+                            .length;
+
+                    return ListTile(
+                      dense: true,
+                      title:
+                          Text(stage),
+                      trailing:
+                          Text(
+                        '$count',
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
   }
+
+  /* =======================================================
+     CUSTOMER 360
+     ======================================================= */
 
   Future<void> customer360(
     Customer customer,
   ) async {
-    await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => Customer360Page(
-          data: data,
-          customer: customer,
-        ),
-      ),
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) {
+        return Directionality(
+          textDirection:
+              TextDirection.rtl,
+          child:
+              DraggableScrollableSheet(
+            expand: false,
+            initialChildSize: .75,
+            minChildSize: .45,
+            maxChildSize: .95,
+            builder:
+                (_, controller) {
+              // الربط الصحيح يكون باسم العميل،
+              // لأن حقلي الفرص والمهام يخزنان اسم العميل.
+              final opportunities =
+                  data
+                      .customerOpportunities(
+                customer.name,
+              );
+
+              final tasks =
+                  data.customerTasks(
+                customer.name,
+              );
+
+              return ListView(
+                controller:
+                    controller,
+                padding:
+                    const EdgeInsets.all(
+                  18,
+                ),
+                children: [
+                  Row(
+                    children: [
+                      const CircleAvatar(
+                        radius: 30,
+                        child: Icon(
+                          Icons.person,
+                        ),
+                      ),
+                      const SizedBox(
+                        width: 12,
+                      ),
+                      Expanded(
+                        child: Text(
+                          customer.name,
+                          style:
+                              const TextStyle(
+                            fontSize: 22,
+                            fontWeight:
+                                FontWeight
+                                    .bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(
+                    height: 8,
+                  ),
+                  Text(
+                    customer.company,
+                  ),
+                  if (customer.phone
+                      .isNotEmpty)
+                    Text(
+                      customer.phone,
+                    ),
+                  if (customer.email
+                      .isNotEmpty)
+                    Text(
+                      customer.email,
+                    ),
+                  const SizedBox(
+                    height: 12,
+                  ),
+                  Chip(
+                    label: Text(
+                      customer.status,
+                    ),
+                  ),
+                  const Divider(
+                    height: 30,
+                  ),
+                  const Text(
+                    'الفرص',
+                    style:
+                        TextStyle(
+                      fontSize: 18,
+                      fontWeight:
+                          FontWeight.bold,
+                    ),
+                  ),
+                  if (opportunities
+                      .isEmpty)
+                    const Padding(
+                      padding:
+                          EdgeInsets.all(
+                        12,
+                      ),
+                      child: Text(
+                        'لا توجد فرص مرتبطة.',
+                      ),
+                    ),
+                  ...opportunities.map(
+                    (opportunity) =>
+                        ListTile(
+                      leading:
+                          const Icon(
+                        Icons
+                            .trending_up,
+                      ),
+                      title: Text(
+                        opportunity
+                            .title,
+                      ),
+                      subtitle:
+                          Text(
+                        opportunity
+                            .stage,
+                      ),
+                      trailing:
+                          Text(
+                        money(
+                          opportunity
+                              .value,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(
+                    height: 10,
+                  ),
+                  const Text(
+                    'المهام',
+                    style:
+                        TextStyle(
+                      fontSize: 18,
+                      fontWeight:
+                          FontWeight.bold,
+                    ),
+                  ),
+                  if (tasks.isEmpty)
+                    const Padding(
+                      padding:
+                          EdgeInsets.all(
+                        12,
+                      ),
+                      child: Text(
+                        'لا توجد مهام مرتبطة.',
+                      ),
+                    ),
+                  ...tasks.map(
+                    taskCard,
+                  ),
+                  if (customer.notes
+                      .isNotEmpty) ...[
+                    const SizedBox(
+                      height: 10,
+                    ),
+                    const Text(
+                      'ملاحظات',
+                      style:
+                          TextStyle(
+                        fontSize: 18,
+                        fontWeight:
+                            FontWeight
+                                .bold,
+                      ),
+                    ),
+                    Card(
+                      child:
+                          Padding(
+                        padding:
+                            const EdgeInsets
+                                .all(
+                          14,
+                        ),
+                        child:
+                            Text(
+                          customer
+                              .notes,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              );
+            },
+          ),
+        );
+      },
     );
   }
+
+  /* =======================================================
+     CUSTOMER FORM
+     ======================================================= */
 
   Future<void> customerForm({
     Customer? existing,
@@ -2578,23 +3008,6 @@ class _CrmHomeState
 
     String status =
         existing?.status ?? 'نشط';
-
-
-    final sectorController = TextEditingController(
-      text: existing?.sector ?? '',
-    );
-
-    final sizeController = TextEditingController(
-      text: existing?.size ?? '',
-    );
-
-    final branchController = TextEditingController(
-      text: existing?.branch ?? '',
-    );
-
-    final salesRepController = TextEditingController(
-      text: existing?.salesRep ?? '',
-    );
 
     final saved =
         await showDialog<bool>(
@@ -2683,77 +3096,7 @@ class _CrmHomeState
                       const SizedBox(
                         height: 10,
                       ),
-                    // ─── القطاع (Dropdown) ───
-                    DropdownButtonFormField<String>(
-                      initialValue: existing?.sector.isNotEmpty == true
-                          ? existing!.sector
-                          : null,
-                      decoration: const InputDecoration(
-                        labelText: 'القطاع',
-                        border: OutlineInputBorder(),
-                      ),
-                      items: const [
-                        'تجاري',
-                        'صناعي',
-                        'خدمي',
-                        'حكومي',
-                        'تعليمي',
-                        'صحي',
-                        'تقني',
-                        'أخرى',
-                      ]
-                          .map((v) => DropdownMenuItem(value: v, child: Text(v)))
-                          .toList(),
-                      onChanged: (v) {
-                        setDialog(() {
-                          sectorController.text = v ?? '';
-                        });
-                      },
-                    ),
-
-                    // ─── الحجم (Dropdown) ───
-                    DropdownButtonFormField<String>(
-                      initialValue: existing?.size.isNotEmpty == true
-                          ? existing!.size
-                          : null,
-                      decoration: const InputDecoration(
-                        labelText: 'الحجم',
-                        border: OutlineInputBorder(),
-                      ),
-                      items: const ['صغير', 'متوسط', 'كبير', 'مؤسسي']
-                          .map((v) => DropdownMenuItem(value: v, child: Text(v)))
-                          .toList(),
-                      onChanged: (v) {
-                        setDialog(() {
-                          sizeController.text = v ?? '';
-                        });
-                      },
-                    ),
-
-                    // ─── الفرع (Dropdown) ───
-                    DropdownButtonFormField<String>(
-                      initialValue: existing?.branch.isNotEmpty == true
-                          ? existing!.branch
-                          : null,
-                      decoration: const InputDecoration(
-                        labelText: 'الفرع',
-                        border: OutlineInputBorder(),
-                      ),
-                      items: const ['صنعاء', 'الحديدة', 'ذمار', 'تعز', 'عدن']
-                          .map((v) => DropdownMenuItem(value: v, child: Text(v)))
-                          .toList(),
-                      onChanged: (v) {
-                        setDialog(() {
-                          branchController.text = v ?? '';
-                        });
-                      },
-                    ),
-
-                  dialogField(
-                    salesRepController,
-                    'المندوب',
-                  ),
-                        TextField(
+                      TextField(
                         controller:
                             notes,
                         maxLines: 3,
@@ -2821,14 +3164,6 @@ class _CrmHomeState
             assigned.text.trim(),
         notes:
             notes.text.trim(),
-          sector:
-              sectorController.text.trim(),
-          size:
-              sizeController.text.trim(),
-          branch:
-              branchController.text.trim(),
-          salesRep:
-              salesRepController.text.trim(),
         createdAt:
             existing?.createdAt,
       );

@@ -1,6 +1,4 @@
-import 'features/reports/reports_page.dart';
 import 'features/onboarding/welcome_screen.dart';
-import 'features/ai/ai_chat_page.dart';
 import 'features/customers/customer_360_page.dart';
 import 'features/home/dashboard_v2.dart';
 import 'core/theme/crm_app.dart';
@@ -19,7 +17,7 @@ const String apiBaseUrl = String.fromEnvironment(
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(CrmApp(home: const Scaffold(body: Center(child: Text("CRM TEST SCREEN")))));
+  runApp(const CrmApp(home: StartupPage()));
 }
 
 /* =========================================================
@@ -1201,17 +1199,7 @@ class _StartupPageState
   }
 
   Future<void> start() async {
-    // ✅ try/catch + timeout
-    try {
-      await data.load().timeout(
-        const Duration(seconds: 5),
-        onTimeout: () {
-          // إذا انتهت المدة، نستمر بدون بيانات
-        },
-      );
-    } catch (e) {
-      // نستمر حتى لو فشل التحميل
-    }
+    await data.load();
 
     if (!mounted) return;
 
@@ -1231,7 +1219,7 @@ class _StartupPageState
   void _onWelcomeComplete() {
     if (!mounted) return;
 
-    if (true) {
+    if (data.session != null) {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
@@ -2009,22 +1997,12 @@ class _CrmHomeState
      DASHBOARD
      ======================================================= */
 
-  void openAIAssistant() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => AIChatPage(data: data),
-      ),
-    );
-  }
-
   Widget dashboard() {
     return buildDashboardV2(
       data: data,
       onAddCustomer: () => customerForm(),
       onOpenNotifications: openNotifications,
       onOpenSettings: openSettings,
-      onOpenAI: openAIAssistant,
     );
   }
   Widget pipelineRow(
@@ -2526,8 +2504,140 @@ class _CrmHomeState
      ======================================================= */
 
   Widget reportsPage() {
-    return buildReportsPage(data: data);
+    final totalTasks =
+        data.tasks.length;
+
+    final completionRate =
+        totalTasks == 0
+            ? 0
+            : ((data.completedTasks /
+                        totalTasks) *
+                    100)
+                .round();
+
+    return ListView(
+      padding:
+          const EdgeInsets.all(14),
+      children: [
+        const Text(
+          'تقارير الأداء',
+          style:
+              TextStyle(
+            fontSize: 22,
+            fontWeight:
+                FontWeight.bold,
+          ),
+        ),
+        const SizedBox(
+          height: 14,
+        ),
+        metric(
+          'إجمالي العملاء',
+          '${data.customers.length}',
+          Icons.people,
+        ),
+        const SizedBox(
+          height: 10,
+        ),
+        metric(
+          'قيمة Pipeline',
+          money(data.pipeline),
+          Icons
+              .account_balance_wallet,
+        ),
+        const SizedBox(
+          height: 10,
+        ),
+        metric(
+          'Weighted Pipeline',
+          money(
+            data.weightedPipeline,
+          ),
+          Icons.balance,
+        ),
+        const SizedBox(
+          height: 10,
+        ),
+        metric(
+          'نسبة إنجاز المهام',
+          '$completionRate%',
+          Icons.task_alt,
+        ),
+        const SizedBox(
+          height: 10,
+        ),
+        metric(
+          'المهام المتأخرة',
+          '${data.overdueTasks}',
+          Icons.warning_amber,
+        ),
+        const SizedBox(
+          height: 16,
+        ),
+        Card(
+          child: Padding(
+            padding:
+                const EdgeInsets.all(
+              16,
+            ),
+            child: Column(
+              crossAxisAlignment:
+                  CrossAxisAlignment
+                      .start,
+              children: [
+                const Text(
+                  'مراحل الفرص',
+                  style:
+                      TextStyle(
+                    fontWeight:
+                        FontWeight.bold,
+                    fontSize: 18,
+                  ),
+                ),
+                const SizedBox(
+                  height: 10,
+                ),
+                ...[
+                  'جديدة',
+                  'مؤهلة',
+                  'عرض سعر',
+                  'تفاوض',
+                  'مغلقة ناجحة',
+                  'مغلقة خاسرة',
+                ].map(
+                  (stage) {
+                    final count =
+                        data
+                            .opportunities
+                            .where(
+                              (x) =>
+                                  x.stage ==
+                                  stage,
+                            )
+                            .length;
+
+                    return ListTile(
+                      dense: true,
+                      title:
+                          Text(stage),
+                      trailing:
+                          Text(
+                        '$count',
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
   }
+
+  /* =======================================================
+     CUSTOMER 360
+     ======================================================= */
 
   Future<void> customer360(
     Customer customer,
@@ -2683,77 +2793,23 @@ class _CrmHomeState
                       const SizedBox(
                         height: 10,
                       ),
-                    // ─── القطاع (Dropdown) ───
-                    DropdownButtonFormField<String>(
-                      initialValue: existing?.sector.isNotEmpty == true
-                          ? existing!.sector
-                          : null,
-                      decoration: const InputDecoration(
-                        labelText: 'القطاع',
-                        border: OutlineInputBorder(),
-                      ),
-                      items: const [
-                        'تجاري',
-                        'صناعي',
-                        'خدمي',
-                        'حكومي',
-                        'تعليمي',
-                        'صحي',
-                        'تقني',
-                        'أخرى',
-                      ]
-                          .map((v) => DropdownMenuItem(value: v, child: Text(v)))
-                          .toList(),
-                      onChanged: (v) {
-                        setDialog(() {
-                          sectorController.text = v ?? '';
-                        });
-                      },
-                    ),
-
-                    // ─── الحجم (Dropdown) ───
-                    DropdownButtonFormField<String>(
-                      initialValue: existing?.size.isNotEmpty == true
-                          ? existing!.size
-                          : null,
-                      decoration: const InputDecoration(
-                        labelText: 'الحجم',
-                        border: OutlineInputBorder(),
-                      ),
-                      items: const ['صغير', 'متوسط', 'كبير', 'مؤسسي']
-                          .map((v) => DropdownMenuItem(value: v, child: Text(v)))
-                          .toList(),
-                      onChanged: (v) {
-                        setDialog(() {
-                          sizeController.text = v ?? '';
-                        });
-                      },
-                    ),
-
-                    // ─── الفرع (Dropdown) ───
-                    DropdownButtonFormField<String>(
-                      initialValue: existing?.branch.isNotEmpty == true
-                          ? existing!.branch
-                          : null,
-                      decoration: const InputDecoration(
-                        labelText: 'الفرع',
-                        border: OutlineInputBorder(),
-                      ),
-                      items: const ['صنعاء', 'الحديدة', 'ذمار', 'تعز', 'عدن']
-                          .map((v) => DropdownMenuItem(value: v, child: Text(v)))
-                          .toList(),
-                      onChanged: (v) {
-                        setDialog(() {
-                          branchController.text = v ?? '';
-                        });
-                      },
-                    ),
-
+                      TextField(
+                  dialogField(
+                    sectorController,
+                    'القطاع',
+                  ),
+                  dialogField(
+                    sizeController,
+                    'الحجم',
+                  ),
+                  dialogField(
+                    branchController,
+                    'الفرع',
+                  ),
                   dialogField(
                     salesRepController,
                     'المندوب',
                   ),
-                        TextField(
                         controller:
                             notes,
                         maxLines: 3,
@@ -2821,14 +2877,6 @@ class _CrmHomeState
             assigned.text.trim(),
         notes:
             notes.text.trim(),
-          sector:
-              sectorController.text.trim(),
-          size:
-              sizeController.text.trim(),
-          branch:
-              branchController.text.trim(),
-          salesRep:
-              salesRepController.text.trim(),
         createdAt:
             existing?.createdAt,
       );
