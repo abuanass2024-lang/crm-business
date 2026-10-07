@@ -31,23 +31,27 @@ jobs:
         run: flutter --version
 
       - name: Fix AGP and Kotlin versions
-        working-directory: ./mobile_v2/android
         run: |
+          cd mobile_v2/android
           sed -i 's/version "9.1.0"/version "8.7.3"/' settings.gradle.kts || true
           sed -i 's/version "2.4.0"/version "2.1.0"/' settings.gradle.kts || true
           cat settings.gradle.kts
 
       - name: Get Flutter dependencies
-        working-directory: ./mobile_v2
-        run: flutter pub get
+        run: |
+          cd mobile_v2
+          ls -la
+          flutter pub get
 
       - name: Build Release APK (split per ABI)
-        working-directory: ./mobile_v2
-        run: flutter build apk --release --split-per-abi --no-tree-shake-icons
+        run: |
+          cd mobile_v2
+          flutter build apk --release --split-per-abi --no-tree-shake-icons
 
       - name: Verify APK exists
-        working-directory: ./mobile_v2
-        run: ls -lh build/app/outputs/flutter-apk/
+        run: |
+          cd mobile_v2
+          ls -lh build/app/outputs/flutter-apk/
 
       - name: Upload ARM64 APK
         uses: actions/upload-artifact@v4
