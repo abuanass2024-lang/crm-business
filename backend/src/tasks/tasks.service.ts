@@ -247,10 +247,11 @@ export class TasksService {
       dto,
     );
 
-    const x =
-      await this.prisma.task.update({
+    const result =
+      await this.prisma.task.updateMany({
         where: {
           id,
+          companyId,
         },
         data: {
           title: dto.title,
@@ -269,6 +270,21 @@ export class TasksService {
             : undefined,
         },
       });
+
+    if (result.count !== 1) {
+      throw new NotFoundException('Task not found');
+    }
+
+    const x = await this.prisma.task.findFirst({
+      where: {
+        id,
+        companyId,
+      },
+    });
+
+    if (!x) {
+      throw new NotFoundException('Task not found');
+    }
 
     await this.prisma.auditLog.create({
       data: {
@@ -310,11 +326,16 @@ export class TasksService {
       );
     }
 
-    await this.prisma.task.delete({
+    const deleted = await this.prisma.task.deleteMany({
       where: {
         id,
+        companyId,
       },
     });
+
+    if (deleted.count !== 1) {
+      throw new NotFoundException('Task not found');
+    }
 
     return {
       success: true,

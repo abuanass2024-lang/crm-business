@@ -84,8 +84,8 @@ export class AutomationService {
       throw new NotFoundException('Automation rule not found');
     }
 
-    const x = await this.prisma.automationRule.update({
-      where: { id },
+    const result = await this.prisma.automationRule.updateMany({
+      where: { id, companyId },
       data: {
         name: d.name,
         description: d.description,
@@ -95,6 +95,14 @@ export class AutomationService {
         actionData: d.actionData,
         enabled: d.enabled,
       },
+    });
+
+    if (result.count !== 1) {
+      throw new NotFoundException('Automation rule not found');
+    }
+
+    const x = await this.prisma.automationRule.findFirst({
+      where: { id, companyId },
     });
 
     await this.audit(
@@ -126,9 +134,13 @@ export class AutomationService {
       throw new NotFoundException('Automation rule not found');
     }
 
-    await this.prisma.automationRule.delete({
-      where: { id },
+    const deleted = await this.prisma.automationRule.deleteMany({
+      where: { id, companyId },
     });
+
+    if (deleted.count !== 1) {
+      throw new NotFoundException('Automation rule not found');
+    }
 
     await this.audit(
       companyId,
@@ -292,6 +304,70 @@ export class AutomationService {
       );
   }
 
+  private async validateAutomationRefs(
+    companyId: string,
+    d: any,
+    ctx: any,
+  ) {
+    const customerIds = [
+      d.customerId,
+      ctx.customerId,
+      ctx.opportunity?.customerId,
+    ].filter(Boolean);
+
+    const opportunityIds = [
+      d.opportunityId,
+      ctx.opportunityId,
+      ctx.opportunity?.id,
+    ].filter(Boolean);
+
+    const userIds = [
+      d.userId,
+      d.assignedTo,
+      ctx.userId,
+      ctx.assignedTo,
+    ].filter(Boolean);
+
+    for (const id of [...new Set(customerIds)]) {
+      const row = await this.prisma.customer.findFirst({
+        where: { id, companyId },
+        select: { id: true },
+      });
+
+      if (!row) {
+        throw new BadRequestException(
+          'Automation references a customer outside this company',
+        );
+      }
+    }
+
+    for (const id of [...new Set(opportunityIds)]) {
+      const row = await this.prisma.opportunity.findFirst({
+        where: { id, companyId },
+        select: { id: true },
+      });
+
+      if (!row) {
+        throw new BadRequestException(
+          'Automation references an opportunity outside this company',
+        );
+      }
+    }
+
+    for (const id of [...new Set(userIds)]) {
+      const row = await this.prisma.user.findFirst({
+        where: { id, companyId, active: true },
+        select: { id: true },
+      });
+
+      if (!row) {
+        throw new BadRequestException(
+          'Automation references a user outside this company',
+        );
+      }
+    }
+  }
+
   private async executeRule(
     rule: any,
     ctx: any,
@@ -319,6 +395,8 @@ export class AutomationService {
       let result: any;
 
       const d = rule.actionData || {};
+
+      await this.validateAutomationRefs(rule.companyId, d, ctx);
 
       switch (
         rule.action as AutomationActionDto
@@ -361,7 +439,8 @@ export class AutomationService {
                   source.customerId,
                 opportunityId:
                   d.opportunityId ||
-                  source.id,
+                  ctx.opportunityId ||
+                  ctx.opportunity?.id,
                 assignedTo: assignee,
                 dueDate: due,
                 priority:
@@ -422,9 +501,10 @@ export class AutomationService {
           }
 
           result =
-            await this.prisma.customer.update({
+            await this.prisma.customer.updateMany({
               where: {
                 id: customerId,
+                companyId: rule.companyId,
               },
               data: {
                 status: String(

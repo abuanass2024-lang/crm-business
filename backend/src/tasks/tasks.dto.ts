@@ -1,4 +1,4 @@
-import { IsDateString, IsEnum, IsOptional, IsString, IsUUID } from 'class-validator';
+import { IsDateString, IsEnum, IsOptional, IsString } from 'class-validator';
 export enum TaskStatusDto { TODO='TODO', IN_PROGRESS='IN_PROGRESS', COMPLETED='COMPLETED', CANCELLED='CANCELLED' }
 export enum TaskPriorityDto { LOW='LOW', MEDIUM='MEDIUM', HIGH='HIGH', URGENT='URGENT' }
 export class CreateTaskDto {

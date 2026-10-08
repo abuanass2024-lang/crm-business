@@ -170,12 +170,47 @@ export class CustomersService {
       },
     });
 
-    const x = await this.prisma.customer.update({
+    if (dto.assignedTo) {
+      const u = await this.prisma.user.findFirst({
+        where: {
+          id: dto.assignedTo,
+          companyId,
+          active: true,
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      if (!u) {
+        throw new NotFoundException(
+          'Assigned user not found in this company',
+        );
+      }
+    }
+
+    const result = await this.prisma.customer.updateMany({
       where: {
         id,
+        companyId,
       },
       data: dto,
     });
+
+    if (result.count !== 1) {
+      throw new NotFoundException('Customer not found');
+    }
+
+    const x = await this.prisma.customer.findFirst({
+      where: {
+        id,
+        companyId,
+      },
+    });
+
+    if (!x) {
+      throw new NotFoundException('Customer not found');
+    }
 
     await this.prisma.auditLog.create({
       data: {
@@ -215,11 +250,16 @@ export class CustomersService {
       },
     });
 
-    await this.prisma.customer.delete({
+    const deleted = await this.prisma.customer.deleteMany({
       where: {
         id,
+        companyId,
       },
     });
+
+    if (deleted.count !== 1) {
+      throw new NotFoundException('Customer not found');
+    }
 
     await this.prisma.auditLog.create({
       data: {

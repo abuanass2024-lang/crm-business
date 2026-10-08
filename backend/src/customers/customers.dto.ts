@@ -4,6 +4,7 @@ import {
   IsString,
   MaxLength,
   MinLength,
+  IsUUID,
 } from 'class-validator';
 
 export class CreateCustomerDto {
@@ -38,7 +39,7 @@ export class CreateCustomerDto {
   status?: string;
 
   @IsOptional()
-  @IsString()
+  @IsUUID()
   assignedTo?: string;
 }
 
@@ -75,6 +76,6 @@ export class UpdateCustomerDto {
   status?: string;
 
   @IsOptional()
-  @IsString()
+  @IsUUID()
   assignedTo?: string;
 }

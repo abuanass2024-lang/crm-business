@@ -23,8 +23,16 @@ export class UsersService {
     const user=await this.prisma.user.findFirst({where:{id,companyId}});
     if(!user) throw new NotFoundException('User not found');
     if(user.role==='OWNER' && dto.role && dto.role!=='ADMIN') throw new BadRequestException('Owner role cannot be downgraded');
-    const updated=await this.prisma.user.update({where:{id},data:dto,select:{id:true,name:true,email:true,role:true,active:true,createdAt:true}});
-    await this.prisma.auditLog.create({data:{companyId,action:dto.role?'ROLE_CHANGED':'UPDATE',entity:'User',entityId:id,metadata:{oldValue:{role:user.role,active:user.active,name:user.name},newValue:updated}}});
-    return updated;
+    const updated=await this.prisma.user.updateMany({
+      where:{id,companyId},
+      data:dto,
+    });
+    if(updated.count !== 1) throw new NotFoundException('User not found');
+    const updatedUser=await this.prisma.user.findFirst({
+      where:{id,companyId},
+      select:{id:true,name:true,email:true,role:true,active:true,createdAt:true},
+    });
+    await this.prisma.auditLog.create({data:{companyId,action:dto.role?'ROLE_CHANGED':'UPDATE',entity:'User',entityId:id,metadata:{oldValue:{role:user.role,active:user.active,name:user.name},newValue:updatedUser}}});
+    return updatedUser;
   }
 }

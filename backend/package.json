@@ -5,7 +5,7 @@
   "scripts": {
     "build": "nest build",
     "start:dev": "nest start --watch",
-    "start": "node dist/main.js",
+    "start": "node dist/src/main.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
@@ -19,6 +19,7 @@
     "@nestjs/core": "^11.0.0",
     "@nestjs/platform-express": "^11.0.0",
     "@nestjs/throttler": "^6.4.0",
+    "@prisma/adapter-pg": "^6.19.3",
     "@prisma/client": "^6.0.0",
     "bcryptjs": "^3.0.3",
     "class-transformer": "^0.5.1",
@@ -26,6 +27,7 @@
     "dotenv": "^18.0.5",
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.2",
+    "pg": "^8.23.1",
     "prisma": "^6.0.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
@@ -39,6 +41,7 @@
     "@types/bcryptjs": "^2.4.6",
     "@types/jsonwebtoken": "^9.0.9",
     "@types/node": "^22.0.0",
+    "@types/pg": "^8.23.1",
     "ts-node": "^10.9.2",
     "typescript": "^5.7.0"
   }

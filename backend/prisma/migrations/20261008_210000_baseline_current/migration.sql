@@ -1,0 +1,904 @@
+--
+-- PostgreSQL database dump
+--
+
+
+-- Dumped from database version 18.2
+-- Dumped by pg_dump version 18.2
+
+SET statement_timeout = 0;
+SET lock_timeout = 0;
+SET idle_in_transaction_session_timeout = 0;
+SET client_encoding = 'UTF8';
+SET standard_conforming_strings = on;
+SELECT pg_catalog.set_config('search_path', '', false);
+SET check_function_bodies = false;
+SET xmloption = content;
+SET client_min_messages = warning;
+SET row_security = off;
+
+--
+-- Name: AutomationAction; Type: TYPE; Schema: public; Owner: -
+--
+
+CREATE TYPE public."AutomationAction" AS ENUM (
+    'CREATE_TASK',
+    'CREATE_NOTIFICATION',
+    'CHANGE_CUSTOMER_STATUS',
+    'LOG_ACTIVITY'
+);
+
+
+--
+-- Name: AutomationTrigger; Type: TYPE; Schema: public; Owner: -
+--
+
+CREATE TYPE public."AutomationTrigger" AS ENUM (
+    'CUSTOMER_CREATED',
+    'OPPORTUNITY_CREATED',
+    'OPPORTUNITY_STAGE_CHANGED',
+    'TASK_CREATED',
+    'TASK_DUE_SOON',
+    'TASK_OVERDUE',
+    'OPPORTUNITY_WON',
+    'OPPORTUNITY_LOST'
+);
+
+
+--
+-- Name: CompanyStatus; Type: TYPE; Schema: public; Owner: -
+--
+
+CREATE TYPE public."CompanyStatus" AS ENUM (
+    'ACTIVE',
+    'SUSPENDED'
+);
+
+
+--
+-- Name: OpportunityStage; Type: TYPE; Schema: public; Owner: -
+--
+
+CREATE TYPE public."OpportunityStage" AS ENUM (
+    'LEAD',
+    'QUALIFIED',
+    'MEETING',
+    'PROPOSAL',
+    'NEGOTIATION',
+    'WON',
+    'LOST'
+);
+
+
+--
+-- Name: SubscriptionStatus; Type: TYPE; Schema: public; Owner: -
+--
+
+CREATE TYPE public."SubscriptionStatus" AS ENUM (
+    'TRIAL',
+    'ACTIVE',
+    'PAST_DUE',
+    'SUSPENDED',
+    'CANCELLED'
+);
+
+
+--
+-- Name: TaskPriority; Type: TYPE; Schema: public; Owner: -
+--
+
+CREATE TYPE public."TaskPriority" AS ENUM (
+    'LOW',
+    'MEDIUM',
+    'HIGH',
+    'URGENT'
+);
+
+
+--
+-- Name: TaskStatus; Type: TYPE; Schema: public; Owner: -
+--
+
+CREATE TYPE public."TaskStatus" AS ENUM (
+    'TODO',
+    'IN_PROGRESS',
+    'COMPLETED',
+    'CANCELLED'
+);
+
+
+--
+-- Name: UserRole; Type: TYPE; Schema: public; Owner: -
+--
+
+CREATE TYPE public."UserRole" AS ENUM (
+    'OWNER',
+    'ADMIN',
+    'MANAGER',
+    'SALES',
+    'VIEWER'
+);
+
+
+SET default_tablespace = '';
+
+SET default_table_access_method = heap;
+
+--
+-- Name: Activity; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public."Activity" (
+    id text NOT NULL,
+    "companyId" text NOT NULL,
+    "userId" text NOT NULL,
+    "customerId" text,
+    "opportunityId" text,
+    type text NOT NULL,
+    description text NOT NULL,
+    "createdAt" timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+
+--
+-- Name: AuditLog; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public."AuditLog" (
+    id text NOT NULL,
+    "companyId" text NOT NULL,
+    "userId" text,
+    action text NOT NULL,
+    entity text NOT NULL,
+    "entityId" text,
+    metadata jsonb,
+    "createdAt" timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+
+--
+-- Name: AutomationExecution; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public."AutomationExecution" (
+    id text NOT NULL,
+    "companyId" text NOT NULL,
+    "ruleId" text NOT NULL,
+    "executionKey" text NOT NULL,
+    trigger public."AutomationTrigger" NOT NULL,
+    status text DEFAULT 'SUCCESS'::text NOT NULL,
+    context jsonb,
+    result jsonb,
+    error text,
+    "createdAt" timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+
+--
+-- Name: AutomationRule; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public."AutomationRule" (
+    id text NOT NULL,
+    "companyId" text NOT NULL,
+    name text NOT NULL,
+    description text,
+    enabled boolean DEFAULT true NOT NULL,
+    trigger public."AutomationTrigger" NOT NULL,
+    condition jsonb,
+    action public."AutomationAction" NOT NULL,
+    "actionData" jsonb,
+    "createdBy" text,
+    "createdAt" timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    "updatedAt" timestamp(3) without time zone NOT NULL
+);
+
+
+--
+-- Name: Company; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public."Company" (
+    id text NOT NULL,
+    name text NOT NULL,
+    country text DEFAULT 'YE'::text,
+    currency text DEFAULT 'YER'::text,
+    status public."CompanyStatus" DEFAULT 'ACTIVE'::public."CompanyStatus" NOT NULL,
+    "createdAt" timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    "updatedAt" timestamp(3) without time zone NOT NULL
+);
+
+
+--
+-- Name: Customer; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public."Customer" (
+    id text NOT NULL,
+    "companyId" text NOT NULL,
+    name text NOT NULL,
+    "companyName" text,
+    phone text,
+    email text,
+    address text,
+    status text DEFAULT 'ACTIVE'::text NOT NULL,
+    "assignedTo" text,
+    "createdAt" timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    "updatedAt" timestamp(3) without time zone NOT NULL
+);
+
+
+--
+-- Name: Notification; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public."Notification" (
+    id text NOT NULL,
+    "companyId" text NOT NULL,
+    "userId" text NOT NULL,
+    type text NOT NULL,
+    title text NOT NULL,
+    message text NOT NULL,
+    "referenceType" text,
+    "referenceId" text,
+    "isRead" boolean DEFAULT false NOT NULL,
+    "createdAt" timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+
+--
+-- Name: Opportunity; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public."Opportunity" (
+    id text NOT NULL,
+    "companyId" text NOT NULL,
+    "customerId" text NOT NULL,
+    title text NOT NULL,
+    value numeric(18,2) NOT NULL,
+    currency text DEFAULT 'YER'::text NOT NULL,
+    stage public."OpportunityStage" DEFAULT 'LEAD'::public."OpportunityStage" NOT NULL,
+    probability integer DEFAULT 10 NOT NULL,
+    "expectedCloseDate" timestamp(3) without time zone,
+    "assignedTo" text,
+    "createdAt" timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    "updatedAt" timestamp(3) without time zone NOT NULL
+);
+
+
+--
+-- Name: OpportunityStageHistory; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public."OpportunityStageHistory" (
+    id text NOT NULL,
+    "companyId" text NOT NULL,
+    "opportunityId" text NOT NULL,
+    "fromStage" public."OpportunityStage",
+    "toStage" public."OpportunityStage" NOT NULL,
+    "changedBy" text,
+    "createdAt" timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+
+--
+-- Name: Plan; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public."Plan" (
+    id text NOT NULL,
+    code text NOT NULL,
+    name text NOT NULL,
+    description text,
+    "monthlyPrice" numeric(18,2) DEFAULT 0 NOT NULL,
+    "annualPrice" numeric(18,2) DEFAULT 0 NOT NULL,
+    "maxUsers" integer DEFAULT 5 NOT NULL,
+    "maxCustomers" integer DEFAULT 1000 NOT NULL,
+    "maxOpportunities" integer DEFAULT 1000 NOT NULL,
+    active boolean DEFAULT true NOT NULL,
+    "sortOrder" integer DEFAULT 0 NOT NULL,
+    "createdAt" timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    "updatedAt" timestamp(3) without time zone NOT NULL
+);
+
+
+--
+-- Name: PlatformAdmin; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public."PlatformAdmin" (
+    id text NOT NULL,
+    "userId" text NOT NULL,
+    "companyId" text NOT NULL,
+    active boolean DEFAULT true NOT NULL,
+    "createdAt" timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+
+--
+-- Name: RolePermission; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public."RolePermission" (
+    id text NOT NULL,
+    role public."UserRole" NOT NULL,
+    permission text NOT NULL,
+    "createdAt" timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+
+--
+-- Name: Subscription; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public."Subscription" (
+    id text NOT NULL,
+    "companyId" text NOT NULL,
+    "planId" text NOT NULL,
+    status public."SubscriptionStatus" DEFAULT 'TRIAL'::public."SubscriptionStatus" NOT NULL,
+    "startDate" timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    "endDate" timestamp(3) without time zone,
+    "trialEnd" timestamp(3) without time zone,
+    "createdAt" timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    "updatedAt" timestamp(3) without time zone NOT NULL
+);
+
+
+--
+-- Name: Task; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public."Task" (
+    id text NOT NULL,
+    "companyId" text NOT NULL,
+    title text NOT NULL,
+    description text,
+    "customerId" text,
+    "opportunityId" text,
+    "assignedTo" text,
+    "dueDate" timestamp(3) without time zone,
+    status public."TaskStatus" DEFAULT 'TODO'::public."TaskStatus" NOT NULL,
+    priority public."TaskPriority" DEFAULT 'MEDIUM'::public."TaskPriority" NOT NULL,
+    "createdAt" timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    "updatedAt" timestamp(3) without time zone NOT NULL
+);
+
+
+--
+-- Name: User; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public."User" (
+    id text NOT NULL,
+    "companyId" text NOT NULL,
+    name text NOT NULL,
+    email text NOT NULL,
+    "passwordHash" text NOT NULL,
+    role public."UserRole" DEFAULT 'SALES'::public."UserRole" NOT NULL,
+    active boolean DEFAULT true NOT NULL,
+    "createdAt" timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+
+--
+-- Name: UserSession; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public."UserSession" (
+    id text NOT NULL,
+    "userId" text NOT NULL,
+    "companyId" text NOT NULL,
+    "refreshTokenHash" text NOT NULL,
+    "expiresAt" timestamp(3) without time zone NOT NULL,
+    "revokedAt" timestamp(3) without time zone,
+    "createdAt" timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+
+--
+-- Name: Activity Activity_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."Activity"
+    ADD CONSTRAINT "Activity_pkey" PRIMARY KEY (id);
+
+
+--
+-- Name: AuditLog AuditLog_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."AuditLog"
+    ADD CONSTRAINT "AuditLog_pkey" PRIMARY KEY (id);
+
+
+--
+-- Name: AutomationExecution AutomationExecution_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."AutomationExecution"
+    ADD CONSTRAINT "AutomationExecution_pkey" PRIMARY KEY (id);
+
+
+--
+-- Name: AutomationRule AutomationRule_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."AutomationRule"
+    ADD CONSTRAINT "AutomationRule_pkey" PRIMARY KEY (id);
+
+
+--
+-- Name: Company Company_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."Company"
+    ADD CONSTRAINT "Company_pkey" PRIMARY KEY (id);
+
+
+--
+-- Name: Customer Customer_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."Customer"
+    ADD CONSTRAINT "Customer_pkey" PRIMARY KEY (id);
+
+
+--
+-- Name: Notification Notification_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."Notification"
+    ADD CONSTRAINT "Notification_pkey" PRIMARY KEY (id);
+
+
+--
+-- Name: OpportunityStageHistory OpportunityStageHistory_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."OpportunityStageHistory"
+    ADD CONSTRAINT "OpportunityStageHistory_pkey" PRIMARY KEY (id);
+
+
+--
+-- Name: Opportunity Opportunity_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."Opportunity"
+    ADD CONSTRAINT "Opportunity_pkey" PRIMARY KEY (id);
+
+
+--
+-- Name: Plan Plan_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."Plan"
+    ADD CONSTRAINT "Plan_pkey" PRIMARY KEY (id);
+
+
+--
+-- Name: PlatformAdmin PlatformAdmin_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."PlatformAdmin"
+    ADD CONSTRAINT "PlatformAdmin_pkey" PRIMARY KEY (id);
+
+
+--
+-- Name: RolePermission RolePermission_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."RolePermission"
+    ADD CONSTRAINT "RolePermission_pkey" PRIMARY KEY (id);
+
+
+--
+-- Name: Subscription Subscription_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."Subscription"
+    ADD CONSTRAINT "Subscription_pkey" PRIMARY KEY (id);
+
+
+--
+-- Name: Task Task_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."Task"
+    ADD CONSTRAINT "Task_pkey" PRIMARY KEY (id);
+
+
+--
+-- Name: UserSession UserSession_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."UserSession"
+    ADD CONSTRAINT "UserSession_pkey" PRIMARY KEY (id);
+
+
+--
+-- Name: User User_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."User"
+    ADD CONSTRAINT "User_pkey" PRIMARY KEY (id);
+
+
+--
+-- Name: Activity_companyId_createdAt_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX "Activity_companyId_createdAt_idx" ON public."Activity" USING btree ("companyId", "createdAt");
+
+
+--
+-- Name: AuditLog_companyId_createdAt_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX "AuditLog_companyId_createdAt_idx" ON public."AuditLog" USING btree ("companyId", "createdAt");
+
+
+--
+-- Name: AuditLog_companyId_entity_entityId_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX "AuditLog_companyId_entity_entityId_idx" ON public."AuditLog" USING btree ("companyId", entity, "entityId");
+
+
+--
+-- Name: AutomationExecution_companyId_createdAt_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX "AutomationExecution_companyId_createdAt_idx" ON public."AutomationExecution" USING btree ("companyId", "createdAt");
+
+
+--
+-- Name: AutomationExecution_ruleId_executionKey_key; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX "AutomationExecution_ruleId_executionKey_key" ON public."AutomationExecution" USING btree ("ruleId", "executionKey");
+
+
+--
+-- Name: AutomationRule_companyId_enabled_trigger_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX "AutomationRule_companyId_enabled_trigger_idx" ON public."AutomationRule" USING btree ("companyId", enabled, trigger);
+
+
+--
+-- Name: Customer_companyId_createdAt_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX "Customer_companyId_createdAt_idx" ON public."Customer" USING btree ("companyId", "createdAt");
+
+
+--
+-- Name: Notification_companyId_userId_isRead_createdAt_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX "Notification_companyId_userId_isRead_createdAt_idx" ON public."Notification" USING btree ("companyId", "userId", "isRead", "createdAt");
+
+
+--
+-- Name: OpportunityStageHistory_companyId_opportunityId_createdAt_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX "OpportunityStageHistory_companyId_opportunityId_createdAt_idx" ON public."OpportunityStageHistory" USING btree ("companyId", "opportunityId", "createdAt");
+
+
+--
+-- Name: Opportunity_companyId_stage_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX "Opportunity_companyId_stage_idx" ON public."Opportunity" USING btree ("companyId", stage);
+
+
+--
+-- Name: Plan_code_key; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX "Plan_code_key" ON public."Plan" USING btree (code);
+
+
+--
+-- Name: PlatformAdmin_companyId_active_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX "PlatformAdmin_companyId_active_idx" ON public."PlatformAdmin" USING btree ("companyId", active);
+
+
+--
+-- Name: PlatformAdmin_userId_key; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX "PlatformAdmin_userId_key" ON public."PlatformAdmin" USING btree ("userId");
+
+
+--
+-- Name: RolePermission_role_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX "RolePermission_role_idx" ON public."RolePermission" USING btree (role);
+
+
+--
+-- Name: RolePermission_role_permission_key; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX "RolePermission_role_permission_key" ON public."RolePermission" USING btree (role, permission);
+
+
+--
+-- Name: Subscription_companyId_status_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX "Subscription_companyId_status_idx" ON public."Subscription" USING btree ("companyId", status);
+
+
+--
+-- Name: Subscription_planId_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX "Subscription_planId_idx" ON public."Subscription" USING btree ("planId");
+
+
+--
+-- Name: Task_companyId_dueDate_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX "Task_companyId_dueDate_idx" ON public."Task" USING btree ("companyId", "dueDate");
+
+
+--
+-- Name: Task_companyId_status_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX "Task_companyId_status_idx" ON public."Task" USING btree ("companyId", status);
+
+
+--
+-- Name: UserSession_companyId_userId_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX "UserSession_companyId_userId_idx" ON public."UserSession" USING btree ("companyId", "userId");
+
+
+--
+-- Name: UserSession_expiresAt_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX "UserSession_expiresAt_idx" ON public."UserSession" USING btree ("expiresAt");
+
+
+--
+-- Name: UserSession_refreshTokenHash_key; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX "UserSession_refreshTokenHash_key" ON public."UserSession" USING btree ("refreshTokenHash");
+
+
+--
+-- Name: User_companyId_email_key; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX "User_companyId_email_key" ON public."User" USING btree ("companyId", email);
+
+
+--
+-- Name: User_companyId_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX "User_companyId_idx" ON public."User" USING btree ("companyId");
+
+
+--
+-- Name: Activity Activity_companyId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."Activity"
+    ADD CONSTRAINT "Activity_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES public."Company"(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: Activity Activity_customerId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."Activity"
+    ADD CONSTRAINT "Activity_customerId_fkey" FOREIGN KEY ("customerId") REFERENCES public."Customer"(id) ON UPDATE CASCADE ON DELETE SET NULL;
+
+
+--
+-- Name: Activity Activity_opportunityId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."Activity"
+    ADD CONSTRAINT "Activity_opportunityId_fkey" FOREIGN KEY ("opportunityId") REFERENCES public."Opportunity"(id) ON UPDATE CASCADE ON DELETE SET NULL;
+
+
+--
+-- Name: Activity Activity_userId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."Activity"
+    ADD CONSTRAINT "Activity_userId_fkey" FOREIGN KEY ("userId") REFERENCES public."User"(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: AuditLog AuditLog_companyId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."AuditLog"
+    ADD CONSTRAINT "AuditLog_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES public."Company"(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: AutomationExecution AutomationExecution_companyId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."AutomationExecution"
+    ADD CONSTRAINT "AutomationExecution_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES public."Company"(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: AutomationExecution AutomationExecution_ruleId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."AutomationExecution"
+    ADD CONSTRAINT "AutomationExecution_ruleId_fkey" FOREIGN KEY ("ruleId") REFERENCES public."AutomationRule"(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: AutomationRule AutomationRule_companyId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."AutomationRule"
+    ADD CONSTRAINT "AutomationRule_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES public."Company"(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: Customer Customer_companyId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."Customer"
+    ADD CONSTRAINT "Customer_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES public."Company"(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: Notification Notification_companyId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."Notification"
+    ADD CONSTRAINT "Notification_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES public."Company"(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: Notification Notification_userId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."Notification"
+    ADD CONSTRAINT "Notification_userId_fkey" FOREIGN KEY ("userId") REFERENCES public."User"(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: OpportunityStageHistory OpportunityStageHistory_companyId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."OpportunityStageHistory"
+    ADD CONSTRAINT "OpportunityStageHistory_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES public."Company"(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: OpportunityStageHistory OpportunityStageHistory_opportunityId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."OpportunityStageHistory"
+    ADD CONSTRAINT "OpportunityStageHistory_opportunityId_fkey" FOREIGN KEY ("opportunityId") REFERENCES public."Opportunity"(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: Opportunity Opportunity_companyId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."Opportunity"
+    ADD CONSTRAINT "Opportunity_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES public."Company"(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: Opportunity Opportunity_customerId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."Opportunity"
+    ADD CONSTRAINT "Opportunity_customerId_fkey" FOREIGN KEY ("customerId") REFERENCES public."Customer"(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: PlatformAdmin PlatformAdmin_companyId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."PlatformAdmin"
+    ADD CONSTRAINT "PlatformAdmin_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES public."Company"(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: PlatformAdmin PlatformAdmin_userId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."PlatformAdmin"
+    ADD CONSTRAINT "PlatformAdmin_userId_fkey" FOREIGN KEY ("userId") REFERENCES public."User"(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: Subscription Subscription_companyId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."Subscription"
+    ADD CONSTRAINT "Subscription_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES public."Company"(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: Subscription Subscription_planId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."Subscription"
+    ADD CONSTRAINT "Subscription_planId_fkey" FOREIGN KEY ("planId") REFERENCES public."Plan"(id) ON UPDATE CASCADE ON DELETE RESTRICT;
+
+
+--
+-- Name: Task Task_assignedTo_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."Task"
+    ADD CONSTRAINT "Task_assignedTo_fkey" FOREIGN KEY ("assignedTo") REFERENCES public."User"(id) ON UPDATE CASCADE ON DELETE SET NULL;
+
+
+--
+-- Name: Task Task_companyId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."Task"
+    ADD CONSTRAINT "Task_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES public."Company"(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: Task Task_customerId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."Task"
+    ADD CONSTRAINT "Task_customerId_fkey" FOREIGN KEY ("customerId") REFERENCES public."Customer"(id) ON UPDATE CASCADE ON DELETE SET NULL;
+
+
+--
+-- Name: Task Task_opportunityId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."Task"
+    ADD CONSTRAINT "Task_opportunityId_fkey" FOREIGN KEY ("opportunityId") REFERENCES public."Opportunity"(id) ON UPDATE CASCADE ON DELETE SET NULL;
+
+
+--
+-- Name: UserSession UserSession_companyId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."UserSession"
+    ADD CONSTRAINT "UserSession_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES public."Company"(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: UserSession UserSession_userId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."UserSession"
+    ADD CONSTRAINT "UserSession_userId_fkey" FOREIGN KEY ("userId") REFERENCES public."User"(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: User User_companyId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."User"
+    ADD CONSTRAINT "User_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES public."Company"(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- PostgreSQL database dump complete
+--

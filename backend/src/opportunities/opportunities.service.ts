@@ -193,6 +193,43 @@ export class OpportunitiesService {
       );
     }
 
+    if (dto.customerId) {
+      const customer = await this.prisma.customer.findFirst({
+        where: {
+          id: dto.customerId,
+          companyId,
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      if (!customer) {
+        throw new BadRequestException(
+          'Customer does not belong to this company',
+        );
+      }
+    }
+
+    if (dto.assignedTo) {
+      const assignee = await this.prisma.user.findFirst({
+        where: {
+          id: dto.assignedTo,
+          companyId,
+          active: true,
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      if (!assignee) {
+        throw new BadRequestException(
+          'Assigned user does not belong to this company or is inactive',
+        );
+      }
+    }
+
     if (
       dto.stage &&
       dto.stage !== current.stage
@@ -201,9 +238,10 @@ export class OpportunitiesService {
         await this.prisma.$transaction(
           async (tx) => {
             const u =
-              await tx.opportunity.update({
+              await tx.opportunity.updateMany({
                 where: {
                   id,
+                  companyId,
                 },
                 data: {
                   ...dto,
@@ -215,6 +253,26 @@ export class OpportunitiesService {
                       : undefined,
                 },
               });
+
+            if (u.count !== 1) {
+              throw new NotFoundException(
+                'Opportunity not found',
+              );
+            }
+
+            const result =
+              await tx.opportunity.findFirst({
+                where: {
+                  id,
+                  companyId,
+                },
+              });
+
+            if (!result) {
+              throw new NotFoundException(
+                'Opportunity not found',
+              );
+            }
 
             await tx.opportunityStageHistory.create(
               {
@@ -230,7 +288,7 @@ export class OpportunitiesService {
               },
             );
 
-            return u;
+            return result;
           },
         );
 
@@ -291,10 +349,11 @@ export class OpportunitiesService {
       );
     }
 
-    const x =
-      await this.prisma.opportunity.update({
+    const result =
+      await this.prisma.opportunity.updateMany({
         where: {
           id,
+          companyId,
         },
         data: {
           ...dto,
@@ -306,6 +365,26 @@ export class OpportunitiesService {
               : undefined,
         },
       });
+
+    if (result.count !== 1) {
+      throw new NotFoundException(
+        'Opportunity not found',
+      );
+    }
+
+    const x =
+      await this.prisma.opportunity.findFirst({
+        where: {
+          id,
+          companyId,
+        },
+      });
+
+    if (!x) {
+      throw new NotFoundException(
+        'Opportunity not found',
+      );
+    }
 
     await this.prisma.auditLog.create({
       data: {
@@ -345,11 +424,19 @@ export class OpportunitiesService {
       );
     }
 
-    await this.prisma.opportunity.delete({
-      where: {
-        id,
-      },
-    });
+    const deleted =
+      await this.prisma.opportunity.deleteMany({
+        where: {
+          id,
+          companyId,
+        },
+      });
+
+    if (deleted.count !== 1) {
+      throw new NotFoundException(
+        'Opportunity not found',
+      );
+    }
 
     return {
       success: true,
