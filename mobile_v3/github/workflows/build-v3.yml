@@ -1,0 +1,46 @@
+name: Build CRM v3 APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - 'mobile_v3/**'
+      - '.github/workflows/build-v3.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile_v3
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.6'
+          channel: 'stable'
+          cache: true
+
+      - name: Create Android platform
+        run: |
+          flutter create --platforms=android --org com.crm.business --project-name crm_v3 .
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Build Release APK
+        run: flutter build apk --release --target-platform android-arm64
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: crm-v3-apk
+          path: mobile_v3/build/app/outputs/flutter-apk/app-release.apk
+          retention-days: 30
