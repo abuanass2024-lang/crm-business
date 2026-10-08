@@ -1,0 +1,115 @@
+name: Backend Security & Integration Test
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+jobs:
+  test:
+    name: Backend Security + Integration
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: crm
+          POSTGRES_PASSWORD: crm_password
+          POSTGRES_DB: crm_business
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U crm -d crm_business"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        env:
+          DATABASE_URL: postgresql://crm:crm_password@localhost:5432/crm_business?schema=public
+        run: npm run prisma:generate
+
+      - name: Deploy database migrations
+        env:
+          DATABASE_URL: postgresql://crm:crm_password@localhost:5432/crm_business?schema=public
+        run: npm run prisma:deploy
+
+      - name: Build backend
+        env:
+          DATABASE_URL: postgresql://crm:crm_password@localhost:5432/crm_business?schema=public
+          JWT_SECRET: github-actions-test-secret-2026-crm-business-strong
+          ACCESS_TOKEN_TTL: 15m
+          REFRESH_TOKEN_TTL_DAYS: 30
+          CORS_ORIGINS: http://localhost:3000
+          PORT: 3000
+        run: npm run build
+
+      - name: Security source checks
+        env:
+          DATABASE_URL: postgresql://crm:crm_password@localhost:5432/crm_business?schema=public
+          JWT_SECRET: github-actions-test-secret-2026-crm-business-strong
+        run: npm run test:security
+
+      - name: Start backend
+        env:
+          DATABASE_URL: postgresql://crm:crm_password@localhost:5432/crm_business?schema=public
+          JWT_SECRET: github-actions-test-secret-2026-crm-business-strong
+          ACCESS_TOKEN_TTL: 15m
+          REFRESH_TOKEN_TTL_DAYS: 30
+          CORS_ORIGINS: http://localhost:3000
+          PORT: 3000
+        run: |
+          nohup npm start > /tmp/crm-backend.log 2>&1 &
+          echo $! > /tmp/crm-backend.pid
+
+      - name: Wait for backend
+        run: |
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:3000/api/health; then
+              echo
+              echo "Backend is ready."
+              exit 0
+            fi
+            sleep 2
+          done
+
+          echo "Backend failed to start."
+          cat /tmp/crm-backend.log
+          exit 1
+
+      - name: Integration journey
+        env:
+          API_BASE_URL: http://localhost:3000/api
+        run: npm run test:journey
+
+      - name: Backend log on failure
+        if: failure()
+        run: |
+          echo "========== BACKEND LOG =========="
+          cat /tmp/crm-backend.log || true
+
+      - name: Stop backend
+        if: always()
+        run: |
+          if [ -f /tmp/crm-backend.pid ]; then
+            kill "$(cat /tmp/crm-backend.pid)" || true
+          fi
