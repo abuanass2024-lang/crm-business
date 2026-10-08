@@ -32,6 +32,11 @@ jobs:
         run: |
           flutter create --platforms=android --org com.crm.business --project-name crm_v3 --no-overwrite .
 
+      - name: Fix Kotlin version
+        working-directory: mobile_v3
+        run: |
+          find android -type f -name "*.gradle.kts" -exec sed -i 's/2\.2\.21/2\.2\.20/g' {} +
+
       - name: Get Flutter dependencies
         working-directory: mobile_v3
         run: flutter pub get
