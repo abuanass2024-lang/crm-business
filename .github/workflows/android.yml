@@ -7,7 +7,7 @@ on:
 
 jobs:
   build:
-    name: Build CRM Business APK
+    name: Build CRM v3 APK
     runs-on: ubuntu-latest
 
     steps:
@@ -27,35 +27,26 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Verify Flutter installation
-        run: flutter --version
-
-      - name: Fix AGP and Kotlin versions
+      - name: Create Android platform
+        working-directory: mobile_v3
         run: |
-          cd mobile_v2/android
-          sed -i 's/version "9.1.0"/version "8.11.1"/' settings.gradle.kts || true
-          sed -i 's/version "2.4.0"/version "2.2.20"/' settings.gradle.kts || true
-          sed -i 's/version "8.7.3"/version "8.11.1"/' settings.gradle.kts || true
-          cat settings.gradle.kts
+          flutter create --platforms=android --org com.crm.business --project-name crm_v3 .
 
       - name: Get Flutter dependencies
-        run: |
-          cd mobile_v2
-          flutter pub get
+        working-directory: mobile_v3
+        run: flutter pub get
 
       - name: Build Release APK
-        run: |
-          cd mobile_v2
-          flutter build apk --release
+        working-directory: mobile_v3
+        run: flutter build apk --release --target-platform android-arm64
 
-      - name: Verify APK exists
-        run: |
-          cd mobile_v2
-          ls -lh build/app/outputs/flutter-apk/
+      - name: Verify APK
+        working-directory: mobile_v3
+        run: ls -lh build/app/outputs/flutter-apk/
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: crm-business-v2-apk
-          path: mobile_v2/build/app/outputs/flutter-apk/app-release.apk
+          name: crm-v3-apk
+          path: mobile_v3/build/app/outputs/flutter-apk/app-release.apk
           retention-days: 30
