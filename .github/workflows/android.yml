@@ -30,7 +30,7 @@ jobs:
       - name: Create Android platform
         working-directory: mobile_v3
         run: |
-          flutter create --platforms=android --org com.crm.business --project-name crm_v3 .
+          flutter create --platforms=android --org com.crm.business --project-name crm_v3 --no-overwrite .
 
       - name: Get Flutter dependencies
         working-directory: mobile_v3
