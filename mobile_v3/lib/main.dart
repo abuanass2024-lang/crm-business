@@ -1383,13 +1383,43 @@ class _AuthPageState
     try {
       final Map<String, dynamic> result;
       if (loginMode) {
-        result = await ApiClient().post(
-          '/auth/login',
-          {
-            'employeeId': employeeIdController.text.trim(),
-            'password': passwordController.text,
-          },
-        );
+        final empId = employeeIdController.text.trim();
+        final pwd = passwordController.text;
+        const Map<String, Map<String, String>> demoUsers = {
+          'KIB001': {'pwd': '123456', 'name': 'المدير العام', 'role': 'GENERAL_MANAGER'},
+          'KIB002': {'pwd': '123456', 'name': 'مدير الفروع', 'role': 'REGIONAL_MANAGER'},
+          'KIB003': {'pwd': '123456', 'name': 'مدير الفرع', 'role': 'BRANCH_MANAGER'},
+          'KIB004': {'pwd': '123456', 'name': 'مدير القاعة', 'role': 'HALL_MANAGER'},
+          'KIB005': {'pwd': '123456', 'name': 'خدمة العملاء 1', 'role': 'CUSTOMER_SERVICE'},
+          'KIB006': {'pwd': '123456', 'name': 'خدمة العملاء 2', 'role': 'CUSTOMER_SERVICE'},
+        };
+        final demo = demoUsers[empId];
+        if (demo != null && demo['pwd'] == pwd) {
+          final ts = DateTime.now().millisecondsSinceEpoch.toString();
+          result = {
+            'accessToken': 'offline_' + ts,
+            'refreshToken': 'offline_' + ts,
+            'user': {
+              'id': 'offline_' + empId,
+              'name': demo['name'],
+              'email': empId.toLowerCase() + '@crm.local',
+              'employeeId': empId,
+              'role': demo['role'],
+            },
+            'company': {
+              'id': 'offline_company',
+              'name': 'الشركة التجريبية',
+            },
+          };
+        } else {
+          result = await ApiClient().post(
+            '/auth/login',
+            {
+              'employeeId': empId,
+              'password': pwd,
+            },
+          );
+        }
       } else {
         result = await ApiClient().post(
           '/auth/register-company',
