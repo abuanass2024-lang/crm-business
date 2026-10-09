@@ -4,6 +4,7 @@ import 'features/ai/ai_chat_page.dart';
 import 'features/customers/customer_360_page.dart';
 import 'features/home/dashboard_v2.dart';
 import 'core/theme/crm_app.dart';
+import 'features/team/team_page.dart';
 // ignore_for_file: prefer_const_constructors
 
 import 'dart:convert';
@@ -155,6 +156,121 @@ class ApiClient {
       return Map<String, dynamic>.from(
         decoded as Map,
       );
+    } finally {
+      client.close(force: true);
+    }
+  }
+
+  Future<List<dynamic>> getList(
+    String path, {
+    String? token,
+  }) async {
+    if (base.isEmpty) {
+      throw Exception('لم يتم ضبط عنوان الخادم API_BASE_URL.');
+    }
+    final client = HttpClient();
+    try {
+      final request = await client.getUrl(Uri.parse('$base$path'));
+      if (token != null && token.isNotEmpty) {
+        request.headers.set(
+          HttpHeaders.authorizationHeader,
+          'Bearer $token',
+        );
+      }
+      final response = await request.close();
+      final responseText = await response.transform(utf8.decoder).join();
+      dynamic decoded;
+      try {
+        decoded = responseText.isEmpty ? [] : jsonDecode(responseText);
+      } catch (_) {
+        decoded = <dynamic>[];
+      }
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw Exception('فشل الطلب (${response.statusCode})');
+      }
+      if (decoded is List) return decoded;
+      return <dynamic>[];
+    } finally {
+      client.close(force: true);
+    }
+  }
+
+  Future<Map<String, dynamic>> patch(
+    String path, {
+    Map<String, dynamic>? body,
+    String? token,
+  }) async {
+    if (base.isEmpty) {
+      throw Exception('لم يتم ضبط عنوان الخادم API_BASE_URL.');
+    }
+    final client = HttpClient();
+    try {
+      final request = await client.patchUrl(Uri.parse('$base$path'));
+      request.headers.contentType = ContentType.json;
+      if (token != null && token.isNotEmpty) {
+        request.headers.set(
+          HttpHeaders.authorizationHeader,
+          'Bearer $token',
+        );
+      }
+      if (body != null) request.write(jsonEncode(body));
+      final response = await request.close();
+      final responseText = await response.transform(utf8.decoder).join();
+      dynamic decoded;
+      try {
+        decoded = responseText.isEmpty
+            ? <String, dynamic>{}
+            : jsonDecode(responseText);
+      } catch (_) {
+        decoded = <String, dynamic>{'message': responseText};
+      }
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        final message = decoded is Map
+            ? decoded['message']?.toString() ??
+                'فشل الطلب (${response.statusCode})'
+            : 'فشل الطلب (${response.statusCode})';
+        throw Exception(message);
+      }
+      return Map<String, dynamic>.from(decoded as Map);
+    } finally {
+      client.close(force: true);
+    }
+  }
+
+  Future<Map<String, dynamic>> delete(
+    String path, {
+    String? token,
+  }) async {
+    if (base.isEmpty) {
+      throw Exception('لم يتم ضبط عنوان الخادم API_BASE_URL.');
+    }
+    final client = HttpClient();
+    try {
+      final request = await client.deleteUrl(Uri.parse('$base$path'));
+      if (token != null && token.isNotEmpty) {
+        request.headers.set(
+          HttpHeaders.authorizationHeader,
+          'Bearer $token',
+        );
+      }
+      final response = await request.close();
+      final responseText = await response.transform(utf8.decoder).join();
+      dynamic decoded;
+      try {
+        decoded = responseText.isEmpty
+            ? <String, dynamic>{}
+            : jsonDecode(responseText);
+      } catch (_) {
+        decoded = <String, dynamic>{'message': responseText};
+      }
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        final message = decoded is Map
+            ? decoded['message']?.toString() ??
+                'فشل الطلب (${response.statusCode})'
+            : 'فشل الطلب (${response.statusCode})';
+        throw Exception(message);
+      }
+      return Map<String, dynamic>.from(decoded as Map);
     } finally {
       client.close(force: true);
     }
@@ -1944,6 +2060,13 @@ class _CrmHomeState
                       ),
                   ],
                 ),
+                if (data.session?.user['role'] == 'GENERAL_MANAGER' ||
+                    data.session?.user['role'] == 'REGIONAL_MANAGER' ||
+                    data.session?.user['role'] == 'BRANCH_MANAGER')
+                  IconButton(
+                    onPressed: openTeam,
+                    icon: const Icon(Icons.group_outlined),
+                  ),
                 IconButton(
                   onPressed:
                       openSettings,
@@ -3731,6 +3854,26 @@ class _CrmHomeState
   /* =======================================================
      SETTINGS
      ======================================================= */
+
+  void openTeam() {
+    if (!mounted) return;
+    final session = data.session;
+    if (session == null) return;
+    final role = session.user['role']?.toString() ?? '';
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => TeamPage(
+          apiBaseUrl: apiBaseUrl,
+          token: session.accessToken,
+          role: role,
+          myBranch: session.user['branch']?.toString(),
+          canManage: true,
+          canTransfer: role == 'GENERAL_MANAGER' || role == 'REGIONAL_MANAGER',
+        ),
+      ),
+    );
+  }
 
   void openSettings() {
     Navigator.push(
