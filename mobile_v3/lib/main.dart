@@ -1852,6 +1852,19 @@ class _CrmHomeState
     return AnimatedBuilder(
       animation: data,
       builder: (context, _) {
+        final role = data.session?.user['role']?.toString() ?? '';
+        final roleLabel = {
+          'GENERAL_MANAGER': 'المدير العام',
+          'REGIONAL_MANAGER': 'مدير الفروع',
+          'BRANCH_MANAGER': 'مدير الفرع',
+          'HALL_MANAGER': 'المشرف',
+          'SUPERVISOR': 'المشرف',
+          'CUSTOMER_SERVICE': 'خدمة العملاء',
+          'OWNER': 'المالك',
+          'ADMIN': 'مدير النظام',
+        }[role] ?? 'مستخدم';
+        final isCustomerService = role == 'CUSTOMER_SERVICE';
+
         final pages = [
           dashboard(),
           customersPage(),
@@ -1861,11 +1874,11 @@ class _CrmHomeState
         ];
 
         final titles = [
-          'لوحة التحكم',
+          roleLabel + ' - الرئيسية',
           'العملاء',
           'الفرص',
           'المهام',
-          'التقارير',
+          isCustomerService ? 'أدائي' : 'التقارير',
         ];
 
         return Directionality(
