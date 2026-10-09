@@ -341,4 +341,130 @@ export class TasksService {
       success: true,
     };
   }
+
+  // ═══ Task Comments (Chat) ═══
+
+  async listComments(companyId: string, taskId: string) {
+    const task = await this.prisma.task.findFirst({
+      where: { id: taskId, companyId },
+      select: { id: true },
+    });
+    if (!task) throw new NotFoundException('المهمة غير موجودة');
+
+    return this.prisma.taskComment.findMany({
+      where: { taskId },
+      include: {
+        user: {
+          select: {
+            id: true,
+            employeeId: true,
+            name: true,
+            role: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  async addComment(
+    companyId: string,
+    userId: string,
+    taskId: string,
+    dto: { message: string },
+  ) {
+    const task = await this.prisma.task.findFirst({
+      where: { id: taskId, companyId },
+      select: { id: true, title: true, assignedTo: true },
+    });
+    if (!task) throw new NotFoundException('المهمة غير موجودة');
+
+    const text = (dto.message ?? '').trim();
+    if (!text) throw new BadRequestException('الرسالة فارغة');
+
+    const comment = await this.prisma.taskComment.create({
+      data: {
+        taskId,
+        userId,
+        message: text,
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            employeeId: true,
+            name: true,
+            role: true,
+          },
+        },
+      },
+    });
+
+    // إشعار للمكلَّف بالمهمة (إن لم يكن هو الكاتب)
+    if (task.assignedTo && task.assignedTo !== userId) {
+      try {
+        await this.prisma.notification.create({
+          data: {
+            companyId,
+            userId: task.assignedTo,
+            type: 'TASK_COMMENT',
+            title: 'تعليق جديد على مهمتك',
+            message: text.length > 80 ? text.substring(0, 80) + '...' : text,
+            referenceType: 'Task',
+            referenceId: taskId,
+          },
+        });
+      } catch (_) {}
+    }
+
+    // إشعار للكاتب إن كان المكلَّف مختلفًا
+    if (task.assignedTo && task.assignedTo !== userId) {
+      // الكاتب قد يكون المدير، والمكلَّف موظف
+    }
+
+    await this.prisma.auditLog.create({
+      data: {
+        companyId,
+        userId,
+        action: 'COMMENT',
+        entity: 'Task',
+        entityId: taskId,
+        metadata: { commentId: comment.id },
+      },
+    });
+
+    return comment;
+  }
+
+  async deleteComment(
+    companyId: string,
+    userId: string,
+    role: string,
+    taskId: string,
+    commentId: string,
+  ) {
+    const comment = await this.prisma.taskComment.findFirst({
+      where: { id: commentId, taskId },
+      include: { task: { select: { companyId: true } } },
+    });
+    if (!comment) throw new NotFoundException('التعليق غير موجود');
+    if (comment.task.companyId !== companyId) {
+      throw new NotFoundException('التعليق غير موجود');
+    }
+
+    const isOwner = comment.userId === userId;
+    const isManager =
+      role === 'GENERAL_MANAGER' ||
+      role === 'REGIONAL_MANAGER' ||
+      role === 'BRANCH_MANAGER' ||
+      role === 'OWNER' ||
+      role === 'ADMIN';
+
+    if (!isOwner && !isManager) {
+      throw new BadRequestException('لا تملك صلاحية حذف هذا التعليق');
+    }
+
+    await this.prisma.taskComment.delete({ where: { id: commentId } });
+    return { success: true };
+  }
 }

@@ -90,6 +90,7 @@ activities     Activity[]
 notifications  Notification[]
 sessions       UserSession[]
 platformAdmin  PlatformAdmin?
+taskComments   TaskComment[]
 @@unique([companyId, email])
 @@unique([companyId, employeeId])
 @@index([companyId])
@@ -177,8 +178,22 @@ company        Company      @relation(fields: [companyId], references: [id], onD
 customer       Customer?     @relation(fields: [customerId], references: [id], onDelete: SetNull)
 opportunity     Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
 assignee       User?         @relation("TaskAssignee", fields: [assignedTo], references: [id], onDelete: SetNull)
+comments       TaskComment[]
 @@index([companyId, status])
 @@index([companyId, dueDate])
+}
+
+model TaskComment {
+id        String   @id @default(cuid())
+taskId    String
+userId    String
+message   String   @db.Text
+createdAt DateTime @default(now())
+updatedAt DateTime @updatedAt
+task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+@@index([taskId, createdAt])
+@@index([userId])
 }
 
 model Activity {
