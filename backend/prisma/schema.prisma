@@ -77,6 +77,7 @@ model User {
 id             String          @id @default(cuid())
 companyId      String
 employeeId     String?
+branch         String?
 name           String
 email          String
 passwordHash   String
@@ -93,6 +94,7 @@ platformAdmin  PlatformAdmin?
 @@unique([companyId, employeeId])
 @@index([companyId])
 @@index([employeeId])
+@@index([branch])
 }
 
 model Customer {
