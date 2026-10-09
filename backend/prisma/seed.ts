@@ -1,5 +1,8 @@
 import { PrismaClient, UserRole } from '@prisma/client';
-const prisma=new PrismaClient();
+import { PrismaPg } from '@prisma/adapter-pg';
+
+const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
+const prisma = new PrismaClient({ adapter });
 const permissions={
  OWNER:['users.read','users.manage','customers.read','customers.create','customers.update','customers.delete','opportunities.read','opportunities.create','opportunities.update','opportunities.delete','tasks.read','tasks.create','tasks.update','tasks.delete','activities.read','activities.create','notifications.read','reports.read'],
  ADMIN:['users.read','users.manage','customers.read','customers.create','customers.update','customers.delete','opportunities.read','opportunities.create','opportunities.update','opportunities.delete','tasks.read','tasks.create','tasks.update','tasks.delete','activities.read','activities.create','notifications.read','reports.read'],
