@@ -5,6 +5,7 @@ import 'features/customers/customer_360_page.dart';
 import 'features/home/dashboard_v2.dart';
 import 'core/theme/crm_app.dart';
 import 'features/team/team_page.dart';
+import 'features/tasks/task_chat_page.dart';
 // ignore_for_file: prefer_const_constructors
 
 import 'dart:convert';
@@ -2764,32 +2765,27 @@ class _CrmHomeState
           '${formatDateTime(task.dueAt)} • ${task.priority}',
         ),
         isThreeLine: true,
-        trailing:
-            PopupMenuButton<String>(
-          onSelected: (value) {
-            if (value ==
-                'edit') {
-              taskForm(
-                existing: task,
-              );
-            }
-
-            if (value ==
-                'delete') {
-              deleteTask(task);
-            }
-          },
-          itemBuilder: (_) =>
-              const [
-            PopupMenuItem(
-              value: 'edit',
-              child:
-                  Text('تعديل'),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              icon: const Icon(Icons.chat_bubble_outline, size: 20),
+              tooltip: 'المحادثة',
+              onPressed: () => openTaskChat(task),
             ),
-            PopupMenuItem(
-              value: 'delete',
-              child:
-                  Text('حذف'),
+            PopupMenuButton<String>(
+              onSelected: (value) {
+                if (value == 'edit') {
+                  taskForm(existing: task);
+                }
+                if (value == 'delete') {
+                  deleteTask(task);
+                }
+              },
+              itemBuilder: (_) => const [
+                PopupMenuItem(value: 'edit', child: Text('تعديل')),
+                PopupMenuItem(value: 'delete', child: Text('حذف')),
+              ],
             ),
           ],
         ),
@@ -3939,6 +3935,24 @@ class _CrmHomeState
   /* =======================================================
      SETTINGS
      ======================================================= */
+
+  void openTaskChat(CrmTask task) {
+    if (!mounted) return;
+    final session = data.session;
+    if (session == null) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => TaskChatPage(
+          apiBaseUrl: apiBaseUrl,
+          token: session.accessToken,
+          taskId: task.id,
+          taskTitle: task.title,
+          currentUserId: session.user['id']?.toString() ?? '',
+        ),
+      ),
+    );
+  }
 
   void openTeam() {
     if (!mounted) return;
