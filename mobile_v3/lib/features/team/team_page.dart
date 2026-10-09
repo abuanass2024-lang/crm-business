@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 
 class TeamPage extends StatefulWidget {
@@ -63,7 +65,7 @@ class _TeamPageState extends State<TeamPage> {
       final req = await client.getUrl(uri);
       req.headers.set(HttpHeaders.authorizationHeader, 'Bearer ${widget.token}');
       final res = await req.close();
-      final txt = await res.transform(const SystemEncoding().decoder).join();
+      final txt = await res.transform(utf8.decoder).join();
       if (res.statusCode < 200 || res.statusCode >= 300) {
         throw Exception('HTTP ${res.statusCode}: $txt');
       }
