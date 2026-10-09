@@ -97,6 +97,14 @@ platformAdmin  PlatformAdmin?
 @@index([branch])
 }
 
+enum CustomerStatus {
+PROSPECT
+CUSTOMER
+ACTIVE
+INACTIVE
+WITHDRAWN
+}
+
 model Customer {
 id             String         @id @default(cuid())
 companyId      String
@@ -105,8 +113,10 @@ companyName    String?
 phone          String?
 email          String?
 address        String?
-status         String         @default("ACTIVE")
+status         CustomerStatus @default(PROSPECT)
 assignedTo     String?
+firstInteractionAt DateTime?
+lastInteractionAt  DateTime?
 createdAt      DateTime       @default(now())
 updatedAt      DateTime       @updatedAt
 company        Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)

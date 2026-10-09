@@ -90,6 +90,33 @@ export class CustomersService {
     return customer;
   }
 
+  /**
+   * تسجيل تعامل: يُحدّث lastInteractionAt
+   * ويحوّل PROSPECT → CUSTOMER عند أول تعامل.
+   */
+  async recordInteraction(companyId: string, customerId: string) {
+    const customer = await this.prisma.customer.findFirst({
+      where: { id: customerId, companyId },
+    });
+    if (!customer) return null;
+
+    const now = new Date();
+    const data: any = { lastInteractionAt: now };
+
+    // أول تعامل: كان PROSPECT → يصبح CUSTOMER
+    if (!customer.firstInteractionAt) {
+      data.firstInteractionAt = now;
+      if (customer.status === 'PROSPECT') {
+        data.status = 'CUSTOMER';
+      }
+    }
+
+    return this.prisma.customer.update({
+      where: { id: customerId },
+      data,
+    });
+  }
+
   async create(companyId: string, dto: CreateCustomerDto) {
     await this.subscriptions.assertWithinQuota(companyId, 'customers');
 

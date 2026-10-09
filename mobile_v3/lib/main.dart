@@ -445,13 +445,15 @@ class Customer {
     required this.company,
     this.phone = '',
     this.email = '',
-    this.status = 'نشط',
+    this.status = 'PROSPECT',
     this.assignedTo = '',
       this.sector = '',
       this.size = '',
       this.branch = '',
       this.salesRep = '',
     this.notes = '',
+    this.firstInteractionAt,
+    this.lastInteractionAt,
     DateTime? createdAt,
   }) : createdAt =
             createdAt ?? DateTime.now();
@@ -471,6 +473,8 @@ class Customer {
   String salesRep; // المندوب
 
   DateTime createdAt;
+  DateTime? firstInteractionAt;
+  DateTime? lastInteractionAt;
 
   Map<String, dynamic> toJson() {
     return {
@@ -503,8 +507,9 @@ class Customer {
           json['phone']?.toString() ?? '',
       email:
           json['email']?.toString() ?? '',
-      status:
-          json['status']?.toString() ?? 'نشط',
+      status: _normalizeStatus(
+        json['status']?.toString() ?? 'PROSPECT',
+      ),
       assignedTo:
           json['assignedTo']?.toString() ?? '',
       notes:
@@ -522,7 +527,62 @@ class Customer {
                 '',
           ) ??
           DateTime.now(),
+      firstInteractionAt: json['firstInteractionAt'] != null
+          ? DateTime.tryParse(json['firstInteractionAt'].toString())
+          : null,
+      lastInteractionAt: json['lastInteractionAt'] != null
+          ? DateTime.tryParse(json['lastInteractionAt'].toString())
+          : null,
     );
+  }
+}
+
+/* =========================================================
+   CUSTOMER STATUS HELPERS
+   ========================================================= */
+
+String _normalizeStatus(String raw) {
+  // دعم القيم القديمة (عربية/إنجليزية)
+  final v = raw.trim().toUpperCase();
+  if (v == 'PROSPECT' || v == 'محتمل') return 'PROSPECT';
+  if (v == 'CUSTOMER' || v == 'عميل') return 'CUSTOMER';
+  if (v == 'ACTIVE' || v == 'نشط') return 'ACTIVE';
+  if (v == 'INACTIVE' || v == 'غير فعال' || v == 'غير نشط') return 'INACTIVE';
+  if (v == 'WITHDRAWN' || v == 'منسحب') return 'WITHDRAWN';
+  return 'PROSPECT';
+}
+
+String customerStatusAr(String status) {
+  switch (_normalizeStatus(status)) {
+    case 'PROSPECT':
+      return 'محتمل';
+    case 'CUSTOMER':
+      return 'عميل';
+    case 'ACTIVE':
+      return 'نشط';
+    case 'INACTIVE':
+      return 'غير فعال';
+    case 'WITHDRAWN':
+      return 'منسحب';
+    default:
+      return 'محتمل';
+  }
+}
+
+Color customerStatusColor(String status) {
+  switch (_normalizeStatus(status)) {
+    case 'PROSPECT':
+      return Colors.blue;
+    case 'CUSTOMER':
+      return Colors.amber.shade700;
+    case 'ACTIVE':
+      return Colors.green;
+    case 'INACTIVE':
+      return Colors.orange;
+    case 'WITHDRAWN':
+      return Colors.red;
+    default:
+      return Colors.grey;
   }
 }
 
@@ -2357,9 +2417,34 @@ class _CrmHomeState
                 FontWeight.bold,
           ),
         ),
-        subtitle: Text(
-          '${customer.company}\n'
-          '${customer.phone.isEmpty ? 'لا يوجد هاتف' : customer.phone}',
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '${customer.company}\n'
+              '${customer.phone.isEmpty ? 'لا يوجد هاتف' : customer.phone}',
+            ),
+            const SizedBox(height: 4),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: customerStatusColor(customer.status).withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: customerStatusColor(customer.status).withValues(alpha: 0.5),
+                  width: 1,
+                ),
+              ),
+              child: Text(
+                customerStatusAr(customer.status),
+                style: TextStyle(
+                  color: customerStatusColor(customer.status),
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
         ),
         isThreeLine: true,
         trailing:

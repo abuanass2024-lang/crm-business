@@ -8,19 +8,40 @@ import { CreateCustomerDto, UpdateCustomerDto } from './customers.dto';
 @UseGuards(JwtGuard, PermissionGuard)
 export class CustomersController {
   constructor(private readonly customers: CustomersService) {}
+
   @Get()
   @RequirePermission('customers.read')
-  list(@Req() req: any, @Query('q') q?: string) { return this.customers.list(req.user.companyId, q); }
+  list(@Req() req: any, @Query('q') q?: string) {
+    return this.customers.list(req.user.companyId, q);
+  }
+
   @Post()
   @RequirePermission('customers.create')
-  create(@Req() req: any, @Body() dto: CreateCustomerDto) { return this.customers.create(req.user.companyId, dto); }
+  create(@Req() req: any, @Body() dto: CreateCustomerDto) {
+    return this.customers.create(req.user.companyId, dto);
+  }
+
   @Get(':id')
   @RequirePermission('customers.read')
-  get(@Req() req: any, @Param('id') id: string) { return this.customers.get(req.user.companyId, id); }
+  get(@Req() req: any, @Param('id') id: string) {
+    return this.customers.get(req.user.companyId, id);
+  }
+
   @Patch(':id')
   @RequirePermission('customers.update')
-  update(@Req() req: any, @Param('id') id: string, @Body() dto: UpdateCustomerDto) { return this.customers.update(req.user.companyId, id, dto); }
+  update(@Req() req: any, @Param('id') id: string, @Body() dto: UpdateCustomerDto) {
+    return this.customers.update(req.user.companyId, id, dto);
+  }
+
+  @Post(':id/interaction')
+  @RequirePermission('customers.update')
+  recordInteraction(@Req() req: any, @Param('id') id: string) {
+    return this.customers.recordInteraction(req.user.companyId, id);
+  }
+
   @Delete(':id')
   @RequirePermission('customers.delete')
-  remove(@Req() req: any, @Param('id') id: string) { return this.customers.remove(req.user.companyId, id); }
+  remove(@Req() req: any, @Param('id') id: string) {
+    return this.customers.remove(req.user.companyId, id);
+  }
 }

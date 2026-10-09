@@ -22,6 +22,40 @@ export class OpportunitiesService {
     private readonly subscriptions: SubscriptionsService,
   ) {}
 
+  /**
+   * يُسجّل تفاعل العميل: يحدّث lastInteractionAt + firstInteractionAt
+   * ويحوّل PROSPECT → CUSTOMER عند أول تعامل.
+   */
+  private async recordCustomerInteraction(
+    companyId: string,
+    customerId: string,
+  ) {
+    try {
+      const customer = await this.prisma.customer.findFirst({
+        where: { id: customerId, companyId },
+        select: { id: true, status: true, firstInteractionAt: true },
+      });
+      if (!customer) return;
+
+      const now = new Date();
+      const data: any = { lastInteractionAt: now };
+
+      if (!customer.firstInteractionAt) {
+        data.firstInteractionAt = now;
+        if (customer.status === 'PROSPECT') {
+          data.status = 'CUSTOMER';
+        }
+      }
+
+      await this.prisma.customer.update({
+        where: { id: customerId },
+        data,
+      });
+    } catch (_) {
+      // لا نُفشل العملية الأساسية إن فشل تسجيل التفاعل
+    }
+  }
+
   list(companyId: string, stage?: any) {
     return this.prisma.opportunity.findMany({
       where: {
@@ -158,6 +192,12 @@ export class OpportunitiesService {
         },
       },
     });
+
+    // ربط العميل: تسجيل أول تعامل
+    await this.recordCustomerInteraction(
+      companyId,
+      item.customerId,
+    );
 
     await this.automation.onEvent(
       companyId,
@@ -328,6 +368,12 @@ export class OpportunitiesService {
       );
 
       if (dto.stage === 'WON') {
+        // تحويل العميل تلقائيًا عند الفوز
+        await this.recordCustomerInteraction(
+          companyId,
+          updated.customerId,
+        );
+
         await this.automation.onEvent(
           companyId,
           AutomationTriggerDto.OPPORTUNITY_WON,

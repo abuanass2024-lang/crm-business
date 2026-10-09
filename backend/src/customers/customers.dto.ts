@@ -1,11 +1,20 @@
 import {
   IsEmail,
+  IsIn,
   IsOptional,
   IsString,
   MaxLength,
   MinLength,
   IsUUID,
 } from 'class-validator';
+
+const CUSTOMER_STATUSES = [
+  'PROSPECT',
+  'CUSTOMER',
+  'ACTIVE',
+  'INACTIVE',
+  'WITHDRAWN',
+] as const;
 
 export class CreateCustomerDto {
   @IsString()
@@ -34,13 +43,17 @@ export class CreateCustomerDto {
   address?: string;
 
   @IsOptional()
-  @IsString()
-  @MaxLength(40)
+  @IsIn(CUSTOMER_STATUSES as any)
   status?: string;
 
   @IsOptional()
   @IsUUID()
   assignedTo?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  branch?: string;
 }
 
 export class UpdateCustomerDto {
@@ -71,11 +84,15 @@ export class UpdateCustomerDto {
   address?: string;
 
   @IsOptional()
-  @IsString()
-  @MaxLength(40)
+  @IsIn(CUSTOMER_STATUSES as any)
   status?: string;
 
   @IsOptional()
   @IsUUID()
   assignedTo?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  branch?: string;
 }
