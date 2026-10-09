@@ -53,6 +53,11 @@ jobs:
           DATABASE_URL: postgresql://crm:crm_password@localhost:5432/crm_business?schema=public
         run: npm run prisma:deploy
 
+      - name: Seed database
+        env:
+          DATABASE_URL: postgresql://crm:crm_password@localhost:5432/crm_business?schema=public
+        run: npm run prisma:seed
+
       - name: Build backend
         env:
           DATABASE_URL: postgresql://crm:crm_password@localhost:5432/crm_business?schema=public
