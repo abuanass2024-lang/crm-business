@@ -1,6 +1,5 @@
 generator client {
-  provider   = "prisma-client-js"
-  engineType = "client"
+provider = "prisma-client-js"
 }
 
 datasource db {
@@ -14,11 +13,6 @@ ADMIN
 MANAGER
 SALES
 VIEWER
-GENERAL_MANAGER
-REGIONAL_MANAGER
-BRANCH_MANAGER
-HALL_MANAGER
-CUSTOMER_SERVICE
 }
 
 enum CompanyStatus {
@@ -76,7 +70,6 @@ platformAdmins           PlatformAdmin[]
 model User {
 id             String          @id @default(cuid())
 companyId      String
-employeeId     String?
 name           String
 email          String
 passwordHash   String
@@ -90,9 +83,7 @@ notifications  Notification[]
 sessions       UserSession[]
 platformAdmin  PlatformAdmin?
 @@unique([companyId, email])
-@@unique([companyId, employeeId])
 @@index([companyId])
-@@index([employeeId])
 }
 
 model Customer {

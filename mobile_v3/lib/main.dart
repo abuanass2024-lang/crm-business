@@ -1297,6 +1297,9 @@ class _AuthPageState
   final emailController =
       TextEditingController();
 
+  final employeeIdController =
+      TextEditingController();
+
   final passwordController =
       TextEditingController();
 
@@ -1312,6 +1315,7 @@ class _AuthPageState
   @override
   void dispose() {
     emailController.dispose();
+    employeeIdController.dispose();
     passwordController.dispose();
     companyController.dispose();
     ownerController.dispose();
@@ -1321,13 +1325,16 @@ class _AuthPageState
   }
 
   Future<void> submit() async {
-    if (emailController.text
-        .trim()
-        .isEmpty) {
-      showError(
-        'أدخل البريد الإلكتروني.',
-      );
-      return;
+    if (loginMode) {
+      if (employeeIdController.text.trim().isEmpty) {
+        showError('أدخل الرقم الوظيفي.');
+        return;
+      }
+    } else {
+      if (emailController.text.trim().isEmpty) {
+        showError('أدخل البريد الإلكتروني.');
+        return;
+      }
     }
 
     if (passwordController
@@ -1374,18 +1381,32 @@ class _AuthPageState
     });
 
     try {
-      final result = <String, dynamic>{
-        'accessToken': 'local_${DateTime.now().millisecondsSinceEpoch}',
-        'refreshToken': 'local_${DateTime.now().millisecondsSinceEpoch}',
-        'user': <String, dynamic>{
-          'name': ownerController.text.trim(),
-          'email': emailController.text.trim(),
-        },
-        'company': <String, dynamic>{
-          'name': companyController.text.trim(),
-          'id': 'local_${DateTime.now().millisecondsSinceEpoch}',
-        },
-      };
+      final Map<String, dynamic> result;
+      if (loginMode) {
+        result = await ApiClient().post(
+          '/auth/login',
+          {
+            'employeeId': employeeIdController.text.trim(),
+            'password': passwordController.text,
+          },
+        );
+      } else {
+        result = await ApiClient().post(
+          '/auth/register-company',
+          {
+            'companyName': companyController.text.trim(),
+            'ownerName': ownerController.text.trim(),
+            'email': emailController.text.trim(),
+            'password': passwordController.text,
+          },
+        );
+      }
+
+      if (result['accessToken'] == null) {
+        throw Exception(
+          result['message']?.toString() ?? 'فشل تسجيل الدخول.',
+        );
+      }
 
       final session = Session(
         accessToken:
@@ -1623,15 +1644,19 @@ class _AuthPageState
                         height: 12,
                       ),
                     ],
-                    field(
-                      emailController,
-                      'البريد الإلكتروني',
-                      Icons
-                          .email_outlined,
-                      keyboardType:
-                          TextInputType
-                              .emailAddress,
-                    ),
+                    if (loginMode)
+                      field(
+                        employeeIdController,
+                        'الرقم الوظيفي',
+                        Icons.badge_outlined,
+                      )
+                    else
+                      field(
+                        emailController,
+                        'البريد الإلكتروني',
+                        Icons.email_outlined,
+                        keyboardType: TextInputType.emailAddress,
+                      ),
                     const SizedBox(
                       height: 12,
                     ),
