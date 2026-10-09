@@ -19,7 +19,7 @@ const String apiBaseUrl = String.fromEnvironment(
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const MaterialApp(home: Scaffold(body: Center(child: Text("RAW MATERIAL TEST")))));
+  runApp(const CrmApp(home: StartupPage()));
 }
 
 /* =========================================================
