@@ -1,0 +1,116 @@
+import 'package:google_generative_ai/google_generative_ai.dart';
+import '../../main.dart' show CrmData;
+
+class GeminiService {
+  static const String _apiKey = String.fromEnvironment(
+    'GEMINI_API_KEY',
+    defaultValue: '',
+  );
+
+  static bool get isConfigured => _apiKey.isNotEmpty;
+
+  static Future<String?> ask(String question, CrmData data) async {
+    if (!isConfigured) return null;
+
+    try {
+      final model = GenerativeModel(
+        model: 'gemini-1.5-flash',
+        apiKey: _apiKey,
+      );
+
+      final context = _buildContext(data);
+      final prompt = '''
+
+$context
+
+$question
+
+''';
+
+      final response = await model.generateContent([Content.text(prompt)]);
+      return response.text;
+    } catch (e, stack) {
+      // ignore: avoid_print
+      print('═══ GEMINI ERROR ═══');
+      // ignore: avoid_print
+      print('Error: $e');
+      // ignore: avoid_print
+      print('Stack: ${stack.toString().split('\n').take(3).join(' | ')}');
+      return null;
+    }
+  }
+
+  static String _buildContext(CrmData data) {
+    final buf = StringBuffer();
+
+    // العملاء
+    buf.writeln('عدد العملاء: ${data.customers.length}');
+    final active = data.customers.where((c) => c.status == 'نشط').length;
+    buf.writeln('العملاء النشطون: $active');
+
+    // القطاعات (مجهولة)
+    final sectors = <String, int>{};
+    for (final c in data.customers) {
+      if (c.sector.isEmpty) continue;
+      sectors[c.sector] = (sectors[c.sector] ?? 0) + 1;
+    }
+    if (sectors.isNotEmpty) {
+      buf.writeln('توزيع القطاعات:');
+      sectors.forEach((k, v) => buf.writeln('  - $k: $v'));
+    }
+
+    // الفروع
+    final branches = <String, int>{};
+    for (final c in data.customers) {
+      if (c.branch.isEmpty) continue;
+      branches[c.branch] = (branches[c.branch] ?? 0) + 1;
+    }
+    if (branches.isNotEmpty) {
+      buf.writeln('توزيع الفروع:');
+      branches.forEach((k, v) => buf.writeln('  - $k: $v'));
+    }
+
+    // الفرص (بدون أسماء عملاء)
+    final open = data.opportunities
+        .where((o) => o.stage != 'Won' && o.stage != 'Lost')
+        .toList();
+    final won = data.opportunities.where((o) => o.stage == 'Won').toList();
+    final totalValue = won.fold<double>(0, (s, o) => s + o.value);
+
+    buf.writeln('الفرص المفتوحة: ${open.length}');
+    buf.writeln('الفرص المربوحة: ${won.length}');
+    buf.writeln('إجمالي المبيعات: ${_money(totalValue)}');
+
+    if (open.isNotEmpty) {
+      buf.writeln('تفاصيل الفرص المفتوحة:');
+      for (final o in open.take(10)) {
+        buf.writeln('  - ${o.stage}: ${_money(o.value)}');
+      }
+    }
+
+    // المهام
+    final overdue = data.tasks.where((t) => !t.done && t.overdue).length;
+    final today = data.tasks.where((t) => !t.done && t.today).length;
+    buf.writeln('المهام المتأخرة: $overdue');
+    buf.writeln('مهام اليوم: $today');
+
+    // المندوبين
+    final reps = <String, int>{};
+    for (final c in data.customers) {
+      if (c.salesRep.isEmpty) continue;
+      reps[c.salesRep] = (reps[c.salesRep] ?? 0) + 1;
+    }
+    if (reps.isNotEmpty) {
+      buf.writeln('توزيع المندوبين (عدد العملاء):');
+      reps.forEach((k, v) => buf.writeln('  - $k: $v'));
+    }
+
+    return buf.toString();
+  }
+
+  static String _money(double v) {
+    if (v >= 1000000) return '${(v / 1000000).toStringAsFixed(1)}M';
+    if (v >= 1000) return '${(v / 1000).toStringAsFixed(1)}K';
+    return v.toStringAsFixed(0);
+  }
+}
