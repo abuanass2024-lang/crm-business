@@ -17,7 +17,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 const String apiBaseUrl = String.fromEnvironment(
   'API_BASE_URL',
-  defaultValue: 'https://spots-incentives-alerts-jenny.trycloudflare.com/api',
+  defaultValue: 'https://rentals-manufacturing-gratuit-accomplish.trycloudflare.com/api',
 );
 
 void main() {
