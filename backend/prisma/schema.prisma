@@ -116,6 +116,7 @@ email          String?
 address        String?
 status         CustomerStatus @default(PROSPECT)
 assignedTo     String?
+branch         String?
 firstInteractionAt DateTime?
 lastInteractionAt  DateTime?
 createdAt      DateTime       @default(now())
@@ -125,6 +126,7 @@ opportunities  Opportunity[]
 tasks          Task[]
 activities     Activity[]
 @@index([companyId, createdAt])
+@@index([branch])
 }
 
 model Opportunity {
