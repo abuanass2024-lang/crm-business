@@ -643,19 +643,26 @@ class Opportunity {
       id: json['id']?.toString() ?? '',
       title:
           json['title']?.toString() ?? '',
-      customer:
-          json['customer']?.toString() ?? '',
-      value:
-          (json['value'] as num?)
-                  ?.toDouble() ??
-              0,
+      customer: () {
+        final v = json['customer'];
+        if (v is Map) return (v['name'] ?? '').toString();
+        return v?.toString() ?? '';
+      }(),
+      value: (() {
+        final v = json['value'];
+        if (v is num) return v.toDouble();
+        if (v is String) return double.tryParse(v) ?? 0;
+        return 0.0;
+      })(),
       stage:
           json['stage']?.toString() ??
               'جديدة',
-      probability:
-          (json['probability'] as num?)
-                  ?.toInt() ??
-              20,
+      probability: (() {
+        final v = json['probability'];
+        if (v is num) return v.toInt();
+        if (v is String) return int.tryParse(v) ?? 20;
+        return 20;
+      })(),
       expectedCloseDate:
           DateTime.tryParse(
         json['expectedCloseDate']
@@ -754,10 +761,16 @@ class CrmTask {
       id: json['id']?.toString() ?? '',
       title:
           json['title']?.toString() ?? '',
-      customer:
-          json['customer']?.toString() ?? '',
-      assignee:
-          json['assignee']?.toString() ?? '',
+      customer: () {
+        final v = json['customer'];
+        if (v is Map) return (v['name'] ?? '').toString();
+        return v?.toString() ?? '';
+      }(),
+      assignee: () {
+        final v = json['assignee'];
+        if (v is Map) return (v['name'] ?? '').toString();
+        return v?.toString() ?? '';
+      }(),
       description:
           json['description']?.toString() ??
               '',
