@@ -6,6 +6,7 @@ import 'features/home/dashboard_v2.dart';
 import 'core/theme/crm_app.dart';
 import 'features/team/team_page.dart';
 import 'features/tasks/task_chat_page.dart';
+import 'features/tasks/chats_list_page.dart';
 import 'features/reports/reports_detail_page.dart';
 // ignore_for_file: prefer_const_constructors
 
@@ -874,6 +875,12 @@ class CrmData extends ChangeNotifier {
   final List<Customer> customers = [];
   final List<Opportunity> opportunities = [];
   final List<CrmTask> tasks = [];
+
+  /// أعداد التعليقات من الآخرين لكل مهمة (لإظهار الشارة الحمراء)
+  final Map<String, int> taskCommentCounts = {};
+
+  /// آخر رسالة لكل مهمة (لقائمة المحادثات)
+  final Map<String, Map<String, dynamic>> taskLastComment = {};
   final List<CrmNotification> notifications =
       [];
 
@@ -979,6 +986,40 @@ class CrmData extends ChangeNotifier {
           'dueAt': m['dueDate'],
           'createdAt': m['createdAt'],
         }));
+      }
+
+      // ═══ جلب التعليقات لكل مهمة ═══
+      taskCommentCounts.clear();
+      taskLastComment.clear();
+      final currentUserId = s.user['id']?.toString() ?? '';
+      for (final t in tasks) {
+        try {
+          final comments = await client.getList(
+            '/tasks/${t.id}/comments',
+            token: s.accessToken,
+          );
+          if (comments.isEmpty) continue;
+
+          int fromOthers = 0;
+          for (final c in comments) {
+            final cm = c as Map;
+            final author = (cm['user'] as Map?)?['id']?.toString() ?? '';
+            if (author != currentUserId) fromOthers++;
+          }
+
+          final lastC = comments.last as Map;
+          final lastAuthor = (lastC['user'] as Map?)?['name']?.toString() ?? '';
+          final lastText = lastC['message']?.toString() ?? '';
+          final lastTime = lastC['createdAt']?.toString() ?? '';
+
+          if (fromOthers > 0) taskCommentCounts[t.id] = fromOthers;
+          taskLastComment[t.id] = {
+            'text': lastText,
+            'author': lastAuthor,
+            'time': lastTime,
+            'count': comments.length,
+          };
+        } catch (_) {}
       }
 
       notifyListeners();
@@ -2220,6 +2261,39 @@ class _CrmHomeState
                               color:
                                   Colors.white,
                               fontSize: 9,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                // ═══ زر المحادثات ═══
+                Stack(
+                  children: [
+                    IconButton(
+                      onPressed: openChatsList,
+                      tooltip: 'المحادثات',
+                      icon: const Icon(Icons.chat_bubble_outline),
+                    ),
+                    if (data.taskCommentCounts.isNotEmpty)
+                      Positioned(
+                        right: 6,
+                        top: 6,
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: const BoxDecoration(
+                            color: Colors.red,
+                            shape: BoxShape.circle,
+                          ),
+                          constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+                          child: Center(
+                            child: Text(
+                              '${data.taskCommentCounts.length}',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
                         ),
@@ -4045,6 +4119,23 @@ class _CrmHomeState
   /* =======================================================
      SETTINGS
      ======================================================= */
+
+  void openChatsList() async {
+    if (!mounted) return;
+    final session = data.session;
+    if (session == null) return;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ChatsListPage(
+          data: data,
+          apiBaseUrl: apiBaseUrl,
+          onRefresh: data.refreshFromApi,
+        ),
+      ),
+    );
+    if (mounted) setState(() {});
+  }
 
   void openDetailedReports() {
     if (!mounted) return;
