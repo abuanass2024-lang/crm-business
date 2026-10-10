@@ -344,6 +344,47 @@ export class TasksService {
 
   // ═══ Task Comments (Chat) ═══
 
+  async commentsSummary(companyId: string, userId: string) {
+    const tasks = await this.prisma.task.findMany({
+      where: { companyId },
+      select: { id: true, title: true },
+    });
+
+    const result: Record<string, any> = {};
+
+    for (const t of tasks) {
+      const comments = await this.prisma.taskComment.findMany({
+        where: { taskId: t.id },
+        include: {
+          user: {
+            select: { id: true, name: true, employeeId: true, role: true },
+          },
+        },
+        orderBy: { createdAt: 'asc' },
+      });
+
+      if (comments.length === 0) continue;
+
+      let fromOthers = 0;
+      for (const c of comments) {
+        if (c.userId !== userId) fromOthers++;
+      }
+
+      const last = comments[comments.length - 1];
+      result[t.id] = {
+        taskTitle: t.title,
+        count: comments.length,
+        unread: fromOthers,
+        lastText: last.message,
+        lastAuthor: last.user?.name ?? '',
+        lastAuthorId: last.userId,
+        lastTime: last.createdAt.toISOString(),
+      };
+    }
+
+    return result;
+  }
+
   async listComments(companyId: string, taskId: string) {
     const task = await this.prisma.task.findFirst({
       where: { id: taskId, companyId },

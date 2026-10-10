@@ -988,39 +988,23 @@ class CrmData extends ChangeNotifier {
         }));
       }
 
-      // ═══ جلب التعليقات لكل مهمة ═══
+      // ═══ جلب ملخص التعليقات في طلب واحد (سريع) ═══
       taskCommentCounts.clear();
       taskLastComment.clear();
-      final currentUserId = s.user['id']?.toString() ?? '';
-      for (final t in tasks) {
-        try {
-          final comments = await client.getList(
-            '/tasks/${t.id}/comments',
-            token: s.accessToken,
-          );
-          if (comments.isEmpty) continue;
-
-          int fromOthers = 0;
-          for (final c in comments) {
-            final cm = c as Map;
-            final author = (cm['user'] as Map?)?['id']?.toString() ?? '';
-            if (author != currentUserId) fromOthers++;
-          }
-
-          final lastC = comments.last as Map;
-          final lastAuthor = (lastC['user'] as Map?)?['name']?.toString() ?? '';
-          final lastText = lastC['message']?.toString() ?? '';
-          final lastTime = lastC['createdAt']?.toString() ?? '';
-
-          if (fromOthers > 0) taskCommentCounts[t.id] = fromOthers;
-          taskLastComment[t.id] = {
-            'text': lastText,
-            'author': lastAuthor,
-            'time': lastTime,
-            'count': comments.length,
+      try {
+        final summary = await client.get('/tasks/comments/summary', token: s.accessToken);
+        summary.forEach((taskId, data) {
+          final d = Map<String, dynamic>.from(data as Map);
+          final unread = (d['unread'] as num?)?.toInt() ?? 0;
+          if (unread > 0) taskCommentCounts[taskId] = unread;
+          taskLastComment[taskId] = {
+            'text': d['lastText']?.toString() ?? '',
+            'author': d['lastAuthor']?.toString() ?? '',
+            'time': d['lastTime']?.toString() ?? '',
+            'count': (d['count'] as num?)?.toInt() ?? 0,
           };
-        } catch (_) {}
-      }
+        });
+      } catch (_) {}
 
       notifyListeners();
     } catch (e) {

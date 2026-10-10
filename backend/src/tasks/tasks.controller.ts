@@ -53,6 +53,12 @@ export class TasksController {
 
   // ═══ Task Comments (Chat) ═══
 
+  @Get('comments/summary')
+  @RequirePermission('tasks.read')
+  commentsSummary(@Req() r: any) {
+    return this.service.commentsSummary(r.user.companyId, r.user.userId);
+  }
+
   @Get(':id/comments')
   @RequirePermission('tasks.read')
   listComments(@Req() r: any, @Param('id') id: string) {
