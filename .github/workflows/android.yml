@@ -32,6 +32,12 @@ jobs:
         run: |
           flutter create --platforms=android --org com.crm.business --project-name crm_v3 --no-overwrite .
 
+      - name: Add INTERNET permission
+        working-directory: mobile_v3
+        run: |
+          sed -i 's|</manifest>|<uses-permission android:name="android.permission.INTERNET"/>\n</manifest>|' android/app/src/main/AndroidManifest.xml
+          grep -q 'INTERNET' android/app/src/main/AndroidManifest.xml && echo "OK: INTERNET permission added"
+
       - name: Fix Kotlin version
         working-directory: mobile_v3
         run: |
