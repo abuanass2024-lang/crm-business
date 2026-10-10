@@ -910,6 +910,70 @@ class CrmData extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> refreshFromApi() async {
+    final s = session;
+    if (s == null || s.accessToken.isEmpty) return;
+
+    try {
+      final client = ApiClient();
+
+      // ═══ جلب العملاء ═══
+      final customersList = await client.getList('/customers', token: s.accessToken);
+      customers.clear();
+      for (final item in customersList) {
+        final m = Map<String, dynamic>.from(item as Map);
+        customers.add(Customer.fromJson({
+          'id': m['id'],
+          'name': m['name'],
+          'company': m['companyName'],
+          'phone': m['phone'],
+          'email': m['email'],
+          'status': m['status'],
+          'assignedTo': m['assignedTo'],
+          'branch': m['branch'],
+          'createdAt': m['createdAt'],
+        }));
+      }
+
+      // ═══ جلب الفرص ═══
+      final oppsList = await client.getList('/opportunities', token: s.accessToken);
+      opportunities.clear();
+      for (final item in oppsList) {
+        final m = Map<String, dynamic>.from(item as Map);
+        opportunities.add(Opportunity.fromJson({
+          'id': m['id'],
+          'title': m['title'],
+          'value': m['value'],
+          'currency': m['currency'],
+          'stage': m['stage'],
+          'probability': m['probability'],
+          'customerId': m['customerId'],
+          'createdAt': m['createdAt'],
+        }));
+      }
+
+      // ═══ جلب المهام ═══
+      final tasksList = await client.getList('/tasks', token: s.accessToken);
+      tasks.clear();
+      for (final item in tasksList) {
+        final m = Map<String, dynamic>.from(item as Map);
+        tasks.add(CrmTask.fromJson({
+          'id': m['id'],
+          'title': m['title'],
+          'description': m['description'],
+          'priority': m['priority'],
+          'done': m['status'] == 'COMPLETED',
+          'dueAt': m['dueDate'],
+          'createdAt': m['createdAt'],
+        }));
+      }
+
+      notifyListeners();
+    } catch (e) {
+      // تجاهل الفشل — التطبيق يعمل بالبيانات المحلية
+    }
+  }
+
   void _loadData(String? raw) {
     customers.clear();
     opportunities.clear();
@@ -1391,6 +1455,11 @@ class _StartupPageState
       // نستمر حتى لو فشل التحميل
     }
 
+    // جلب البيانات من الباكند
+    try {
+      await data.refreshFromApi();
+    } catch (_) {}
+
     if (!mounted) return;
 
     final userName = data.session?.user['name']?.toString() ??
@@ -1650,6 +1719,11 @@ class _AuthPageState
 
       widget.data.session =
           session;
+
+      // جلب البيانات من الباكند بعد تسجيل الدخول
+      try {
+        await widget.data.refreshFromApi();
+      } catch (_) {}
 
       final companyData =
           session.company;
