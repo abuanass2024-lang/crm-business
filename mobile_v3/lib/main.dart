@@ -6,6 +6,7 @@ import 'features/home/dashboard_v2.dart';
 import 'core/theme/crm_app.dart';
 import 'features/team/team_page.dart';
 import 'features/tasks/task_chat_page.dart';
+import 'features/reports/reports_detail_page.dart';
 // ignore_for_file: prefer_const_constructors
 
 import 'dart:convert';
@@ -2121,6 +2122,11 @@ class _CrmHomeState
                       ),
                   ],
                 ),
+                IconButton(
+                  onPressed: openDetailedReports,
+                  tooltip: 'التقارير التفصيلية',
+                  icon: const Icon(Icons.bar_chart_outlined),
+                ),
                 if (data.session?.user['role'] == 'GENERAL_MANAGER' ||
                     data.session?.user['role'] == 'REGIONAL_MANAGER' ||
                     data.session?.user['role'] == 'BRANCH_MANAGER')
@@ -3935,6 +3941,21 @@ class _CrmHomeState
   /* =======================================================
      SETTINGS
      ======================================================= */
+
+  void openDetailedReports() {
+    if (!mounted) return;
+    final session = data.session;
+    if (session == null) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ReportsDetailPage(
+          apiBaseUrl: apiBaseUrl,
+          token: session.accessToken,
+        ),
+      ),
+    );
+  }
 
   void openTaskChat(CrmTask task) {
     if (!mounted) return;
